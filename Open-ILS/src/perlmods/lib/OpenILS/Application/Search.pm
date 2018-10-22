@@ -17,6 +17,7 @@ use OpenILS::Application::Search::Zips;
 use OpenILS::Application::Search::CNBrowse;
 use OpenILS::Application::Search::Serial;
 use OpenILS::Application::Search::Browse;
+use OpenILS::Application::Search::Elastic;
 
 
 use OpenILS::Application::AppUtils;

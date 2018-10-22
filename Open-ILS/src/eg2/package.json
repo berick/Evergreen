@@ -32,6 +32,7 @@
     "@nguniversal/express-engine": "^8.1.1",
     "bootstrap-css-only": "^4.3.1",
     "core-js": "^3.3.2",
+    "elastic-builder": "^2.4.0",
     "file-saver": "^2.0.2",
     "material-design-icons": "^3.0.1",
     "moment": "^2.24.0",
