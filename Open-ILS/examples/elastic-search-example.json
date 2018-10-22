@@ -8,6 +8,13 @@
       ]
     }
   },
+  "evergreen-database": {
+    "host": "localhost",
+    "port": 5432,
+    "name": "evergreen",
+    "user": "evergreen",
+    "pass": "evergreen"
+  },
   "indexes": {
     "bib-search": {
       "cluster": "main",

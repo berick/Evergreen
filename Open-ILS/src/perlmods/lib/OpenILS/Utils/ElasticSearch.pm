@@ -17,13 +17,16 @@ use strict;
 use warnings;
 use Clone qw/clone/;
 use DateTime;
+use DBI;
+use XML::LibXML;
 use OpenSRF::Utils::JSON;
 use OpenSRF::Utils::Logger qw/:logger/;
 use OpenILS::Utils::DateTime qw/:datetime/;
 #use OpenILS::Utils::CStoreEditor qw/:funcs/;
 use Search::Elasticsearch;
 
-our $date_parser = DateTime::Format::ISO8601->new;
+my $date_parser = DateTime::Format::ISO8601->new;
+my $db_handle;
 
 sub new {
     my ($class, %args) = @_;
@@ -36,9 +39,38 @@ sub new {
     return $self;
 }
 
+sub get_db_conn {
+	my ($self) = @_;
+    return $db_handle if $db_handle;
+
+    my $settings = $self->{config}->{'evergreen-database'};
+    my $db_name = $settings->{name};
+    my $db_host = $settings->{host};
+    my $db_port = $settings->{port};
+    my $db_user = $settings->{user};
+    my $db_pass = $settings->{pass};
+
+    my $dsn = "dbi:Pg:db=$db_name;host=$db_host;port=$db_port";
+    $logger->debug("ES connecting to DB $dsn");
+
+    $db_handle = DBI->connect(
+        "$dsn;options='--statement-timeout=0'",
+        $db_user, $db_pass, {
+            RaiseError => 1,
+            PrintError => 0,
+            AutoCommit => 1,
+            pg_expand_array => 0,
+            pg_enable_utf8 => 1
+        }
+    ) or $logger->error(
+        "ES Connection to database failed: $DBI::err : $DBI::errstr", 1);
+
+    return $db_handle;
+}
+
 sub read_config {
     my $self = shift;
-    
+
     open(CONFIG_FILE, $self->{config_file})
         or die "Cannot open elastic config " .$self->{config_file}. ": $!\n";
 
@@ -93,7 +125,7 @@ sub create_index {
     my $mappings = $config->{indexes}{$index}{'base-properties'};
 
     # TODO: a dynamic property may live in multiple indexes
-    my @dynamics = grep {$_->{index} eq $index} 
+    my @dynamics = grep {$_->{index} eq $index}
         @{$config->{'dynamic-properties'}};
 
     # Add an index definition for each dynamic field.
@@ -113,7 +145,7 @@ sub create_index {
     }
 
     my $settings = $config->{indexes}{$index}{settings};
-    $settings->{number_of_replicas} = 
+    $settings->{number_of_replicas} =
         scalar(@{$config->{clusters}{$cluster}{nodes}});
 
     my $doc_type = $config->{indexes}{$index}{'document-type'};
@@ -126,21 +158,72 @@ sub create_index {
         }
     };
 
-    # send to es
-
-
-    #print "\n\n\n";
-    #print OpenSRF::Utils::JSON->perl2JSON($conf) . "\n";
-    #print "\n\n\n";
-
+    # Send the index definition to Elastic
     eval { $self->es($cluster)->indices->create($conf) };
 
     if ($@) {
-        my $msg = 
+        my $msg =
             "ES failed to create index cluster=$cluster index=$index error=$@";
         $logger->error($msg);
         die "$msg\n";
     }
+}
+
+sub populate_index {
+    my ($self, $cluster, $index) = @_;
+
+    if ($index eq 'bib-search') {
+        return $self->populate_bib_search_index;
+    }
+}
+
+sub populate_bib_search_index {
+    my ($self, $cluster) = @_;
+
+    my $db = $self->get_db_conn;
+
+    my $index_count = 0;
+    my $state = {
+        last_bib_id => 0
+    };
+
+    do {
+        $index_count =
+            $self->populate_bib_search_index_page($cluster, $state);
+    } while ($index_count > 0);
+}
+
+# TODO holdings
+# TODO partial re-index
+sub populate_bib_search_index_page {
+    my ($self, $cluster, $state) = @_;
+
+    my $index_count = 0;
+    my $last_id = $state->{last_bib_id};
+
+    my $sth = $self->get_db_conn()->prepare(<<SQL);
+
+SELECT bre.id, bre.marc, bre.create_date, bre.edit_date, bre.source
+FROM biblio.record_entry bre
+WHERE (
+    NOT bre.deleted
+    AND bre.active
+    AND bre.id > $last_id
+)
+ORDER BY bre.edit_date ASC, bre.id ASC
+LIMIT 1000
+SQL
+
+    $sth->execute;
+
+    while (my $bib = $sth->fetchrow_hashref) {
+        print "found id " . $bib->{id} . "\n";
+
+        $state->{last_bib_id} = $bib->{id};
+        $index_count++;
+    }
+
+    return $index_count;
 }
 
 
