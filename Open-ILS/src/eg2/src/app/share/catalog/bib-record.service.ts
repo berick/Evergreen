@@ -132,6 +132,17 @@ export class BibRecordService {
             return summary;
         }));
     }
+
+    // Batch hold counts lookup.
+    getHoldCounts(targetIds: number[], isMetarecord?: boolean):
+        Observable<{[id: string]: number}> {
+
+        const method = isMetarecord ?
+            'open-ils.circ.mmr.holds.count.batch' :
+            'open-ils.circ.bre.holds.count.batch';
+
+        return this.net.request('open-ils.circ', method, targetIds);
+    }
 }
 
 

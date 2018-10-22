@@ -4358,6 +4358,43 @@ sub rec_hold_count {
     return $result;
 }
 
+__PACKAGE__->register_method(
+    method    => 'rec_hold_count_batch',
+    api_name  => 'open-ils.circ.bre.holds.count.batch',
+    stream    => 1,
+    signature => {
+        desc => q/Streaming batch version of open-ils.circ.bre.holds.count/
+    }
+);
+
+__PACKAGE__->register_method(
+    method    => 'rec_hold_count',
+    api_name  => 'open-ils.circ.mmr.holds.count.batch',
+    stream    => 1,
+    signature => {
+        desc => q/metarecord variant of open-ils.circ.bre.holds.count.batch/
+    }
+);
+
+sub rec_hold_count_batch {
+    my ($self, $client, $target_ids, $args) = @_;
+    $args ||= {};
+
+    # Note this could be done w/ a single database call, but would require
+    # a lot of code duplication with rec_hold_count.  This is at least an
+    # improvement over requiring clients to make a net call per target.
+
+    # Start providing responses as soon as they are available.
+    $client->max_bundle_count(1);
+
+    $client->respond({$_ => rec_hold_count($self, $client, $_, $args)}) 
+        foreach @$target_ids;
+
+    return undef;
+}
+
+
+
 # A helper function to calculate a hold's expiration time at a given
 # org_unit. Takes the org_unit as an argument and returns either the
 # hold expire time as an ISO8601 string or undef if there is no hold

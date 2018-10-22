@@ -7,6 +7,7 @@ import {BibRecordService} from './bib-record.service';
 import {UnapiService} from './unapi.service';
 import {MarcHtmlComponent} from './marc-html.component';
 import {BibDisplayFieldComponent} from './bib-display-field.component';
+import {ElasticService} from './elastic.service';
 
 
 @NgModule({
@@ -26,7 +27,8 @@ import {BibDisplayFieldComponent} from './bib-display-field.component';
         CatalogUrlService,
         UnapiService,
         BibRecordService,
-        BasketService
+        BasketService,
+        ElasticService
     ]
 })
 

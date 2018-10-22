@@ -192,6 +192,10 @@ export class CatalogTermContext {
     matchOp: string[];
     format: string;
     available = false;
+
+    // TODO: configurable
+    // format limiter default to using the search_format filter
+    formatCtype = 'search_format';
     ccvmFilters: {[ccvmCode: string]: string[]};
     facetFilters: FacetFilter[];
     copyLocations: string[]; // ID's, but treated as strings in the UI.
@@ -444,7 +448,7 @@ export class CatalogSearchContext {
             this.pager.resultCount
         );
         for (let idx = this.pager.offset; idx < max; idx++) {
-            ids.push(this.resultIds[idx]);
+            ids.push(Number(this.resultIds[idx]));
         }
         return ids;
     }
@@ -631,7 +635,7 @@ export class CatalogSearchContext {
         }
 
         if (ts.format) {
-            str += ' search_format(' + ts.format + ')';
+            str += ' ' + ts.formatCtype + '(' + ts.format + ')';
         }
 
         if (this.global) {
