@@ -1,0 +1,128 @@
+= Elasticsearch and Evergreen =
+
+== Goals ==
+
+Fast bib record searching without requiring significant changes to
+existing Evergreen search and display code.
+
+Initially support integration with the Angular staff catalog, covering 
+most search features commonly used by staff.
+
+Allow for expanding use to other interfaces (e.g. TPAC) and extending
+functionatlity.
+
+== Installation ==
+
+1. Install and run a 6.8.* version of ES:
+   https://www.elastic.co/downloads/past-releases/elasticsearch-6-8-3
+2. Check out this Evergreen branch.
+3. Apply SQL Open-ILS/src/sql/Pg/upgrade/XXXX.schema.elastic-search.sql
+4. cd Open-ILS/src/eg2/ && npm install # new dependency
+5. Build and Install branch
+
+== Configuration ==
+
+See database tables in the 'elastic' schema.  No admin UI exists.  If a 
+single elasticsearch node is running on the same server as EG, no 
+configuration changes are needed.
+
+To enable Elasticsearch for bib indexing and searching, modify the related
+global flags:
+
+[source,sql]
+------------------------------------------------------------------------------
+UPDATE config.global_flag SET enabled = true WHERE name ~ '^elastic.*';
+------------------------------------------------------------------------------
+
+== Indexing Bib Records ==
+
+See Open-ILS/src/support-scripts/elastic-index.pl
+
+Examples:
+
+[source,sh]
+------------------------------------------------------------------------------
+./elastic-index.pl --index-name my-bib-index --create-index --populate
+./elastic-index.pl --index-name my-bib-index --delete-index --create-index --populate
+./elastic-index.pl --index-name my-bib-index --populate --modified-since 2019-09-17T14:45:00
+------------------------------------------------------------------------------
+
+== Bib Search Index ==
+
+A single 'bib-search' index class is defined by default.  The structure
+of indexes defined for this class is defined by entries in the
+elastic.bib_field table.  A default bib record transform file is located
+at Open-ILS/xsl/elastic-bib-transform.xsl for extracting data from the
+MARCXML data for each indexed record.
+
+=== Search Fields ===
+
+Search fields are grouped by search class (title, author, etc.).  Searches
+can be performed against a specific field or across the class.
+
+==== Caveats ====
+
+* Author fields are not presently indexed with language-specific analyzers, 
+  since the values are generally proper names.
+* Keyword fields are not processed via lowercase keyword index, since exact
+  matches on keyword indexes makes little sense.
+* ISBN and ISSN values are specially handled for data cleanup and supporting
+  isbn 10 / 13 searches.
+
+=== Facet Fields ===
+
+Field marked as facets are tracked via a separate '$field_class|$name|facet'
+which contains only an unprocessed version of the facet-specific data
+output from the record transform.
+
+=== MARC Data ===
+
+The full MARC record is included in the bib search index as a series
+of nested objects.  This makes it possible to search MARC data in 
+addition to (or instead of) search/filter fields, including filtering
+on holdings.
+
+=== Holdings ===
+
+A set of holdings summaries are included with each bib record as nested 
+objects.  The summaries track circ lib, shelf location, etc. so the caller
+can determine org visibility and availability.
+
+== API ==
+
+New APIs were added:
+
+open-ils.search.elastic.bib_search[.staff]
+
+These allow the caller to compose Elasticsearch query structures which are
+passed, with API-local additions, to the ES engine.  The response structure 
+mimics the open-ils.search.biblio.multiclass.query class of APIs.
+
+Additional options may be passed to the elastic API to include holdings-level
+location and availability filtering.  (Note the client could add such filters, 
+but baking it into the API saves the client a lot of work for a common work flow).
+
+Facets are generated from ES and included in the API response.  No external 
+faceting or facet caching is required.
+
+== User Interface ==
+
+The branch includes an Elastic service baked into the Angular staff catalog. 
+It uses the elastic-builder module for creating the search structures.  
+
+== Test Scripts ==
+
+* Open-ILS/src/support-scripts/test-scripts/elastic-search.pl
+** Allows the user to execute query_string-based searches.
+
+* Open-ILS/src/support-scripts/test-scripts/elastic-search-samples.pl
+** Runs a few canned searches as examples.
+
+== Features Pending ==
+
+Some existing Evergreen features are not supported by the ES API, though in
+most cases it should be possible to add them.
+
+* Popularity ranking
+* Search Highlighting
+

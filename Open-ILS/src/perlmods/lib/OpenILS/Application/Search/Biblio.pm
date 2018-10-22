@@ -865,42 +865,23 @@ sub cat_search_z_style_wrapper {
     my $client = shift;
     my $authtoken = shift;
     my $args = shift;
+    my $is_staff = ($self->api_name =~ /staff$/);
 
-    my $cstore = OpenSRF::AppSession->connect('open-ils.cstore');
+    my $e = new_editor();
+    my $use_elastic = $e->search_config_global_flag(
+        {enabled => 't', name => 'elastic.bib_search.enabled'})->[0];
 
-    my $ou = $cstore->request(
-        'open-ils.cstore.direct.actor.org_unit.search',
-        { parent_ou => undef }
-    )->gather(1);
+    my $list = $use_elastic ?
+        zstyle_elastic($self, $args, $is_staff) : 
+        zstyle_staged($self, $args, $is_staff);
 
-    my $result = { service => 'native-evergreen-catalog', records => [] };
-    my $searchhash = { limit => $$args{limit}, offset => $$args{offset}, org_unit => $ou->id };
-
-    $$searchhash{searches}{title}{term}   = $$args{search}{title}   if $$args{search}{title};
-    $$searchhash{searches}{author}{term}  = $$args{search}{author}  if $$args{search}{author};
-    $$searchhash{searches}{subject}{term} = $$args{search}{subject} if $$args{search}{subject};
-    $$searchhash{searches}{keyword}{term} = $$args{search}{keyword} if $$args{search}{keyword};
-    $$searchhash{searches}{'identifier|isbn'}{term} = $$args{search}{isbn} if $$args{search}{isbn};
-    $$searchhash{searches}{'identifier|issn'}{term} = $$args{search}{issn} if $$args{search}{issn};
-    $$searchhash{searches}{'identifier|upc'}{term} = $$args{search}{upc} if $$args{search}{upc};
-
-    $$searchhash{searches}{keyword}{term} .= join ' ', $$searchhash{searches}{keyword}{term}, $$args{search}{tcn}       if $$args{search}{tcn};
-    $$searchhash{searches}{keyword}{term} .= join ' ', $$searchhash{searches}{keyword}{term}, $$args{search}{publisher} if $$args{search}{publisher};
-    $$searchhash{searches}{keyword}{term} .= join ' ', $$searchhash{searches}{keyword}{term}, $$args{search}{pubdate}   if $$args{search}{pubdate};
-    $$searchhash{searches}{keyword}{term} .= join ' ', $$searchhash{searches}{keyword}{term}, $$args{search}{item_type} if $$args{search}{item_type};
-
-    my $method = 'open-ils.search.biblio.multiclass.staged';
-    $method .= '.staff' if $self->api_name =~ /staff$/;
-
-    my ($list) = $self->method_lookup($method)->run( $searchhash );
+    my $result = {service => 'native-evergreen-catalog', records => []};
 
     if ($list->{count} > 0 and @{$list->{ids}}) {
         $result->{count} = $list->{count};
 
-        my $records = $cstore->request(
-            'open-ils.cstore.direct.biblio.record_entry.search.atomic',
-            { id => [ map { ( $_->[0] ) } @{$list->{ids}} ] }
-        )->gather(1);
+        my $records = $e->search_biblio_record_entry(
+            { id => [ map { ( $_->[0] ) } @{$list->{ids}} ] });
 
         for my $rec ( @$records ) {
             
@@ -908,15 +889,103 @@ sub cat_search_z_style_wrapper {
                         $u->start_mods_batch( $rec->marc );
                         my $mods = $u->finish_mods_batch();
 
-            push @{ $result->{records} }, { mvr => $mods, marcxml => $rec->marc, bibid => $rec->id };
-
+            push @{ $result->{records} }, 
+                { mvr => $mods, marcxml => $rec->marc, bibid => $rec->id };
         }
-
     }
 
-    $cstore->disconnect();
     return $result;
 }
+
+sub zstyle_staged {
+    my ($self, $args, $is_staff) = @_;
+
+    my @classes = qw/title author subject keyword/;
+    my @idents = qw/isbn issn upc/;
+
+    my %vals;
+    $vals{$_} = $$args{search}{$_} for @classes;
+    $vals{$_} = $$args{search}{$_} for @idents;
+
+    # Append these to the keyword search (backwards compat).
+    # TODO: these should search specific indexes instead of keyword.
+    for my $kw (qw/tcn publisher pubdate item_type/) {
+        $vals{keyword} .= join(' ', $vals{keyword}, $$args{search}{$kw}) 
+            if $$args{search}{$kw};
+    }
+
+    my $searchhash = {
+        limit => $$args{limit}, 
+        offset => $$args{offset}, 
+        org_unit => $U->get_org_tree->id
+    };
+
+    for my $class (@classes) {
+        $$searchhash{searches}{$class}{term} = 
+            $vals{$class} if $vals{$class};
+    }
+
+    for my $ident (@idents) {
+        $$searchhash{searches}{"identifier|$ident"}{term} =     
+            $vals{$ident} if $vals{$ident};
+    }
+
+    my $method = 'open-ils.search.biblio.multiclass.staged';
+    $method .= '.staff' if $is_staff;
+
+    my ($list) = $self->method_lookup($method)->run($searchhash);
+    return $list;
+}
+
+sub zstyle_elastic {
+    my ($self, $args, $is_staff) = @_;
+
+    my @classes = qw/title author subject keyword/;
+    my @idents = qw/isbn issn upc tcn publisher pubdate/;
+
+    my %vals;
+    $vals{$_} = $$args{search}{$_} for @classes;
+    $vals{$_} = $$args{search}{$_} for @idents;
+
+    my $search = {
+        from => $$args{offset},
+        size => $$args{limit},
+        sort => [{_score => 'desc'}],
+        query => {bool => {must => []}}
+    };
+
+    my $ops = {disable_facets => 1};
+
+    # use a filter for item_type.
+    my $itype = $$args{item_type};
+    $search->{filter} = [{term => {item_type => $itype}}] if $itype;
+
+    for my $class (grep {$vals{$_}} @classes) {
+        push(@{$search->{query}->{bool}->{must}}, {
+            multi_match => {
+                type => 'best_fields', 
+                fields => "$class|*text*", 
+                query => $vals{$class}
+            }
+        });
+    }
+
+    for my $ident (grep {$vals{$_}} @idents) {
+        push(@{$search->{query}->{bool}->{must}}, 
+            {term => {"identifier|$ident" => $vals{$ident}}});
+    }
+
+    # avoid bogus searches
+    return [] unless (@{$search->{query}->{bool}->{must}});
+
+    my $method = 'open-ils.search.elastic.bib_search' ;
+    $method .= '.staff' if $is_staff;
+
+    my ($list) = $self->method_lookup($method)->run($search, $ops);
+
+    return $list;
+}
+
 
 # ----------------------------------------------------------------------------
 # These are the main OPAC search methods

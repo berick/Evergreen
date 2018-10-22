@@ -7,6 +7,8 @@ use UNIVERSAL;
 use MARC::Record;
 use MARC::File::XML ( BinaryEncoding => 'UTF-8' );
 use OpenILS::Application::AppUtils;
+use Business::ISBN;
+use Business::ISSN;
 
 use Exporter 'import';
 our @EXPORT_OK = qw( clean_marc naco_normalize search_normalize );
@@ -123,6 +125,43 @@ sub clean_marc {
     $xml = OpenILS::Application::AppUtils->entityize($xml);
     $xml =~ s/[\x00-\x1f]//go;
     return $xml;
+}
+
+# Returns a list of Business::ISBN objects from the provided string,
+# which is assumed to be a space-seprated list of ISBN-ish data.
+# The resulting object can be used to extract isbn10 and isbn13 values.
+# $isbn->as_isbn10->isbn # compact
+# $isbn->as_isbn13->as_string # with hyphens
+sub clean_isbns {
+    my $value = shift;
+    return () unless $value;
+    my @isbns;
+
+    # Chop up the collected raw values into parts and let
+    # Business::* tell us which parts looks like ISBNs.
+    for my $token (split(/ /, $value)) {
+        if (length($token) > 8) {
+            my $isbn = Business::ISBN->new($token);
+            push(@isbns, $isbn) if $isbn && $isbn->is_valid;
+        }
+    }
+
+    return @isbns;
+}
+
+sub clean_issns {
+    my $value = shift;
+    return () unless $value;
+    my @issns;
+
+    # Chop up the collected raw values into parts and let
+    # Business::* tell us which parts looks valid.
+    for my $token (split(/ /, $value)) {
+        my $issn = Business::ISSN->new($token);
+        push(@issns, $issn) if $issn && $issn->is_valid;
+    }
+
+    return @issns;
 }
 
 1;

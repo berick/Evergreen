@@ -1,6 +1,6 @@
 import {Injectable, EventEmitter} from '@angular/core';
 import {Observable} from 'rxjs';
-import {map, tap, finalize} from 'rxjs/operators';
+import {map, tap, finalize, merge} from 'rxjs/operators';
 import {OrgService} from '@eg/core/org.service';
 import {UnapiService} from '@eg/share/catalog/unapi.service';
 import {IdlService, IdlObject} from '@eg/core/idl.service';
@@ -10,6 +10,12 @@ import {CatalogSearchContext, CatalogSearchState} from './search-context';
 import {BibRecordService, BibRecordSummary} from './bib-record.service';
 import {BasketService} from './basket.service';
 import {CATALOG_CCVM_FILTERS} from './search-context';
+import {ElasticService} from './elastic.service';
+
+// Start with this number of records in the first batch so results
+// can start displaying sooner.  A batch of 5 gets a decent chunk of
+// data on the page while waiting for the other results to appear.
+const INITIAL_REC_BATCH_SIZE = 5;
 
 @Injectable()
 export class CatalogService {
@@ -34,14 +40,23 @@ export class CatalogService {
         private unapi: UnapiService,
         private pcrud: PcrudService,
         private bibService: BibRecordService,
-        private basket: BasketService
+        private basket: BasketService,
+        private elastic: ElasticService
     ) {
         this.onSearchComplete = new EventEmitter<CatalogSearchContext>();
-
     }
 
     search(ctx: CatalogSearchContext): Promise<void> {
         ctx.searchState = CatalogSearchState.SEARCHING;
+
+        if (this.elastic.canSearch(ctx)) {
+            return this.elastic.performSearch(ctx)
+            .then(result => {
+                this.applyResultData(ctx, result);
+                ctx.searchState = CatalogSearchState.COMPLETE;
+                this.onSearchComplete.emit(ctx);
+            });
+        }
 
         if (ctx.showBasket) {
             return this.basketSearch(ctx);
@@ -92,6 +107,7 @@ export class CatalogService {
     }
 
     marcSearch(ctx: CatalogSearchContext): Promise<void> {
+
         let method = 'open-ils.search.biblio.marc';
         if (ctx.isStaff) { method += '.staff'; }
 
@@ -174,6 +190,9 @@ export class CatalogService {
             ctx.resultIds = [];
         }
 
+        console.debug(`Search found ${result.count} and ` +
+            `returned ${result.ids.length} record IDs`);
+
         result.ids.forEach((blob, idx) => ctx.addResultId(blob[0], idx));
     }
 
@@ -187,14 +206,25 @@ export class CatalogService {
 
         const isMeta = ctx.termSearch.isMetarecordSearch();
 
-        let observable: Observable<BibRecordSummary>;
+        // When fetching batches of search results, fetch the first
+        // few records first so results lists can start rendering
+        // before the full data set has arrived and been processed.
+        let ids1 = ctx.currentResultIds();
+        let ids2 = [];
+        if (ids1.length > INITIAL_REC_BATCH_SIZE) {
+            ids1 = ctx.currentResultIds().slice(0, INITIAL_REC_BATCH_SIZE);
+            ids2 = ctx.currentResultIds().slice(INITIAL_REC_BATCH_SIZE);
+        }
 
-        if (isMeta) {
-            observable = this.bibService.getMetabibSummary(
-                ctx.currentResultIds(), ctx.searchOrg.id(), depth);
-        } else {
-            observable = this.bibService.getBibSummary(
-                ctx.currentResultIds(), ctx.searchOrg.id(), depth);
+        let observable: Observable<BibRecordSummary>;
+        const bibFunc = isMeta ? 'getMetabibSummary' : 'getBibSummary';
+
+        observable = this.bibService[bibFunc](ids1, ctx.searchOrg.id(), depth);
+
+        if (ids2.length > 0) {
+            observable = observable.pipe(merge(
+                this.bibService.getBibSummary(ids2, ctx.searchOrg.id(), depth)
+            ));
         }
 
         return observable.pipe(map(summary => {
@@ -205,7 +235,6 @@ export class CatalogService {
             } else {
                 idx = ctx.currentResultIds().indexOf(summary.id);
             }
-
             if (ctx.result.records) {
                 // May be reset when quickly navigating results.
                 ctx.result.records[idx] = summary;
@@ -289,41 +318,61 @@ export class CatalogService {
             return Promise.resolve();
         }
 
+        if (this.elastic.enabled && ctx.result.facets) {
+            ctx.result.facetData = this.elastic.formatFacets(ctx.result.facets);
+            return Promise.resolve();
+        }
+
         return new Promise((resolve, reject) => {
             this.net.request('open-ils.search',
                 'open-ils.search.facet_cache.retrieve',
                 ctx.result.facet_key
             ).subscribe(facets => {
-                const facetData = {};
-                Object.keys(facets).forEach(cmfId => {
-                    const facetHash = facets[cmfId];
-                    const cmf = this.cmfMap[cmfId];
-
-                    const cmfData = [];
-                    Object.keys(facetHash).forEach(value => {
-                        const count = facetHash[value];
-                        cmfData.push({value : value, count : count});
-                    });
-
-                    if (!facetData[cmf.field_class()]) {
-                        facetData[cmf.field_class()] = {};
-                    }
-
-                    facetData[cmf.field_class()][cmf.name()] = {
-                        cmfLabel : cmf.label(),
-                        valueList : cmfData.sort((a, b) => {
-                            if (a.count > b.count) { return -1; }
-                            if (a.count < b.count) { return 1; }
-                            // secondary alpha sort on display value
-                            return a.value < b.value ? -1 : 1;
-                        })
-                    };
-                });
-
+                const facetData = this.formatFacets(facets);
                 this.lastFacetKey = ctx.result.facet_key;
                 this.lastFacetData = ctx.result.facetData = facetData;
                 resolve();
             });
+        });
+    }
+
+    formatFacets(facets: any) {
+        const facetData = {};
+        Object.keys(facets).forEach(cmfId => {
+            const facetHash = facets[cmfId];
+            const cmf = this.cmfMap[cmfId];
+
+            const cmfData = [];
+            Object.keys(facetHash).forEach(value => {
+                const count = facetHash[value];
+                cmfData.push({value : value, count : count});
+            });
+
+            if (!facetData[cmf.field_class()]) {
+                facetData[cmf.field_class()] = {};
+            }
+
+            facetData[cmf.field_class()][cmf.name()] = {
+                cmfLabel : cmf.label(),
+                valueList : cmfData.sort((a, b) => {
+                    if (a.count > b.count) { return -1; }
+                    if (a.count < b.count) { return 1; }
+                    // secondary alpha sort on display value
+                    return a.value < b.value ? -1 : 1;
+                })
+            };
+        });
+
+        return facetData;
+    }
+
+    checkSearchEngine(): Promise<any> {
+        return this.pcrud.retrieve('cgf', 'elastic.bib_search.enabled')
+        .toPromise().then(flag => {
+            if (flag && flag.enabled() == 't') {
+                this.elastic.enabled = true;
+                return this.elastic.init();
+            }
         });
     }
 

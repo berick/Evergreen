@@ -1,0 +1,14 @@
+= Elasticsearch Examples
+
+== Bib Transform Testing
+
+[source,sh]
+----------------------------------------------------------------------------
+sudo apt install xsltproc
+
+xsltproc ../../xsl/elastic-bib-transform.xsl bib-248-marc.xml
+
+xsltproc ../../xsl/elastic-bib-transform.xsl bib-233-marc.xml
+----------------------------------------------------------------------------
+
+

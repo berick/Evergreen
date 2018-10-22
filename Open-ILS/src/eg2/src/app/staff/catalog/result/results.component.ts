@@ -110,27 +110,32 @@ export class ResultsComponent implements OnInit, OnDestroy {
     // To reduce page display shuffling, avoid showing the list of
     // records until the first few are ready to render.
     shouldStartRendering(): boolean {
-
-        if (this.searchHasResults()) {
-            const pageCount = this.searchContext.currentResultIds().length;
-            switch (pageCount) {
-                case 1:
-                    return this.searchContext.result.records[0];
-                default:
-                    return this.searchContext.result.records[0]
-                        && this.searchContext.result.records[1];
-            }
-        }
-
-        return false;
+        return (
+            this.searchHasResults() && this.searchContext.result.records[0]
+        );
     }
 
     fleshSearchResults(): void {
         const records = this.searchContext.result.records;
         if (!records || records.length === 0) { return; }
 
-        // Flesh the creator / editor fields with the user object.
-        this.bib.fleshBibUsers(records.map(r => r.record));
+        setTimeout(() => {
+            // setTimeout here is not required, but it allows Angular to start
+            // rendering the results a bit sooner, before these actions complete.
+
+            // Flesh the creator / editor fields with the user object.
+            this.bib.fleshBibUsers(records.map(r => r.record));
+
+            const isMeta = this.searchContext.termSearch.isMetarecordSearch();
+            this.bib.getHoldCounts(this.searchContext.currentResultIds())
+                .subscribe(result => {
+                    const idField = isMeta ? 'metabibId' : 'id';
+                    const targetId = Object.keys(result)[0];
+                    const record =
+                        records.filter(r => r[idField] === Number(targetId))[0];
+                    record.holdCount = result[targetId];
+                });
+        });
     }
 
     searchIsDone(): boolean {

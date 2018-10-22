@@ -33,6 +33,7 @@ export class CatalogResolver implements Resolve<Promise<any[]>> {
         return Promise.all([
             this.cat.fetchCcvms(),
             this.cat.fetchCmfs(),
+            this.cat.checkSearchEngine(),
             this.fetchSettings(),
             this.basket.getRecordIds()
         ]);
