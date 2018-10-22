@@ -362,7 +362,7 @@
       "name": "physical_description",
       "label": "Physical Descrption",
       "format": "mods33",
-      "xpath": "(//mods33:mods/mods33:physicalDescription/mods33:form://mods33:mods/mods33:physicalDescription/mods33:extent://mods33:mods/mods33:physicalDescription/mods33:reformattingQuality://mods33:mods/mods33:physicalDescription/mods33:internetMediaType://mods33:mods/mods33:physicalDescription/mods33:digitalOrigin)"
+      "xpath": "(//mods33:mods/mods33:physicalDescription/mods33:form|//mods33:mods/mods33:physicalDescription/mods33:extent|//mods33:mods/mods33:physicalDescription/mods33:reformattingQuality|//mods33:mods/mods33:physicalDescription/mods33:internetMediaType|//mods33:mods/mods33:physicalDescription/mods33:digitalOrigin)"
     }, {
       "index": "bib-search",
       "field_class": "identifier",
@@ -446,28 +446,28 @@
       "name": "item_lang",
       "label": "Language",
       "format": "marcxml",
-      "xpath": "substring(//marc:controlfield[@tag='008']/text(), '36', '38')"
+      "xpath": "substring(//marc:controlfield[@tag='008']/text(), '36', '3')"
     }, {
       "index": "bib-search",
       "field_class": "identifier",
       "name": "item_form",
       "label": "Item Form",
       "format": "marcxml",
-      "xpath": "substring(//marc:controlfield[@tag='008']/text(), '24', '25')"
+      "xpath": "substring(//marc:controlfield[@tag='008']/text(), '24', '1')"
     }, {
       "index": "bib-search",
       "field_class": "identifier",
       "name": "audience",
       "label": "Audience",
       "format": "marcxml",
-      "xpath": "substring(//marc:controlfield[@tag='008']/text(), '23', '24')"
+      "xpath": "substring(//marc:controlfield[@tag='008']/text(), '23', '1')"
     }, {
       "index": "bib-search",
       "field_class": "identifier",
       "name": "lit_form",
       "label": "Literary Form",
       "format": "marcxml",
-      "xpath": "substring(//marc:controlfield[@tag='008']/text(), '34', '35')"
+      "xpath": "substring(//marc:controlfield[@tag='008']/text(), '34', '1')"
     }, {
       "index": "bib-search",
       "field_class": "identifier",

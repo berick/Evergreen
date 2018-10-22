@@ -19,6 +19,8 @@ use Clone qw/clone/;
 use DateTime;
 use DBI;
 use XML::LibXML;
+use XML::LibXSLT;
+use Data::Dumper;
 use OpenSRF::Utils::JSON;
 use OpenSRF::Utils::Logger qw/:logger/;
 use OpenILS::Utils::DateTime qw/:datetime/;
@@ -32,7 +34,9 @@ sub new {
     my ($class, %args) = @_;
     my $self = bless(
         {   clusters => {},
-            config_file => $args{config_file}
+            config_file => $args{config_file},
+            xsl_transforms => {},
+            xml_namespaces => {}
         }, $class
     );
     $self->read_config;
@@ -173,33 +177,38 @@ sub populate_index {
     my ($self, $cluster, $index) = @_;
 
     if ($index eq 'bib-search') {
-        return $self->populate_bib_search_index;
+        return $self->populate_bib_search_index($cluster, $index);
     }
 }
 
 sub populate_bib_search_index {
-    my ($self, $cluster) = @_;
+    my ($self, $cluster, $index) = @_;
 
-    my $db = $self->get_db_conn;
+    $self->load_transforms($index);
 
     my $index_count = 0;
-    my $state = {
-        last_bib_id => 0
-    };
+    my $total_indexed = 0;
+    my $state = {last_bib_id => 0};
 
     do {
         $index_count =
-            $self->populate_bib_search_index_page($cluster, $state);
+            $self->populate_bib_search_index_page($cluster, $index, $state);
+        $total_indexed += $index_count;
+        $logger->info("ES indexed $total_indexed bib records");
+
     } while ($index_count > 0);
+
+    $logger->info("ES bib indexing complete");
 }
 
 # TODO holdings
 # TODO partial re-index
 sub populate_bib_search_index_page {
-    my ($self, $cluster, $state) = @_;
+    my ($self, $cluster, $index, $state) = @_;
 
     my $index_count = 0;
     my $last_id = $state->{last_bib_id};
+    my $doc_type = $self->{config}->{indexes}{$index}{'document-type'};
 
     my $sth = $self->get_db_conn()->prepare(<<SQL);
 
@@ -217,13 +226,126 @@ SQL
     $sth->execute;
 
     while (my $bib = $sth->fetchrow_hashref) {
-        print "found id " . $bib->{id} . "\n";
+        my $bib_id = $bib->{id};
 
-        $state->{last_bib_id} = $bib->{id};
+        my $marc_doc = XML::LibXML->new->parse_string($bib->{marc});
+        my $body = $self->extract_bib_values($index, $marc_doc);
+        my $holdings = $self->load_holdings($index, $bib_id);
+
+        $body->{source} = $bib->{source};
+
+        for my $field (q/create_date edit_date/) {
+            next unless $bib->{$field};
+            # ES wants ISO dates with the 'T' separator
+            (my $val = $bib->{$field}) =~ s/ /T/g;
+            $body->{$field} = $val;
+        }
+
+        $self->add_to_elastic($cluster, $index, $doc_type, $bib_id, $body);
+
+        $state->{last_bib_id} = $bib_id;
         $index_count++;
     }
 
     return $index_count;
+}
+
+sub load_transforms {
+    my ($self, $index) = @_;
+
+    my @dynamics = grep {$_->{index} eq $index}
+        @{$self->{config}{'dynamic-properties'}};
+
+    for my $prop (@dynamics) {
+        my $format = $prop->{format};
+        next if $self->{xsl_transforms}{$format};
+
+        $logger->info("ES loading info for document type $format");
+
+        my $xform = $self->get_db_conn()->selectrow_hashref(
+            "SELECT * FROM config.xml_transform WHERE name = '$format'");
+
+        $self->{xml_namespaces}{$format} = {
+            prefix => $xform->{prefix},
+            uri => $xform->{namespace_uri}
+        };
+
+        if ($format eq 'marcxml') {
+            # No transform needed for MARCXML.  Indicate we've seen
+            # it and move on.
+            $self->{xsl_transforms}{$format} = {};
+            next;
+        }
+
+        $logger->info("ES parsing stylesheet for $format");
+        my $xsl_doc = XML::LibXML->new->parse_string($xform->{xslt});
+        my $stylesheet = XML::LibXSLT->new->parse_stylesheet($xsl_doc);
+        $self->{xsl_transforms}{$format} = $stylesheet;
+    }
+}
+
+sub extract_bib_values {
+    my ($self, $index, $marc_doc) = @_;
+    my $values = {};
+
+    my @dynamics = grep {$_->{index} eq $index}
+        @{$self->{config}{'dynamic-properties'}};
+
+    # various formats of the current MARC record (mods, etc.)
+    my %xform_docs;
+
+    for my $prop (@dynamics) {
+
+        my $format = $prop->{format};
+        my $xform_doc = $marc_doc;
+        my $field_name = $prop->{field_class} .'|' . $prop->{name};
+
+        if ($format ne 'marcxml') { # no transform required for MARCXML
+
+            if (!$xform_docs{$format}) {
+                # No document exists for the current format.
+                # Perform the transform here.
+                $xform_docs{$format} = 
+                    $self->{xsl_transforms}{$format}->transform($marc_doc);
+            }
+
+            $xform_doc = $xform_docs{$format};
+        }
+
+        # Apply the field-specific xpath to our transformed document
+
+        my $ns = $self->{xml_namespaces}{$format};
+        my $root = $xform_doc->documentElement;
+        $root->setNamespace($ns->{uri}, $ns->{prefix}, 1);
+
+        my @nodes = $root->findnodes($prop->{xpath});
+
+        $values->{$field_name} = [ map { $_->textContent } @nodes ]; 
+        #$logger->info("ES $field_name = " . Dumper($values->{$field_name}));
+        #print "ES $field_name = " . Dumper($values->{$field_name}) . "\n";
+    }
+
+    return $values;
+}
+
+sub load_holdings {
+    my ($self, $index, $bib_id) = @_;
+
+    my $holdings = [];
+    return $holdings;
+}
+
+sub add_to_elastic {
+    my ($self, $cluster, $index, $doc_type, $id, $body) = @_;
+
+    my $result = $self->es($cluster)->index(
+        index => $index,
+        type => $doc_type,
+        id => $id,
+        body => $body
+    );
+
+    $logger->debug("ES index command returned $result");
 }
 
 
