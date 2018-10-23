@@ -114,24 +114,19 @@
           "type": "nested",
           "properties": {
             "status": {
-              "type": "integer",
-              "index": "false"
+              "type": "integer"
             },
             "circ_lib": {
-              "type": "integer",
-              "index": "false"
+              "type": "integer"
             },
             "location": {
-              "type": "integer",
-              "index": "false"
+              "type": "integer"
             },
             "circulate": {
-              "type": "boolean",
-              "index": "false"
+              "type": "boolean"
             },
             "opac_visible": {
-              "type": "boolean",
-              "index": "false"
+              "type": "boolean"
             }
           }
         }

@@ -2,8 +2,8 @@
 use strict;
 use warnings;
 use Getopt::Long;
-use OpenILS::Utils::ElasticSearch;
 use OpenILS::Utils::Fieldmapper;
+use OpenILS::Elastic::BibSearch;
 
 my $help;
 my $elastic_config;
@@ -32,17 +32,14 @@ OpenSRF::System->bootstrap_client(config_file => $osrf_config);
 Fieldmapper->import(
     IDL => OpenSRF::Utils::SettingsClient->new->config_value("IDL"));
 
-my $es = OpenILS::Utils::ElasticSearch->new(
-    cluster => $cluster,
-    config_file => $elastic_config
-);
+my $es = OpenILS::Elastic::BibSearch->new($cluster);
 
-$es->connect($cluster);
+$es->connect;
 
-$es->delete_index($cluster, $index_name) if $delete_index;
+$es->delete_index if $delete_index;
 
-$es->create_index($cluster, $index_name) if $create_index;
+$es->create_index if $create_index;
 
-$es->populate_index($cluster, $index_name) if $populate;
+$es->populate_index if $populate;
 
 
