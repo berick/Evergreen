@@ -198,7 +198,7 @@ sub populate_bib_search_index {
 
     } while ($index_count > 0);
 
-    $logger->info("ES bib indexing complete");
+    $logger->info("ES bib indexing complete with $total_indexed records");
 }
 
 # TODO holdings
@@ -209,9 +209,7 @@ sub populate_bib_search_index_page {
     my $index_count = 0;
     my $last_id = $state->{last_bib_id};
     my $doc_type = $self->{config}->{indexes}{$index}{'document-type'};
-
-    my $sth = $self->get_db_conn()->prepare(<<SQL);
-
+    my $bib_data = $self->get_db_conn()->selectall_arrayref(<<SQL, {Slice => {}});
 SELECT bre.id, bre.marc, bre.create_date, bre.edit_date, bre.source
 FROM biblio.record_entry bre
 WHERE (
@@ -223,15 +221,17 @@ ORDER BY bre.edit_date ASC, bre.id ASC
 LIMIT 1000
 SQL
 
-    $sth->execute;
+    my $bib_ids = [ map {$_->{id}} @$bib_data ];
 
-    while (my $bib = $sth->fetchrow_hashref) {
+    my $holdings = $self->load_holdings($index, $bib_ids);
+
+    for my $bib (@$bib_data) {
         my $bib_id = $bib->{id};
 
         my $marc_doc = XML::LibXML->new->parse_string($bib->{marc});
         my $body = $self->extract_bib_values($index, $marc_doc);
-        my $holdings = $self->load_holdings($index, $bib_id);
 
+        $body->{holdings} = $holdings->{$bib_id} || [];
         $body->{source} = $bib->{source};
 
         for my $field (q/create_date edit_date/) {
@@ -320,18 +320,69 @@ sub extract_bib_values {
 
         my @nodes = $root->findnodes($prop->{xpath});
 
-        $values->{$field_name} = [ map { $_->textContent } @nodes ]; 
-        #$logger->info("ES $field_name = " . Dumper($values->{$field_name}));
-        #print "ES $field_name = " . Dumper($values->{$field_name}) . "\n";
+        if (@nodes) {
+            if (@nodes == 1) {
+                $values->{$field_name} = $nodes[0]->textContent;
+            } else {
+                $values->{$field_name} = [ map { $_->textContent } @nodes ]; 
+            }
+        } else {
+            # Some XPATH returns nodes, some (e.g. substring()) returns 
+            # string values instead of nodes.
+            $values->{$field_name} = $root->findvalue($prop->{xpath}) || undef;
+        }
+
+        $logger->internal(
+            "ES $field_name = " . Dumper($values->{$field_name}));
     }
+
+    $logger->debug("ES extracted record values: " . Dumper($values));
 
     return $values;
 }
 
+# Load holdings summary blobs for requested bibs
 sub load_holdings {
-    my ($self, $index, $bib_id) = @_;
+    my ($self, $index, $bib_ids) = @_;
 
-    my $holdings = [];
+    my $bib_ids_str = join(',', @$bib_ids);
+
+    my $copy_data = $self->get_db_conn()->selectall_arrayref(<<SQL, {Slice => {}});
+SELECT 
+    COUNT(*) AS count,
+    acn.record, 
+    acp.status AS status, 
+    acp.circ_lib AS circ_lib, 
+    acp.location AS location,
+    acp.circulate AS circulate,
+    acp.opac_visible AS opac_visible
+FROM asset.copy acp
+JOIN asset.call_number acn ON acp.call_number = acn.id
+WHERE 
+    NOT acp.deleted AND
+    NOT acn.deleted AND
+    acn.record IN ($bib_ids_str)
+GROUP BY 2, 3, 4, 5, 6, 7
+SQL
+
+    $logger->info("ES found ".scalar(@$copy_data).
+        " holdings summaries for current record batch");
+
+    my $holdings = {};
+    for my $copy (@$copy_data) {
+        $holdings->{$copy->{record}} = [] 
+            unless $holdings->{$copy->{record}};
+
+        push(@{$holdings->{$copy->{record}}}, {
+            count => $copy->{count},
+            status => $copy->{status},
+            circ_lib => $copy->{circ_lib},
+            location => $copy->{location},
+            circulate => $copy->{circulate} eq 't' ? 'true' : 'false',
+            opac_visbile => $copy->{opac_visible} eq 't' ? 'true' : 'false'
+        });
+    }
+
     return $holdings;
 }
 

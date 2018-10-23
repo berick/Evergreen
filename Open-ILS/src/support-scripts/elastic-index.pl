@@ -3,9 +3,11 @@ use strict;
 use warnings;
 use Getopt::Long;
 use OpenILS::Utils::ElasticSearch;
+use OpenILS::Utils::Fieldmapper;
 
 my $help;
 my $elastic_config;
+my $osrf_config = '/openils/conf/opensrf_core.xml';
 my $cluster = 'main';
 my $create_index;
 my $delete_index;
@@ -16,6 +18,7 @@ my $partial;
 GetOptions(
     'help'              => \$help,
     'elastic-config=s'  => \$elastic_config,
+    'osrf-config=s'     => \$osrf_config,
     'cluster=s'         => \$cluster,
     'create-index'      => \$create_index,
     'delete-index'      => \$delete_index,
@@ -24,6 +27,10 @@ GetOptions(
     'partial'           => \$partial
 ) || die "\nSee --help for more\n";
 
+# connect to osrf...
+OpenSRF::System->bootstrap_client(config_file => $osrf_config);
+Fieldmapper->import(
+    IDL => OpenSRF::Utils::SettingsClient->new->config_value("IDL"));
 
 my $es = OpenILS::Utils::ElasticSearch->new(
     cluster => $cluster,
