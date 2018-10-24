@@ -85,33 +85,43 @@ WHERE cmf.xpath IS NOT NULL AND (cmf.search_field OR cmf.facet_field);
 -- Add additional indexes for other search-y / filter-y stuff
 
 INSERT INTO config.elastic_marc_field 
-    (index, active, field_class, label, name, format,
-        datatype, search_field, facet_field, xpath)
+    (index, active, search_field, facet_field, 
+        field_class, label, name, format, datatype, xpath)
 VALUES ( 
     (SELECT id FROM config.elastic_index WHERE purpose = 'bib-search'),
-    TRUE,
-    'identifier', 'Language', 'item_lang', 'marcxml', 'keyword', TRUE, TRUE,
+    TRUE, TRUE, TRUE, 
+    'identifier', 'Language', 'item_lang', 'marcxml', 'keyword',
     $$substring(//marc:controlfield[@tag='008']/text(), '36', '3')$$
 ), (
     (SELECT id FROM config.elastic_index WHERE purpose = 'bib-search'),
-    TRUE,
-    'identifier', 'Item Form', 'item_form', 'marcxml', 'keyword', TRUE, TRUE,
+    TRUE, TRUE, TRUE, 
+    'identifier', 'Item Form', 'item_form', 'marcxml', 'keyword',
     $$substring(//marc:controlfield[@tag='008']/text(), '24', '1')$$
 ), (
     (SELECT id FROM config.elastic_index WHERE purpose = 'bib-search'),
-    TRUE,
-    'identifier', 'Audience', 'audience', 'marcxml', 'keyword', TRUE, TRUE,
+    TRUE, TRUE, TRUE, 
+    'identifier', 'Audience', 'audience', 'marcxml', 'keyword',
     $$substring(//marc:controlfield[@tag='008']/text(), '23', '1')$$
 ), (
     (SELECT id FROM config.elastic_index WHERE purpose = 'bib-search'),
-    TRUE,
-    'identifier', 'Literary Form', 'lit_form', 'marcxml', 'keyword', TRUE, TRUE,
+    TRUE, TRUE, TRUE, 
+    'identifier', 'Literary Form', 'lit_form', 'marcxml', 'keyword',
     $$substring(//marc:controlfield[@tag='008']/text(), '34', '1')$$
 ), (
     (SELECT id FROM config.elastic_index WHERE purpose = 'bib-search'),
-    TRUE,
-    'identifier', 'Publication Date', 'pub_date', 'mods32', 'long', TRUE, TRUE,
+    TRUE, TRUE, TRUE, 
+    'identifier', 'Publication Date', 'pub_date', 'mods32', 'long',
     $$//mods32:mods/mods32:originInfo/mods32:dateIssued[@encoding='marc']$$
+), (
+    (SELECT id FROM config.elastic_index WHERE purpose = 'bib-search'),
+    TRUE, FALSE, TRUE, 
+    'title', 'Title Sort', 'sort', 'mods32', 'keyword',
+    $$(//mods32:mods/mods32:titleInfo[mods32:nonSort]/mods32:title|//mods32:mods/mods32:titleNonfiling[mods32:title and not (@type)])[1]$$
+), (
+    (SELECT id FROM config.elastic_index WHERE purpose = 'bib-search'),
+    TRUE, FALSE, TRUE, 
+    'author', 'Author Sort', 'sort', 'mods32', 'keyword',
+    $$//mods32:mods/mods32:name[mods32:role/mods32:roleTerm[text()='creator']][1]$$
 );
 
 -- TODO ADD MORE FIELDS

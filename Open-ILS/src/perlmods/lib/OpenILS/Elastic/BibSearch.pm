@@ -186,14 +186,25 @@ sub create_index {
 
         my $field_class = $field->{field_class};
         my $field_name = "$field_class|" . $field->{name};
+        my $datatype = $field->{datatype};
+        my $def;
 
-        # Clone the class-level index definition (e.g. title) to
-        # use as the source of the field-specific index.
-        my $def = clone($BASE_PROPERTIES->{$field_class});
+        if ($datatype eq 'text') {
 
-        # Copy data for all fields to their parent class to
-        # support group-level searches (e.g. title search)
-        $def->{copy_to} = $field_class;
+            # Clone the class-level index definition (e.g. title) to
+            # use as the source of the field-specific index.
+            $def = clone($BASE_PROPERTIES->{$field_class});
+
+            # Copy data for all search fields to their parent class to
+            # support group-level searches (e.g. title search)
+            $def->{copy_to} = $field_class;
+
+        } else {
+            # non-text (keyword, etc.) fields are indexed as-is, no extra text field
+            # index analysis is necessary.
+            $def = {type => $datatype};
+        }
+
         $mappings->{$field_name} = $def;
     }
 

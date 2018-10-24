@@ -1400,12 +1400,29 @@ sub elastic_search {
         }
     }
 
-    if ($calls{sort}) {
-        my $key = 'title.raw' if ($calls{sort} =~ /title/);
-        $key = 'author.raw' if ($calls{sort} =~ /author/);
-        $key = 'pub_date' if ($calls{sort} =~ /pubdate/);
-        if ($key) {
-            $elastic_query->{sort} = [{$key => $descending ? 'desc' : 'asc'}];
+    if (my $key = $calls{sort}) {
+
+        # These sort fields match the default display field entries.
+        # TODO: index fields specific to sorting
+
+        my $dir = $descending ? 'desc' : 'asc';
+        if ($key =~ /title/) {
+            $elastic_query->{sort} = [
+                {'title|sort' => $dir},
+                {'title|proper.raw' => $dir}
+                {'title|maintitle.raw' => $dir}
+            ];
+            
+        } elsif ($key =~ /author/) {
+            $elastic_query->{sort} = [
+                {'author|sort' => $dir},
+                {'author|first_author.raw' => $dir}
+            ];
+
+        } elsif ($key =~ /pubdate/) {
+            $elastic_query->{sort} = [
+                {'identifier|pub_date' => $dir}
+            ];
         }
     }
 
