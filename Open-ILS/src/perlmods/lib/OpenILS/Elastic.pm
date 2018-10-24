@@ -20,6 +20,7 @@ use OpenSRF::Utils::Logger qw/:logger/;
 use OpenSRF::Utils::SettingsClient;
 use OpenILS::Utils::CStoreEditor qw/:funcs/;
 use Search::Elasticsearch;
+use Data::Dumper;
 
 sub new {
     my ($class, $cluster) = @_;
@@ -157,23 +158,47 @@ sub delete_index {
 sub index_document {
     my ($self, $id, $body) = @_;
 
-    my $result = $self->es->index(
-        index => $self->index_name,
-        id => $id,
-        body => $body
-    );
+    my $result;
+
+    eval {
+        $result = $self->es->index(
+            index => $self->index_name,
+            type => 'record', # deprecated in v6
+            id => $id,
+            body => $body
+        );
+    };
+
+    if ($@) {
+        $logger->error("ES index_document failed with $@");
+        return undef;
+    } 
 
     $logger->debug("ES index command returned $result");
+    return $result;
 }
 
 sub search {
     my ($self, $query) = @_;
 
-    return $self->es->search(
-        index => $self->index_name,
-        body => $query
-    );
+    my $result;
+
+    eval {
+        $result = $self->es->search(
+            index => $self->index_name,
+            body => $query
+        );
+    };
+
+    if ($@) {
+        $logger->error("ES search failed with $@");
+        $logger->error("ES failed query: " . Dumper($query));
+        return undef;
+    }
+
+    return $result;
 }
+
 
 
 1;

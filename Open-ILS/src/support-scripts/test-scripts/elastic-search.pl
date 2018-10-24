@@ -5,10 +5,9 @@ use Getopt::Long;
 use Time::HiRes qw/time/;
 use OpenSRF::Utils::JSON;
 use OpenILS::Utils::Fieldmapper;
-use OpenILS::Elastic;
+use OpenILS::Elastic::BibSearch;
 
 my $help;
-my $elastic_config;
 my $osrf_config = '/openils/conf/opensrf_core.xml';
 my $cluster = 'main';
 my $index = 'bib-search';
@@ -16,7 +15,6 @@ my $query_string;
 
 GetOptions(
     'help'              => \$help,
-    'elastic-config=s'  => \$elastic_config,
     'osrf-config=s'     => \$osrf_config,
     'cluster=s'         => \$cluster,
     'index=s'           => \$index,
@@ -98,14 +96,12 @@ my $query = {
   }
 };
 
-my $es = OpenILS::Utils::ElasticSearch->new(
-    config_file => $elastic_config
-);
+my $es = OpenILS::Elastic::BibSearch->new($cluster);
 
-$es->connect($cluster);
+$es->connect;
 
 my $start = time();
-my $results = $es->search($index, $query);
+my $results = $es->search($query);
 my $duration = substr(time() - $start, 0, 6);
 
 print OpenSRF::Utils::JSON->perl2JSON($results) . "\n\n";

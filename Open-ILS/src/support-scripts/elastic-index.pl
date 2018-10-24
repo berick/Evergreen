@@ -6,25 +6,21 @@ use OpenILS::Utils::Fieldmapper;
 use OpenILS::Elastic::BibSearch;
 
 my $help;
-my $elastic_config;
 my $osrf_config = '/openils/conf/opensrf_core.xml';
 my $cluster = 'main';
 my $create_index;
 my $delete_index;
-my $index_name; # use "all" to affect all configured indexes
+my $index_name;
 my $populate;
-my $partial;
 
 GetOptions(
     'help'              => \$help,
-    'elastic-config=s'  => \$elastic_config,
     'osrf-config=s'     => \$osrf_config,
     'cluster=s'         => \$cluster,
     'create-index'      => \$create_index,
     'delete-index'      => \$delete_index,
     'index=s'           => \$index_name,
-    'populate'          => \$populate,
-    'partial'           => \$partial
+    'populate'          => \$populate
 ) || die "\nSee --help for more\n";
 
 # connect to osrf...
@@ -36,10 +32,16 @@ my $es = OpenILS::Elastic::BibSearch->new($cluster);
 
 $es->connect;
 
-$es->delete_index if $delete_index;
+if ($delete_index) {
+    $es->delete_index or die "Index delete failed.\n";
+}
 
-$es->create_index if $create_index;
+if ($create_index) {
+    $es->create_index or die "Index create failed.\n";
+}
 
-$es->populate_index if $populate;
+if ($populate) {
+    $es->populate_index or die "Index populate failed.\n";
+}
 
 

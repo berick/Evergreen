@@ -22,6 +22,8 @@ use XML::LibXSLT;
 use OpenSRF::Utils::Logger qw/:logger/;
 use OpenILS::Elastic;
 use base qw/OpenILS::Elastic/;
+use Data::Dumper;
+$Data::Dumper::Indent = 2;
 
 my $INDEX_NAME = 'bib-search';
 
@@ -119,7 +121,7 @@ sub index_name {
 sub index {
     my $self = shift;
     return $self->{index} if $self->{index};
-    ($self->{index}) = grep {$_->{name} eq $INDEX_NAME} @{$self->{indices}};
+    ($self->{index}) = grep {$_->{purpose} eq $INDEX_NAME} @{$self->{indices}};
     return $self->{index};
 }
 
@@ -197,14 +199,16 @@ sub create_index {
     }
 
     my $settings = $BASE_INDEX_SETTINGS;
-    $settings->{number_of_replicas} = scalar($self->{servers});
+    $settings->{number_of_replicas} = scalar(@{$self->{servers}});
     $settings->{number_of_shards} = $self->index->{num_shards};
 
     my $conf = {
         index => $INDEX_NAME,
         body => {
             settings => $settings,
-            mappings => {properties => $mappings}
+            mappings => {record => {properties => $mappings}}
+            # document type (i.e. 'record') deprecated in v6
+            #mappings => {properties => $mappings}
         }
     };
 
@@ -214,6 +218,7 @@ sub create_index {
     if ($@) {
         $logger->error("ES failed to create index cluster=".  
             $self->cluster. "index=$INDEX_NAME error=$@");
+        print "$@\n\n";
         return 0;
     }
 
@@ -294,7 +299,8 @@ sub populate_bib_search_index_page {
             $body->{$field} = $val;
         }
 
-        $self->index_document($INDEX_NAME, $bib_id, $body);
+        return 0 unless 
+            $self->index_document($bib_id, $body);
 
         $state->{last_bib_id} = $bib_id;
         $index_count++;
