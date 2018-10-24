@@ -202,8 +202,8 @@ sub search {
     }
 
     $logger->info(
-        sprintf("ES search found %d results in %f seconds.",
-            $result->{hits}->{total}, substr($duration, 0, 6)
+        sprintf("ES search found %d results in %0.3f seconds.",
+            $result->{hits}->{total}, $duration
         )
     );
 
