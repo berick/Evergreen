@@ -442,7 +442,7 @@ export class CatalogSearchContext {
             this.pager.resultCount
         );
         for (let idx = this.pager.offset; idx < max; idx++) {
-            ids.push(this.resultIds[idx]);
+            ids.push(Number(this.resultIds[idx]));
         }
         return ids;
     }

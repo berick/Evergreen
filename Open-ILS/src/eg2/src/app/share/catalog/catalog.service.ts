@@ -174,6 +174,9 @@ export class CatalogService {
             ctx.resultIds = [];
         }
 
+        console.debug(`Search found ${result.count} and ` +
+            `returned ${result.ids.length} record IDs`);
+
         result.ids.forEach((blob, idx) => ctx.addResultId(blob[0], idx));
     }
 
@@ -205,7 +208,6 @@ export class CatalogService {
             } else {
                 idx = ctx.currentResultIds().indexOf(summary.id);
             }
-
             if (ctx.result.records) {
                 // May be reset when quickly navigating results.
                 ctx.result.records[idx] = summary;

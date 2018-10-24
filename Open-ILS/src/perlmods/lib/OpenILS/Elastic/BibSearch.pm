@@ -21,9 +21,8 @@ use XML::LibXML;
 use XML::LibXSLT;
 use OpenSRF::Utils::Logger qw/:logger/;
 use OpenILS::Elastic;
+use OpenSRF::Utils::JSON;
 use base qw/OpenILS::Elastic/;
-use Data::Dumper;
-$Data::Dumper::Indent = 2;
 
 my $INDEX_NAME = 'bib-search';
 

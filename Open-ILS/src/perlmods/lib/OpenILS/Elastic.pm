@@ -16,11 +16,12 @@ package OpenILS::Elastic;
 use strict;
 use warnings;
 use DBI;
+use Time::HiRes qw/time/;
 use OpenSRF::Utils::Logger qw/:logger/;
 use OpenSRF::Utils::SettingsClient;
 use OpenILS::Utils::CStoreEditor qw/:funcs/;
 use Search::Elasticsearch;
-use Data::Dumper;
+use OpenSRF::Utils::JSON;
 
 sub new {
     my ($class, $cluster) = @_;
@@ -182,19 +183,29 @@ sub search {
     my ($self, $query) = @_;
 
     my $result;
+    my $duration;
+
+    $logger->info("ES searching " . OpenSRF::Utils::JSON->perl2JSON($query));
 
     eval {
+        my $start_time = time;
         $result = $self->es->search(
             index => $self->index_name,
             body => $query
         );
+        $duration = time - $start_time;
     };
 
     if ($@) {
         $logger->error("ES search failed with $@");
-        $logger->error("ES failed query: " . Dumper($query));
         return undef;
     }
+
+    $logger->info(
+        sprintf("ES search found %d results in %f seconds.",
+            $result->{hits}->{total}, substr($duration, 0, 6)
+        )
+    );
 
     return $result;
 }

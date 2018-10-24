@@ -10,6 +10,7 @@ use OpenSRF::Utils::SettingsClient;
 use OpenILS::Utils::CStoreEditor q/:funcs/;
 use OpenSRF::Utils::Cache;
 use Encode;
+use OpenILS::Elastic::BibSearch;
 
 use OpenSRF::Utils::Logger qw/:logger/;
 
@@ -1156,6 +1157,9 @@ sub staged_search {
     $user_offset = ($user_offset >= 0) ? $user_offset :  0;
     $user_limit  = ($user_limit  >= 0) ? $user_limit  : 10;
 
+    # TODO TODO check settings/db to see if elasticsearch is 
+    # enabled for bib-search.
+    return elastic_search($search_hash->{query}, $user_offset, $user_limit);
 
     # we're grabbing results on a per-superpage basis, which means the 
     # limit and offset should coincide with superpage boundaries
@@ -1304,6 +1308,51 @@ sub staged_search {
     $logger->info("Completed canonicalized search is: $$global_summary{canonicalized_query}");
 
     return cache_facets($facet_key, $new_ids, $IAmMetabib, $ignore_facet_classes) if $docache;
+}
+
+
+sub elastic_search {
+    my ($query, $offset, $limit) = @_;
+
+    # TODO visibility limits on holdings summaries
+    my ($site) = ($query =~ /site\(([^\)]+)\)/);
+    $query =~ s/site\(([^\)]+)\)//g;
+
+    my $elastic_query = {
+        _source => ['id'] , # return only the ID field
+#        sort => [
+#            {'title.raw' => 'asc'},
+#            {'author.raw' => 'asc'},
+#            '_score'
+#        ],
+        size => $limit,
+        from => $offset,
+        query => {
+            bool => {
+                must => {
+                    query_string => {
+                        default_field => 'keyword',
+                        query => $query
+                    }
+                }
+            }
+        }
+    };
+
+    my $es = OpenILS::Elastic::BibSearch->new('main');
+    $es->connect;
+    my $results = $es->search($elastic_query);
+
+    return {count => 0} unless $results;
+
+    return {
+        count => $results->{hits}->{total},
+        ids => [
+            map { [$_->{_id}, undef, $_->{_score}] } 
+                grep {defined $_} @{$results->{hits}->{hits}}
+        ]
+    };
+
 }
 
 sub fetch_display_fields {
