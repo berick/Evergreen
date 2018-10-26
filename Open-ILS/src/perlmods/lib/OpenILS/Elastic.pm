@@ -95,18 +95,8 @@ sub load_config {
     my $self = shift;
     my $cluster = $self->cluster;
 
-    my $clusters = $self->get_db_rows(
-        "SELECT * FROM config.elastic_cluster WHERE name = '$cluster'");
-
-    my $cluster_id = $clusters->[0]->{id};
-
-    unless ($cluster_id) {
-        $logger->error("ES no such cluster: $cluster");
-        return;
-    }
-
     $self->{servers} = $self->get_db_rows(
-        "SELECT * FROM config.elastic_server WHERE cluster = $cluster_id AND active");
+        "SELECT * FROM elastic.node WHERE cluster = '$cluster' AND active");
 
     unless (@{$self->{servers}}) {
         $logger->error("ES no servers defined for cluster $cluster");
@@ -114,17 +104,12 @@ sub load_config {
     }
 
     $self->{indices} = $self->get_db_rows(
-        "SELECT * FROM config.elastic_index WHERE cluster = $cluster_id AND active");
+        "SELECT * FROM elastic.index WHERE cluster = '$cluster' AND active");
 
     unless (@{$self->{indices}}) {
         $logger->error("ES no indices defined for cluster $cluster");
         return;
     }
-
-    my $index_ids = join(',', map {$_->{id}} @{$self->{indices}});
-
-    $self->{marc_fields} = $self->get_db_rows(
-        "SELECT * FROM config.elastic_marc_field WHERE index IN ($index_ids) AND active");
 }
 
 sub connect {

@@ -10,7 +10,7 @@ package OpenILS::Elastic::BibSearch;
 
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR code.  See the
 # GNU General Public License for more details.
 # ---------------------------------------------------------------
 use strict;
@@ -49,7 +49,7 @@ my $BASE_PROPERTIES = {
     create_date => {type => 'date', index => 'false'},
     edit_date   => {type => 'date', index => 'false'},
 
-    # Holdings summaries.  For bib-search purposes, we don't need
+    # Holdings summaries.  For bib-search codes, we don't need
     # copy-specific details, only aggregate visibility information.
     holdings => {
         type => 'nested',
@@ -69,37 +69,31 @@ my $BASE_PROPERTIES = {
         type => 'text',
         analyzer => $LANG_ANALYZER,
         fields => {
-            folded => {type => 'text', analyzer => 'folding'},
-            raw => {type => 'keyword'}
+            folded => {type => 'text', analyzer => 'folding'}
         }
     },
     author => {
         type => 'text',
         analyzer => $LANG_ANALYZER,
         fields => {
-            folded => {type => 'text', analyzer => 'folding'},
-            raw => {type => 'keyword'}
+            folded => {type => 'text', analyzer => 'folding'}
         }
     },
     subject => {
         type => 'text',
         analyzer => $LANG_ANALYZER,
         fields => {
-            folded => {type => 'text', analyzer => 'folding'},
-            raw => {type => 'keyword'}
+            folded => {type => 'text', analyzer => 'folding'}
         }
     },
     series => {
         type => 'text',
         analyzer => $LANG_ANALYZER,
         fields => {
-            folded => {type => 'text', analyzer => 'folding'},
-            raw => {type => 'keyword'}
+            folded => {type => 'text', analyzer => 'folding'}
         }
     },
 
-    # No .raw field for keyword based on the assumption
-    # keyword values are not used for sorting or aggregation.
     keyword => {
         type => 'text',
         analyzer => $LANG_ANALYZER,
@@ -108,8 +102,7 @@ my $BASE_PROPERTIES = {
         }
     },
 
-    # Index identifier fields as keywords to avoid unnecessary
-    # ES analysis.
+    # Avoid full-text analysis on identifer fields.
     identifier => {type => 'keyword'}
 };
 
@@ -120,51 +113,8 @@ sub index_name {
 sub index {
     my $self = shift;
     return $self->{index} if $self->{index};
-    ($self->{index}) = grep {$_->{purpose} eq $INDEX_NAME} @{$self->{indices}};
+    ($self->{index}) = grep {$_->{code} eq $INDEX_NAME} @{$self->{indices}};
     return $self->{index};
-}
-
-sub get_marc_fields {
-    my $self = shift;
-    return grep {
-        $_->{index} == $self->index->{id}
-    } @{$self->{marc_fields}};
-}
-
-# Load the XSLT transforms from the DB.
-sub load_transforms {
-    my $self = shift;
-
-    $self->{xsl_transforms} = {} unless $self->{xsl_transforms};
-
-    for my $field ($self->get_marc_fields) {
-        my $format = $field->{format};
-        next if $self->{xsl_transforms}{$format};
-
-        $logger->info("ES loading info for document type $format");
-
-        my $xform = $self->get_db_rows(
-            "SELECT * FROM config.xml_transform WHERE name = '$format'")->[0];
-
-        $self->{xml_namespaces}{$format} = {
-            prefix => $xform->{prefix},
-            uri => $xform->{namespace_uri}
-        };
-
-        if ($format eq 'marcxml') {
-            # No transform needed for MARCXML.  
-            # Indicate we've seen it and move on.
-            $self->{xsl_transforms}{$format} = {};
-            next;
-        }
-
-        $logger->info("ES parsing stylesheet for $format");
-
-        my $xsl_doc = XML::LibXML->new->parse_string($xform->{xslt});
-
-        $self->{xsl_transforms}{$format} = 
-            XML::LibXSLT->new->parse_stylesheet($xsl_doc);
-    }
 }
 
 sub create_index {
@@ -180,30 +130,47 @@ sub create_index {
 
     my $mappings = $BASE_PROPERTIES;
 
-    # Add an index definition for each dynamic field.
-    # Add copy_to for field_class-level combined searches.
-    for my $field ($self->get_marc_fields) {
+    my $fields = $self->get_db_rows(
+        'SELECT * FROM elastic.bib_index_properties');
 
-        my $field_class = $field->{field_class};
-        my $field_name = "$field_class|" . $field->{name};
-        my $datatype = $field->{datatype};
+    for my $field (@$fields) {
+
+        my $field_name = $field->{name};
+        my $search_group = $field->{search_group};
+        $field_name = "$search_group|$field_name" if $search_group;
+
         my $def;
+        if ($field->{search_field}) {
+            # Search fields get full text indexing and analysis
 
-        if ($datatype eq 'text') {
+            $def = {
+                type => 'text',
+                analyzer => $LANG_ANALYZER,
+                fields => {
+                    folded => {type => 'text', analyzer => 'folding'}
+                }
+            };
 
-            # Clone the class-level index definition (e.g. title) to
-            # use as the source of the field-specific index.
-            $def = clone($BASE_PROPERTIES->{$field_class});
+            if ($field->{facet_field} || $field->{sorter}) {
+                # If it's also a facet field, add a keyword version
+                # of the field to use for aggregation
+                $def->{fields}{raw} = {type => 'keyword'};
 
-            # Copy data for all search fields to their parent class to
-            # support group-level searches (e.g. title search)
-            $def->{copy_to} = $field_class;
+                if ($search_group) {
+                    # Fields in a search group are "copy_to"'ed the 
+                    # group definition
+                    $def->{copy_to} = $search_group;
+                }
+            }
 
         } else {
-            # non-text (keyword, etc.) fields are indexed as-is, no extra text field
-            # index analysis is necessary.
-            $def = {type => $datatype};
+            # Fields that are only used for aggregation and sorting
+            # and filtering get no full-text treatment.
+            $def = {type => 'keyword'};
         }
+
+        $logger->info("ES adding field $field_name: ". 
+            OpenSRF::Utils::JSON->perl2JSON($def));
 
         $mappings->{$field_name} = $def;
     }
@@ -239,8 +206,6 @@ sub create_index {
 sub populate_index {
     my ($self) = @_;
 
-    $self->load_transforms;
-
     my $index_count = 0;
     my $total_indexed = 0;
     my $state = {last_bib_id => 0};
@@ -262,7 +227,7 @@ sub get_bib_records {
     my ($self, $state, $record_id) = @_;
 
     my $sql = <<SQL;
-SELECT bre.id, bre.marc, bre.create_date, bre.edit_date, bre.source
+SELECT bre.id, bre.create_date, bre.edit_date, bre.source AS bib_source
 FROM biblio.record_entry bre
 SQL
 
@@ -272,7 +237,7 @@ SQL
         my $last_id = $state->{last_bib_id};
         $sql .= <<SQL;
 WHERE NOT bre.deleted AND bre.active AND bre.id > $last_id
-ORDER BY bre.edit_date , bre.id LIMIT $BIB_BATCH_SIZE
+ORDER BY bre.edit_date, bre.id LIMIT $BIB_BATCH_SIZE
 SQL
     }
 
@@ -293,20 +258,32 @@ sub populate_bib_search_index_page {
 
     my $holdings = $self->load_holdings($bib_ids);
 
+    my $fields = $self->get_db_rows(                                           
+        'SELECT * FROM elastic.bib_index_properties');                         
+
     for my $bib (@$bib_data) {
         my $bib_id = $bib->{id};
 
-        my $marc_doc = XML::LibXML->new->parse_string($bib->{marc});
-        my $body = $self->extract_bib_values($marc_doc);
+        my $body = {
+            bib_source => $bib->{bib_source},
+            holdings => $holdings->{$bib_id} || []
+        };
 
-        $body->{holdings} = $holdings->{$bib_id} || [];
-        $body->{source} = $bib->{source};
-
-        for my $field (q/create_date edit_date/) {
-            next unless $bib->{$field};
+        for my $df (q/create_date edit_date/) {
+            next unless $bib->{$df};
             # ES wants ISO dates with the 'T' separator
-            (my $val = $bib->{$field}) =~ s/ /T/g;
-            $body->{$field} = $val;
+            (my $val = $bib->{$df}) =~ s/ /T/g;
+            $body->{$df} = $val;
+        }
+
+        my $fields = $self->get_db_rows(
+            "SELECT * FROM elastic.bib_record_properties($bib_id)");
+
+        for my $field (@$fields) {
+            my $fclass = $field->{search_group};
+            my $fname = $field->{name};
+            $fname = "$fclass|$fname" if $fclass;
+            $body->{$fname} = $field->{value}
         }
 
         return 0 unless 
@@ -317,59 +294,6 @@ sub populate_bib_search_index_page {
     }
 
     return $index_count;
-}
-
-sub get_bib_as {
-    my ($self, $marc_doc, $format) = @_;
-    return $marc_doc if $format eq 'marcxml';
-    return $self->{xsl_transforms}{$format}->transform($marc_doc);
-}
-
-# Returns either a string value or an array of string values.
-sub extract_xpath {
-    my ($self, $xml_doc, $format, $xpath) = @_;
-
-    my $ns = $self->{xml_namespaces}{$format};
-    my $root = $xml_doc->documentElement;
-
-    $root->setNamespace($ns->{uri}, $ns->{prefix}, 1);
-
-    my @nodes = $root->findnodes($xpath);
-
-    if (@nodes) {
-        if (@nodes == 1) {
-            return $nodes[0]->textContent;
-        } else {
-            return [ map { $_->textContent } @nodes ]; 
-        }
-    } else {
-        # Some XPATH returns nodes, some (e.g. substring()) returns 
-        # string values instead of nodes.
-        return $root->findvalue($xpath) || undef;
-    }
-}
-
-sub extract_bib_values {
-    my ($self, $marc_doc) = @_;
-
-    # various formats of the current MARC record (mods, etc.)
-    my %xform_docs;
-    my $values = {};
-    for my $field ($self->get_marc_fields) {
-
-        my $format = $field->{format};
-        my $field_name = $field->{field_class} .'|' . $field->{name};
-
-        $xform_docs{$format} = $self->get_bib_as($marc_doc, $format)
-            unless $xform_docs{$format};
-
-        my $xform_doc = $xform_docs{$format};
-
-        $values->{$field_name} = 
-            $self->extract_xpath($xform_doc, $format, $field->{xpath});
-    }
-
-    return $values;
 }
 
 # Load holdings summary blobs for requested bibs
@@ -410,8 +334,10 @@ SQL
             status => $copy->{status},
             circ_lib => $copy->{circ_lib},
             location => $copy->{location},
-            circulate => $copy->{circulate} eq 't' ? 'true' : 'false',
-            opac_visbile => $copy->{opac_visible} eq 't' ? 'true' : 'false'
+            #circulate => $copy->{circulate} eq 't' ? 'true' : 'false',
+            #opac_visbile => $copy->{opac_visible} eq 't' ? 'true' : 'false'
+            circulate => $copy->{circulate} ? 'true' : 'false',
+            opac_visbile => $copy->{opac_visible} ? 'true' : 'false'
         });
     }
 

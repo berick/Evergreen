@@ -1159,7 +1159,7 @@ sub staged_search {
 
     # TODO TODO check settings/db to see if elasticsearch is 
     # enabled for bib-search.
-    return elastic_search($search_hash->{query}, $user_offset, $user_limit);
+    #return elastic_search($search_hash->{query}, $user_offset, $user_limit);
 
     # we're grabbing results on a per-superpage basis, which means the 
     # limit and offset should coincide with superpage boundaries
@@ -1409,7 +1409,6 @@ sub elastic_search {
         if ($key =~ /title/) {
             $elastic_query->{sort} = [
                 {'title|sort' => $dir},
-                {'title|proper.raw' => $dir}
                 {'title|maintitle.raw' => $dir}
             ];
             

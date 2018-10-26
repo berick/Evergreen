@@ -11,6 +11,7 @@ my $help;
 my $osrf_config = '/openils/conf/opensrf_core.xml';
 my $cluster = 'main';
 my $index = 'bib-search';
+my $quiet = 0;
 my $query_string;
 
 GetOptions(
@@ -18,6 +19,7 @@ GetOptions(
     'osrf-config=s'     => \$osrf_config,
     'cluster=s'         => \$cluster,
     'index=s'           => \$index,
+    'quiet'             => \$quiet,
     'query-string=s'    => \$query_string
 ) || die "\nSee --help for more\n";
 
@@ -104,10 +106,12 @@ my $start = time();
 my $results = $es->search($query);
 my $duration = substr(time() - $start, 0, 6);
 
-print OpenSRF::Utils::JSON->perl2JSON($results) . "\n\n";
+print OpenSRF::Utils::JSON->perl2JSON($results) . "\n";
 
-print "Search returned ".$results->{hits}->{total}.
-    " hits with a reported duration of ".$results->{took}."ms.\n";
-print "Full round-trip time was $duration seconds.\n";
+unless ($quiet) {
+    print "\nSearch returned ".$results->{hits}->{total}.
+        " hits with a reported duration of ".$results->{took}."ms.\n";
+    print "Full round-trip time was $duration seconds.\n";
+}
 
 
