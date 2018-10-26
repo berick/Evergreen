@@ -95,11 +95,11 @@ sub load_config {
     my $self = shift;
     my $cluster = $self->cluster;
 
-    $self->{servers} = $self->get_db_rows(
+    $self->{nodes} = $self->get_db_rows(
         "SELECT * FROM elastic.node WHERE cluster = '$cluster' AND active");
 
-    unless (@{$self->{servers}}) {
-        $logger->error("ES no servers defined for cluster $cluster");
+    unless (@{$self->{nodes}}) {
+        $logger->error("ES no nodes defined for cluster $cluster");
         return;
     }
 
@@ -117,14 +117,19 @@ sub connect {
     $self->load_config;
 
     my @nodes;
-    for my $server (@{$self->{servers}}) {
+    for my $server (@{$self->{nodes}}) {
         push(@nodes, sprintf("%s://%s:%d", 
             $server->{proto}, $server->{host}, $server->{port}));
     }
 
     $logger->info("ES connecting to nodes @nodes");
 
-    $self->{es} = Search::Elasticsearch->new(nodes => \@nodes)
+    eval { $self->{es} = Search::Elasticsearch->new(nodes => \@nodes) };
+
+    if ($@) {
+        $logger->error("ES failed to connect to @nodes: $@");
+        return;
+    }
 }
 
 sub delete_index {
@@ -136,8 +141,10 @@ sub delete_index {
         $logger->info(
             "ES deleting index '$index' on cluster '".$self->cluster."'");
         $self->es->indices->delete(index => $index);
+
     } else {
-        $logger->warn("ES index '$index' does not exist");
+        $logger->warn("ES index '$index' ".
+            "does not exist in cluster '".$self->cluster."'");
     }
 }
 

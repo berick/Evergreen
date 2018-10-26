@@ -15,19 +15,15 @@ package OpenILS::Elastic::BibSearch;
 # ---------------------------------------------------------------
 use strict;
 use warnings;
-use Clone qw/clone/;
-use DBI;
-use XML::LibXML;
-use XML::LibXSLT;
 use OpenSRF::Utils::Logger qw/:logger/;
-use OpenILS::Elastic;
 use OpenSRF::Utils::JSON;
+use OpenILS::Elastic;
 use base qw/OpenILS::Elastic/;
 
 my $INDEX_NAME = 'bib-search';
 
 # number of bibs to index per batch.
-my $BIB_BATCH_SIZE = 1000;
+my $BIB_BATCH_SIZE = 500;
 
 # TODO: it's possible to apply multiple language analyzers.
 my $LANG_ANALYZER = 'english';
@@ -63,8 +59,8 @@ my $BASE_PROPERTIES = {
     },
 
     # Combo fields for field-class level searches.
-    # The value for every (for eaxmple) title|* field will be copied
-    # to the "title" field for searching accross all title entries.
+    # The value for every (for example) title|* search field will be 
+    # copied to the "title" field for searching accross all title entries.
     title => {
         type => 'text',
         analyzer => $LANG_ANALYZER,
@@ -152,31 +148,35 @@ sub create_index {
             };
 
             if ($field->{facet_field} || $field->{sorter}) {
-                # If it's also a facet field, add a keyword version
-                # of the field to use for aggregation
+                # If it's also a sort/facet field, add a keyword version
+                # of the field to use for sorting and aggregation
                 $def->{fields}{raw} = {type => 'keyword'};
+            }
 
-                if ($search_group) {
-                    # Fields in a search group are "copy_to"'ed the 
-                    # group definition
-                    $def->{copy_to} = $search_group;
-                }
+            if ($search_group) {
+                # Fields in a search group are copied to the group field
+                # for searching acrosss all fields of a given type.
+                $def->{copy_to} = $search_group;
             }
 
         } else {
-            # Fields that are only used for aggregation and sorting
-            # and filtering get no full-text treatment.
+            # Non-search fields -- used for sorting, aggregation,
+            # and "code" (raw value) searches -- are only indexed
+            # as (non-analyzed) keyword fields.
             $def = {type => 'keyword'};
         }
 
-        $logger->info("ES adding field $field_name: ". 
+        # Apply field boost.
+        $def->{boost} = $field->{weight} if ($field->{weight} || 1) > 1;
+
+        $logger->debug("ES adding field $field_name: ". 
             OpenSRF::Utils::JSON->perl2JSON($def));
 
         $mappings->{$field_name} = $def;
     }
 
     my $settings = $BASE_INDEX_SETTINGS;
-    $settings->{number_of_replicas} = scalar(@{$self->{servers}});
+    $settings->{number_of_replicas} = scalar(@{$self->{nodes}});
     $settings->{number_of_shards} = $self->index->{num_shards};
 
     my $conf = {
@@ -184,8 +184,6 @@ sub create_index {
         body => {
             settings => $settings,
             mappings => {record => {properties => $mappings}}
-            # document type (i.e. 'record') deprecated in v6
-            #mappings => {properties => $mappings}
         }
     };
 
@@ -222,72 +220,104 @@ sub populate_index {
     $logger->info("ES bib indexing complete with $total_indexed records");
 }
 
-# TODO add support for last_edit_date for partial re-indexing
-sub get_bib_records {
+sub get_bib_ids {
     my ($self, $state, $record_id) = @_;
+    return [$record_id] if $record_id;
+
+    # TODO add support for last_edit_date
+    my $last_id = $state->{last_bib_id};
 
     my $sql = <<SQL;
-SELECT bre.id, bre.create_date, bre.edit_date, bre.source AS bib_source
+SELECT bre.id
 FROM biblio.record_entry bre
-SQL
-
-    if ($record_id) {
-        $sql .= " WHERE bre.id = $record_id"
-    } else {
-        my $last_id = $state->{last_bib_id};
-        $sql .= <<SQL;
 WHERE NOT bre.deleted AND bre.active AND bre.id > $last_id
 ORDER BY bre.edit_date, bre.id LIMIT $BIB_BATCH_SIZE
 SQL
-    }
+
+    my $ids = $self->get_db_rows($sql);
+    return [ map {$_->{id}} @$ids ];
+}
+
+sub get_bib_data {
+    my ($self, $record_ids) = @_;
+
+    my $ids_str = join(',', @$record_ids);
+
+    my $sql = <<SQL;
+SELECT 
+    bre.id, 
+    bre.create_date, 
+    bre.edit_date, 
+    bre.source AS bib_source,
+    (elastic.bib_record_properties(bre.id)).*
+FROM biblio.record_entry bre
+WHERE id IN ($ids_str)
+SQL
 
     return $self->get_db_rows($sql);
 }
 
-# TODO partial re-index
 sub populate_bib_search_index_page {
     my ($self, $state) = @_;
 
     my $index_count = 0;
     my $last_id = $state->{last_bib_id};
 
-    my $bib_data = $self->get_bib_records($state);
-    return 0 unless @$bib_data;
+    my $bib_ids = $self->get_bib_ids($state);
+    return 0 unless @$bib_ids;
 
-    my $bib_ids = [ map {$_->{id}} @$bib_data ];
+    my $bib_data = $self->get_bib_data($bib_ids);
 
     my $holdings = $self->load_holdings($bib_ids);
 
-    my $fields = $self->get_db_rows(                                           
-        'SELECT * FROM elastic.bib_index_properties');                         
-
-    for my $bib (@$bib_data) {
-        my $bib_id = $bib->{id};
+    for my $bib_id (@$bib_ids) {
 
         my $body = {
-            bib_source => $bib->{bib_source},
             holdings => $holdings->{$bib_id} || []
         };
 
-        for my $df (q/create_date edit_date/) {
-            next unless $bib->{$df};
-            # ES wants ISO dates with the 'T' separator
-            (my $val = $bib->{$df}) =~ s/ /T/g;
-            $body->{$df} = $val;
-        }
+        # there are multiple rows per bib in the data list.
+        my @fields = grep {$_->{id} == $bib_id} @$bib_data;
 
-        my $fields = $self->get_db_rows(
-            "SELECT * FROM elastic.bib_record_properties($bib_id)");
+        my $first = 1;
+        for my $field (@fields) {
+        
+            if ($first) {
+                $first = 0;
+                # some values are repeated per field. 
+                # extract them from the first entry.
+                $body->{bib_source} = $field->{bib_source};
 
-        for my $field (@$fields) {
+                # ES ikes the "T" separator for ISO dates
+                ($body->{create_date} = $field->{create_date}) =~ s/ /T/g;
+                ($body->{edit_date} = $field->{edit_date}) =~ s/ /T/g;
+            }
+
             my $fclass = $field->{search_group};
             my $fname = $field->{name};
             $fname = "$fclass|$fname" if $fclass;
-            $body->{$fname} = $field->{value}
+
+            if ($body->{$fname}) {
+                if (ref $body->{$fname}) {
+                    # Three or more values encountered for field.
+                    # Add to the list.
+                    push(@{$body->{$fname}}, $field->{value});
+                } else {
+                    # Second value encountered for field.
+                    # Upgrade to array storage.
+                    $body->{$fname} = [
+                        $body->{$fname},
+                        $field->{value}
+                    ]
+                }
+            } else {
+                # First value encountered for field.
+                # Assume for now there will only be one value.
+                $body->{$fname} = $field->{value}
+            }
         }
 
-        return 0 unless 
-            $self->index_document($bib_id, $body);
+        return 0 unless $self->index_document($bib_id, $body);
 
         $state->{last_bib_id} = $bib_id;
         $index_count++;

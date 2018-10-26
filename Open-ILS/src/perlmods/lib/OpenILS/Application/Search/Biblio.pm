@@ -10,7 +10,7 @@ use OpenSRF::Utils::SettingsClient;
 use OpenILS::Utils::CStoreEditor q/:funcs/;
 use OpenSRF::Utils::Cache;
 use Encode;
-use OpenILS::Elastic::BibSearch;
+use OpenILS::Application::Search::Elastic;
 
 use OpenSRF::Utils::Logger qw/:logger/;
 
@@ -1159,7 +1159,10 @@ sub staged_search {
 
     # TODO TODO check settings/db to see if elasticsearch is 
     # enabled for bib-search.
-    #return elastic_search($search_hash->{query}, $user_offset, $user_limit);
+    if (1) {
+        return OpenILS::Application::Search::Elastic->bib_search(
+            $search_hash->{query}, $user_offset, $user_limit);
+    }
 
     # we're grabbing results on a per-superpage basis, which means the 
     # limit and offset should coincide with superpage boundaries
@@ -1311,6 +1314,7 @@ sub staged_search {
 }
 
 
+my $elastic_fields;
 sub elastic_search {
     my ($query, $offset, $limit) = @_;
 
@@ -1329,7 +1333,6 @@ sub elastic_search {
         }
     }
 
-
     my $elastic_query = {
         # Fetch only the bib ID field from each source document
         _source => ['id'],
@@ -1347,57 +1350,9 @@ sub elastic_search {
         }
     };
 
-    # No need to filter on holdings lib when searching globally
-    # (i.e. depth = 0)
-    if ($calls{site}) {
-
-        my $types = $U->get_org_types;
-        my $org = $U->find_org_by_shortname($U->get_org_tree, $calls{site});
-        my ($type) = grep {$_->id == $org->ou_type} @$types;
-        my $depth = $calls{depth} || $type->depth;
-
-        # No holdings-level circ lib filter needed when searching globally
-        if ($depth > 0) {
-
-            # TODO
-            # this makes a cstore call, but could easily come from cache.
-            my $org_ids = $U->get_org_descendants($org->id, $depth);
-
-            # Add a boolean OR-filter on holdings circ lib and optionally
-            # add a boolean AND-filter on copy status for availability
-            # checking.
-            $elastic_query->{query}->{bool}->{filter} = {
-                nested => {
-                    path => 'holdings',
-                    query => {bool => {should => []}}
-                }
-            };
-
-            my $should = 
-                $elastic_query->{query}{bool}{filter}{nested}{query}{bool}{should};
-
-            for my $org_id (@$org_ids) {
-
-                # Ensure at least one copy exists at the selected org unit
-                my $and = {
-                    bool => {
-                        must => [
-                            {term => {'holdings.circ_lib' => $org_id}}
-                        ]
-                    }
-                };
-
-                # When limiting to available, ensure at least one of the
-                # above copies is in status 0 or 7.
-                # TODO: consult config.copy_status.is_available
-                push(
-                    @{$and->{bool}{must}}, 
-                    {terms => {'holdings.status' => [0, 7]}}
-                ) if $available;
-
-                push(@$should, $and);
-            }
-        }
+    if (my $sn = $calls{site}) {
+        elastic_add_holdings_filter(
+            $elastic_query, $sn, $calls{depth}, $available);
     }
 
     if (my $key = $calls{sort}) {
@@ -1408,19 +1363,17 @@ sub elastic_search {
         my $dir = $descending ? 'desc' : 'asc';
         if ($key =~ /title/) {
             $elastic_query->{sort} = [
-                {'title|sort' => $dir},
-                {'title|maintitle.raw' => $dir}
+                {'titlesort' => $dir},
             ];
             
         } elsif ($key =~ /author/) {
             $elastic_query->{sort} = [
-                {'author|sort' => $dir},
-                {'author|first_author.raw' => $dir}
+                {'authorsort' => $dir},
             ];
 
         } elsif ($key =~ /pubdate/) {
             $elastic_query->{sort} = [
-                {'identifier|pub_date' => $dir}
+                {'pubdate' => $dir}
             ];
         }
     }
@@ -1438,7 +1391,88 @@ sub elastic_search {
                 grep {defined $_} @{$results->{hits}->{hits}}
         ]
     };
+}
 
+# avoid repetitive calls to DB for org info.
+my %org_data_cache = (by_shortname => {}, ancestors_at => {});
+
+sub elastic_add_holdings_filter {
+    my ($elastic_query, $shortname, $depth, $available) = @_;
+
+    if (!$org_data_cache{by_shortname}{$shortname}) {
+        $org_data_cache{by_shortname}{$shortname} = 
+            $U->find_org_by_shortname($U->get_org_tree, $shortname);
+    }
+
+    my $org = $org_data_cache{by_shortname}{$shortname};
+
+    my $types = $U->get_org_types; # pulls from cache
+    my ($type) = grep {$_->id == $org->ou_type} @$types;
+
+    $depth = defined $depth ? min($depth, $type->depth) : $type->depth;
+
+    if ($depth > 0) {
+
+        if (!$org_data_cache{ancestors_at}{$shortname}) {
+            $org_data_cache{ancestors_at}{$shortname} = {};
+        }
+
+        if (!$org_data_cache{ancestors_at}{$shortname}{$depth}) {
+            $org_data_cache{ancestors_at}{$shortname}{$depth} = 
+                $U->get_org_descendants($org->id, $depth);
+        }
+
+        my $org_ids = $org_data_cache{ancestors_at}{$shortname}{$depth};
+
+        # Add a boolean OR-filter on holdings circ lib and optionally
+        # add a boolean AND-filter on copy status for availability
+        # checking.
+        $elastic_query->{query}->{bool}->{filter} = {
+            nested => {
+                path => 'holdings',
+                query => {bool => {should => []}}
+            }
+        };
+
+        my $should = 
+            $elastic_query->{query}{bool}{filter}{nested}{query}{bool}{should};
+
+        for my $org_id (@$org_ids) {
+
+            # Ensure at least one copy exists at the selected org unit
+            my $and = {
+                bool => {
+                    must => [
+                        {term => {'holdings.circ_lib' => $org_id}}
+                    ]
+                }
+            };
+
+            # When limiting to available, ensure at least one of the
+            # above copies is in status 0 or 7.
+            # TODO: consult config.copy_status.is_available
+            push(
+                @{$and->{bool}{must}}, 
+                {terms => {'holdings.status' => [0, 7]}}
+            ) if $available;
+
+            push(@$should, $and);
+        }
+
+    } elsif ($available) {
+        # Limit to results that have an available copy, but don't worry
+        # about where the copy lives, since we're searching globally.
+
+        $elastic_query->{query}->{bool}->{filter} = {
+            nested => {
+                path => 'holdings',
+                query => {bool => {must => [
+                    # TODO: consult config.copy_status.is_available
+                    {terms => {'holdings.status' => [0, 7]}}
+                ]}}
+            }
+        };
+    }
 }
 
 sub fetch_display_fields {
