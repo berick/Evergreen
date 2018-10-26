@@ -3,6 +3,7 @@ use strict;
 use warnings;
 use Getopt::Long;
 use OpenILS::Utils::Fieldmapper;
+use OpenILS::Utils::CStoreEditor;
 use OpenILS::Elastic::BibSearch;
 
 my $help;
@@ -27,6 +28,7 @@ GetOptions(
 OpenSRF::System->bootstrap_client(config_file => $osrf_config);
 Fieldmapper->import(
     IDL => OpenSRF::Utils::SettingsClient->new->config_value("IDL"));
+OpenILS::Utils::CStoreEditor::init();
 
 my $es = OpenILS::Elastic::BibSearch->new($cluster);
 

@@ -40,6 +40,16 @@ sub cluster {
     return $self->{cluster};
 }
 
+sub nodes {
+    my $self = shift;
+    return $self->{nodes};
+}
+
+sub indices {
+    my $self = shift;
+    return $self->{indices};
+}
+
 sub es {
     my ($self) = @_;
     return $self->{es};
@@ -49,8 +59,9 @@ sub index_name {
     die "Index name must be provided by sub-class\n";
 }
 
-# Returns database connection object.
-# Connects if necessary.
+# Provide a direct DB connection so some high-volume activities,
+# like indexing bib records, can take advantage of a direct connection.
+# Returns database connection object -- connects if necessary.
 sub db {
 	my ($self) = @_;
 
@@ -89,24 +100,22 @@ sub get_db_rows {
     return $self->db->selectall_arrayref($sql, {Slice => {}});
 }
 
-# TODO: Add IDL entries for config.elastic* so we can
 # load the config via cstore.
 sub load_config {
     my $self = shift;
+    my $e = new_editor();
     my $cluster = $self->cluster;
 
-    $self->{nodes} = $self->get_db_rows(
-        "SELECT * FROM elastic.node WHERE cluster = '$cluster' AND active");
+    $self->{nodes} = $e->search_elastic_node({cluster => $cluster});
 
-    unless (@{$self->{nodes}}) {
+    unless (@{$self->nodes}) {
         $logger->error("ES no nodes defined for cluster $cluster");
         return;
     }
 
-    $self->{indices} = $self->get_db_rows(
-        "SELECT * FROM elastic.index WHERE cluster = '$cluster' AND active");
+    $self->{indices} = $e->search_elastic_index({cluster => $cluster});
 
-    unless (@{$self->{indices}}) {
+    unless (@{$self->indices}) {
         $logger->error("ES no indices defined for cluster $cluster");
         return;
     }
@@ -117,9 +126,9 @@ sub connect {
     $self->load_config;
 
     my @nodes;
-    for my $server (@{$self->{nodes}}) {
+    for my $server (@{$self->nodes}) {
         push(@nodes, sprintf("%s://%s:%d", 
-            $server->{proto}, $server->{host}, $server->{port}));
+            $server->proto, $server->host, $server->port));
     }
 
     $logger->info("ES connecting to nodes @nodes");

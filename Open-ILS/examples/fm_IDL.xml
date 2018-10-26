@@ -12964,6 +12964,74 @@ SELECT  usr,
 		</links>
 	</class>
 
+	<!-- Elasticsearch Classes -->
+	<!-- TODO pcrud -->
+	<class id="ec" 
+		controller="open-ils.cstore"
+		oils_obj:fieldmapper="elastic::cluster"
+		oils_persist:tablename="elastic.cluster"
+		reporter:label="Elastic Cluster">
+		<fields oils_persist:primary="code">
+			<field reporter:label="Code" name="code" reporter:datatype="text" />
+			<field reporter:label="Label" name="label" reporter:datatype="text"/>
+			<field reporter:label="Nodes" name="nodes" reporter:datatype="link" oils_persist:virtual="true" />
+		</fields>
+		<links>
+			<link field="nodes" reltype="has_many" key="cluster" class="en"/>
+		</links>
+	</class>
+	<class id="en" 
+		controller="open-ils.cstore"
+		oils_obj:fieldmapper="elastic::node"
+		oils_persist:tablename="elastic.node"
+		reporter:label="Elastic Node">
+		<fields oils_persist:primary="id" oils_persist:sequence="elastic.node_id_seq">
+			<field reporter:label="Cluster" name="cluster" reporter:datatype="link"/>
+			<field reporter:label="Label" name="label" reporter:datatype="text"/>
+			<field reporter:label="Host" name="host" reporter:datatype="text"/>
+			<field reporter:label="Protocol" name="proto" reporter:datatype="text"/>
+			<field reporter:label="Port" name="port" reporter:datatype="int"/>
+			<field reporter:label="Active" name="active" reporter:datatype="bool"/>
+		</fields>
+		<links>
+			<link field="cluster" reltype="has_a" key="code" map="" class="ec"/>
+		</links>
+	</class>
+	<class id="ei" 
+		controller="open-ils.cstore"
+		oils_obj:fieldmapper="elastic::index"
+		oils_persist:tablename="elastic.index"
+		reporter:label="Elastic Index">
+		<fields oils_persist:primary="id" oils_persist:sequence="elastic.index_id_seq">
+			<field reporter:label="Cluster" name="cluster" reporter:datatype="link"/>
+			<field reporter:label="Code" name="code" reporter:datatype="text"/>
+			<field reporter:label="Number of Shards" name="num_shards" reporter:datatype="int"/>
+			<field reporter:label="Active" name="active" reporter:datatype="bool"/>
+		</fields>
+		<links>
+			<link field="cluster" reltype="has_a" key="code" map="" class="ec"/>
+		</links>
+	</class>
+	<class id="ebip" 
+		controller="open-ils.cstore"
+		oils_obj:fieldmapper="elastic::bib_field"
+		oils_persist:tablename="elastic.bib_field"
+		reporter:label="Elastic Bib Index field"
+		oils_persist:readonly="true">
+		<fields oils_persist:primary="id" oils_persist:sequence="elastic.index_id_seq">
+			<field reporter:label="Metabib Field" name="metabib_field" reporter:datatype="link"/>
+			<field reporter:label="Name" name="name" reporter:datatype="text"/>
+			<field reporter:label="Search Group" name="search_group" reporter:datatype="text"/>
+			<field reporter:label="Is Sort Field" name="sorter" reporter:datatype="bool"/>
+			<field reporter:label="Is Search Field" name="search_field" reporter:datatype="bool"/>
+			<field reporter:label="Is Facet Field" name="facet_field" reporter:datatype="bool"/>
+			<field reporter:label="Field Weight (Boost)" name="weight" reporter:datatype="int"/>
+		</fields>
+		<links>
+			<link field="metabib_field" reltype="has_a" key="id" map="" class="cmf"/>
+		</links>
+	</class>
+
 	<class id="cht" controller="open-ils.cstore open-ils.pcrud" oils_obj:fieldmapper="config::hold_type" oils_persist:tablename="config.hold_type" reporter:label="Hold Type" oils_persist:readonly="true">
     	<fields oils_persist:primary="id" oils_persist:sequence="config.hold_type_id_seq">
         	<field name="id" reporter:selector="name" reporter:datatype="id"/>

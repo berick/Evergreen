@@ -33,14 +33,13 @@ CREATE TABLE elastic.index (
     CONSTRAINT    index_type_once_per_cluster UNIQUE (code, cluster)
 );
 
-CREATE OR REPLACE VIEW elastic.bib_index_properties AS
+CREATE OR REPLACE VIEW elastic.bib_field AS
     SELECT fields.* FROM (
         SELECT 
             NULL::INT AS metabib_field,
             crad.name,
             NULL AS search_group,
             crad.sorter,
-            crad.multi,
             FALSE AS search_field,
             FALSE AS facet_field,
             1 AS weight
@@ -52,7 +51,6 @@ CREATE OR REPLACE VIEW elastic.bib_index_properties AS
             cmf.name,
             cmf.field_class AS search_group,
             FALSE AS sorter,
-            TRUE AS multi,
             -- always treat identifier fields as non-search fields.
             (cmf.field_class <> 'identifier' AND cmf.search_field) AS search_field,
             cmf.facet_field,
@@ -62,7 +60,7 @@ CREATE OR REPLACE VIEW elastic.bib_index_properties AS
     ) fields;
 
 -- Note this could be done with a view, but pushing the bib ID
--- filter down to the base filter makes it a lot faster.
+-- filter down to the bottom of the query makes it a lot faster.
 CREATE OR REPLACE FUNCTION elastic.bib_record_properties(bre_id BIGINT) 
     RETURNS TABLE (
         search_group TEXT,
@@ -105,27 +103,36 @@ BEGIN
                 mfe.source, 
                 -- Index individual values instead of string-joined values
                 -- so they may be treated individually.  This is useful,
-                -- for example, when aggregating on individual subjects.
+                -- for example, when aggregating on subjects.
                 CASE WHEN cmf.joiner IS NOT NULL THEN
                     REGEXP_SPLIT_TO_TABLE(mfe.value, cmf.joiner)
                 ELSE
                     mfe.value
                 END AS value
             FROM (
-                SELECT * FROM metabib.title_field_entry UNION 
-                SELECT * FROM metabib.author_field_entry UNION
-                SELECT * FROM metabib.subject_field_entry UNION
-                SELECT * FROM metabib.series_field_entry UNION
-                SELECT * FROM metabib.keyword_field_entry UNION
-                SELECT * FROM metabib.identifier_field_entry
+                SELECT * FROM metabib.title_field_entry mtfe
+                    WHERE mtfe.source = $$ || QUOTE_LITERAL(bre_id) || $$ 
+                UNION 
+                SELECT * FROM metabib.author_field_entry mafe
+                    WHERE mafe.source = $$ || QUOTE_LITERAL(bre_id) || $$ 
+                UNION 
+                SELECT * FROM metabib.subject_field_entry msfe
+                    WHERE msfe.source = $$ || QUOTE_LITERAL(bre_id) || $$
+                UNION 
+                SELECT * FROM metabib.series_field_entry msrfe
+                    WHERE msrfe.source = $$ || QUOTE_LITERAL(bre_id) || $$ 
+                UNION 
+                SELECT * FROM metabib.keyword_field_entry mkfe
+                    WHERE mkfe.source = $$ || QUOTE_LITERAL(bre_id) || $$
+                UNION 
+                SELECT * FROM metabib.identifier_field_entry mife
+                    WHERE mife.source = $$ || QUOTE_LITERAL(bre_id) || $$
             ) mfe
             JOIN config.metabib_field cmf ON (cmf.id = mfe.field)
-            WHERE mfe.source = $$ || QUOTE_LITERAL(bre_id) || $$
-                AND (cmf.search_field OR cmf.facet_field)
+            WHERE (cmf.search_field OR cmf.facet_field)
         ) record
     $$;
 END $FUNK$ LANGUAGE PLPGSQL;
-
 
 
 /* SEED DATA ------------------------------------------------------------ */

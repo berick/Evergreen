@@ -17,6 +17,7 @@ use strict;
 use warnings;
 use OpenSRF::Utils::Logger qw/:logger/;
 use OpenSRF::Utils::JSON;
+use OpenILS::Utils::CStoreEditor qw/:funcs/;
 use OpenILS::Elastic;
 use base qw/OpenILS::Elastic/;
 
@@ -109,7 +110,7 @@ sub index_name {
 sub index {
     my $self = shift;
     return $self->{index} if $self->{index};
-    ($self->{index}) = grep {$_->{code} eq $INDEX_NAME} @{$self->{indices}};
+    ($self->{index}) = grep {$_->code eq $INDEX_NAME} @{$self->indices};
     return $self->{index};
 }
 
@@ -126,17 +127,16 @@ sub create_index {
 
     my $mappings = $BASE_PROPERTIES;
 
-    my $fields = $self->get_db_rows(
-        'SELECT * FROM elastic.bib_index_properties');
+    my $fields = new_editor()->retrieve_all_elastic_bib_field();
 
     for my $field (@$fields) {
 
-        my $field_name = $field->{name};
-        my $search_group = $field->{search_group};
+        my $field_name = $field->name;
+        my $search_group = $field->search_group;
         $field_name = "$search_group|$field_name" if $search_group;
 
         my $def;
-        if ($field->{search_field}) {
+        if ($field->search_field eq 't') {
             # Search fields get full text indexing and analysis
 
             $def = {
@@ -147,7 +147,7 @@ sub create_index {
                 }
             };
 
-            if ($field->{facet_field} || $field->{sorter}) {
+            if ($field->facet_field eq 't' || $field->sorter eq 't') {
                 # If it's also a sort/facet field, add a keyword version
                 # of the field to use for sorting and aggregation
                 $def->{fields}{raw} = {type => 'keyword'};
@@ -167,7 +167,7 @@ sub create_index {
         }
 
         # Apply field boost.
-        $def->{boost} = $field->{weight} if ($field->{weight} || 1) > 1;
+        $def->{boost} = $field->weight if ($field->weight || 1) > 1;
 
         $logger->debug("ES adding field $field_name: ". 
             OpenSRF::Utils::JSON->perl2JSON($def));
@@ -176,8 +176,8 @@ sub create_index {
     }
 
     my $settings = $BASE_INDEX_SETTINGS;
-    $settings->{number_of_replicas} = scalar(@{$self->{nodes}});
-    $settings->{number_of_shards} = $self->index->{num_shards};
+    $settings->{number_of_replicas} = scalar(@{$self->nodes});
+    $settings->{number_of_shards} = $self->index->num_shards;
 
     my $conf = {
         index => $INDEX_NAME,
@@ -364,8 +364,6 @@ SQL
             status => $copy->{status},
             circ_lib => $copy->{circ_lib},
             location => $copy->{location},
-            #circulate => $copy->{circulate} eq 't' ? 'true' : 'false',
-            #opac_visbile => $copy->{opac_visible} eq 't' ? 'true' : 'false'
             circulate => $copy->{circulate} ? 'true' : 'false',
             opac_visbile => $copy->{opac_visible} ? 'true' : 'false'
         });
