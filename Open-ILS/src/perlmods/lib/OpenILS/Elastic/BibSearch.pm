@@ -169,7 +169,7 @@ sub create_index {
         # Apply field boost.
         $def->{boost} = $field->weight if ($field->weight || 1) > 1;
 
-        $logger->debug("ES adding field $field_name: ". 
+        $logger->info("ES adding field $field_name: ". 
             OpenSRF::Utils::JSON->perl2JSON($def));
 
         $mappings->{$field_name} = $def;

@@ -38,16 +38,22 @@ my %org_data_cache = (by_shortname => {}, ancestors_at => {});
 sub bib_search {
     my ($class, $query, $offset, $limit) = @_;
 
-    if (!$bib_search_fields) {
-        # gather fields and flesh with crad / cmf
-    }
+    $bib_search_fields = 
+        new_editor()->retrieve_all_elastic_bib_field()
+        unless $bib_search_fields;
 
     my $elastic_query = translate_elastic_query($query, $offset, $limit);
+
+    $logger->info("ES sending query to elasticsearch: ".
+        OpenSRF::Utils::JSON->perl2JSON($elastic_query));
 
     my $es = OpenILS::Elastic::BibSearch->new('main');
 
     $es->connect;
     my $results = $es->search($elastic_query);
+
+    $logger->info("ES elasticsearch returned: ".
+        OpenSRF::Utils::JSON->perl2JSON($results));
 
     return {count => 0} unless $results;
 
@@ -63,10 +69,17 @@ sub bib_search {
 sub translate_elastic_query {
     my ($query, $offset, $limit) = @_;
 
+    # Scrub functions and tags from the bare query so they may
+    # be translated to elastic equivalents.  We only want the 
+    # query portion to be passed as-is for the elastic query string
+
     my ($available) = ($query =~ s/(\#available)//g);
     my ($descending) = ($query =~ s/(\#descending)//g);
 
-    my @funcs = qw/site depth sort item_lang/; # todo add others
+    # Remove unsupported tags (e.g. #deleted)
+    $query =~ s/\#[a-z]+//ig;
+
+    my @funcs = qw/site depth sort item_lang/; 
     my %calls;
 
     for my $func (@funcs) {
@@ -79,8 +92,7 @@ sub translate_elastic_query {
     }
 
     my $elastic_query = {
-        # Fetch only the bib ID field from each source document
-        _source => ['id'],
+        _source => ['id'], # Fetch bib ID only
         size => $limit,
         from => $offset,
         query => {
@@ -95,35 +107,42 @@ sub translate_elastic_query {
         }
     };
 
-    if (my $sn = $calls{site}) {
-        add_elastic_holdings_filter(
-            $elastic_query, $sn, $calls{depth}, $available);
-    }
+    add_elastic_holdings_filter(
+        $elastic_query, $calls{site}, $calls{depth}, $available)
+        if $calls{site};
 
-    if (my $key = $calls{sort}) {
-
-        # These sort fields match the default display field entries.
-        # TODO: index fields specific to sorting
-
+    if (my $sf = $calls{sort}) {
         my $dir = $descending ? 'desc' : 'asc';
-        if ($key =~ /title/) {
-            $elastic_query->{sort} = [
-                {'titlesort' => $dir},
-            ];
-            
-        } elsif ($key =~ /author/) {
-            $elastic_query->{sort} = [
-                {'authorsort' => $dir},
-            ];
-
-        } elsif ($key =~ /pubdate/) {
-            $elastic_query->{sort} = [
-                {'pubdate' => $dir}
-            ];
-        }
+        $elastic_query->{sort} = [{$sf => $dir}];
     }
 
+    add_elastic_facets($elastic_query);
+        
     return $elastic_query;
+}
+
+sub add_elastic_facets {
+    my ($elastic_query) = @_;
+
+    my @facet_fields = grep {$_->facet_field eq 't'} @$bib_search_fields;
+    return unless @facet_fields;
+
+    $elastic_query->{aggs} = {};
+
+    for my $facet (@facet_fields) {
+        my $fname = $facet->name;
+        my $fgrp = $facet->search_group;
+        $fname = "$fgrp|$fname" if $fgrp;
+
+        # Search fields have a .raw multi-field for indexing the
+        # raw (keyword) value for aggregation.
+        # Non-search fields use the base field, since it's already a 
+        # keyword field.
+        my $index = $fname;
+        $index = "$fname.raw" if $facet->search_field eq 't';
+
+        $elastic_query->{aggs}{$fname} = {terms => {field => $index}};
+    }
 }
 
 
