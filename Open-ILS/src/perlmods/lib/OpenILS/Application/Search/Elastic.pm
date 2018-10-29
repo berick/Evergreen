@@ -85,7 +85,7 @@ sub format_facets {
 
         my ($name, $field_class) = split('|', $fname);
         my ($bib_field) = grep {
-            $_->{name} eq $name && $_->{search_group} eq $field_class
+            $_->name eq $name && $_->search_group eq $field_class
         } @$bib_search_fields;
 
         my $hash = $facets->{$bib_field->metabib_field} = {};
