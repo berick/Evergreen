@@ -145,18 +145,6 @@ vim:et:ts=4:sw=4:
             <!-- number of parallel processes to use during fine generation -->
             <parallel>1</parallel>
         </fine_generator>
-
-        <elastic_search>
-            <database>
-                <driver>Pg</driver>
-                <host>localhost</host>
-                <port>5432</port>
-                <db>evergreen</db>
-                <user>evergreen</user>
-                <pw>evergreen</pw>
-                <application_name>Elastic Search Indexer</application_name>
-            </database>
-        </elastic_search>
         
         <reporter>
             <!--

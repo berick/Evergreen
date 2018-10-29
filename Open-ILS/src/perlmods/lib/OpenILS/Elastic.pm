@@ -18,7 +18,6 @@ use warnings;
 use DBI;
 use Time::HiRes qw/time/;
 use OpenSRF::Utils::Logger qw/:logger/;
-use OpenSRF::Utils::SettingsClient;
 use OpenILS::Utils::CStoreEditor qw/:funcs/;
 use Search::Elasticsearch;
 use OpenSRF::Utils::JSON;
@@ -66,15 +65,13 @@ sub db {
 	my ($self) = @_;
 
     return $self->{db} if $self->{db};
-
-    my $client = OpenSRF::Utils::SettingsClient->new;
-    my $settings = $client->config_value('elastic_search');
-    my $db_name = $settings->{database}->{db};
-    my $db_host = $settings->{database}->{host};
-    my $db_port = $settings->{database}->{port};
-    my $db_user = $settings->{database}->{user};
-    my $db_pass = $settings->{database}->{pw};
-    my $db_appn = $settings->{database}->{application_name};
+    
+    my $db_name = $self->{db_name};
+    my $db_host = $self->{db_host};
+    my $db_port = $self->{db_port};
+    my $db_user = $self->{db_user};
+    my $db_pass = $self->{db_pass};
+    my $db_appn = $self->{db_appn} || 'Elastic Indexer';
 
     # TODO Add application_name to dsn
 

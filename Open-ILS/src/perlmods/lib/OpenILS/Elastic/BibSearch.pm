@@ -15,9 +15,12 @@ package OpenILS::Elastic::BibSearch;
 # ---------------------------------------------------------------
 use strict;
 use warnings;
+use DateTime;
+use Time::HiRes qw/time/;
 use OpenSRF::Utils::Logger qw/:logger/;
 use OpenSRF::Utils::JSON;
 use OpenILS::Utils::CStoreEditor qw/:funcs/;
+use OpenILS::Utils::DateTime qw/interval_to_seconds/;
 use OpenILS::Elastic;
 use base qw/OpenILS::Elastic/;
 
@@ -202,35 +205,66 @@ sub create_index {
 
 # Add data to the bib-search index
 sub populate_index {
-    my ($self) = @_;
+    my ($self, $settings) = @_;
+    $settings ||= {};
 
     my $index_count = 0;
     my $total_indexed = 0;
-    my $state = {last_bib_id => 0};
 
-    do {
-        $index_count =
-            $self->populate_bib_search_index_page($state);
+    # extract the database settings.
+    for my $db_key (grep {$_ =~ /^db_/} keys %$settings) {
+        $self->{$db_key} = $settings->{$db_key};
+    }
+
+    # TODO $settings->{stop_record}
+    # TODO $settings->{start_date}
+
+    my $end_time;
+    my $duration = $settings->{max_duration};
+    if ($duration) {
+        my $seconds = interval_to_seconds($duration);
+        $end_time = DateTime->now;
+        $end_time->add(seconds => $seconds);
+    }
+
+    while (1) {
+
+        $index_count = $self->populate_bib_index_batch($settings);
         $total_indexed += $index_count;
 
         $logger->info("ES indexed $total_indexed bib records");
 
-    } while ($index_count > 0);
+        # exit if we're only indexing a single record or if the 
+        # batch indexer says there are no more records to index.
+        last if !$index_count || $settings->{index_record};
+
+        if ($end_time && DateTime->now > $end_time) {
+            $logger->info(
+                "ES index populate exiting early on max_duration $duration");
+            last;
+        }
+    } 
 
     $logger->info("ES bib indexing complete with $total_indexed records");
 }
 
 sub get_bib_ids {
-    my ($self, $state, $record_id) = @_;
-    return [$record_id] if $record_id;
+    my ($self, $state) = @_;
 
-    # TODO add support for last_edit_date
-    my $last_id = $state->{last_bib_id};
+    # A specific record is selected for indexing.
+    return [$state->{index_record}] if $state->{index_record};
+
+    my $start_id = $state->{start_record} || 0;
+    my $stop_id = $state->{stop_record}; # TODO
+
+    # TODO: implement start_date filtering.
+    # Requires checking edit dates on bibs, call numbers, and copies!
+    my $start_date = $state->{start_date};
 
     my $sql = <<SQL;
 SELECT bre.id
 FROM biblio.record_entry bre
-WHERE NOT bre.deleted AND bre.active AND bre.id > $last_id
+WHERE NOT bre.deleted AND bre.active AND bre.id >= $start_id
 ORDER BY bre.edit_date, bre.id LIMIT $BIB_BATCH_SIZE
 SQL
 
@@ -257,14 +291,15 @@ SQL
     return $self->get_db_rows($sql);
 }
 
-sub populate_bib_search_index_page {
+sub populate_bib_index_batch {
     my ($self, $state) = @_;
 
     my $index_count = 0;
-    my $last_id = $state->{last_bib_id};
 
     my $bib_ids = $self->get_bib_ids($state);
     return 0 unless @$bib_ids;
+
+    $logger->info("ES indexing ".scalar(@$bib_ids)." records");
 
     my $bib_data = $self->get_bib_data($bib_ids);
 
@@ -319,7 +354,7 @@ sub populate_bib_search_index_page {
 
         return 0 unless $self->index_document($bib_id, $body);
 
-        $state->{last_bib_id} = $bib_id;
+        $state->{start_record} = $bib_id + 1;
         $index_count++;
     }
 
