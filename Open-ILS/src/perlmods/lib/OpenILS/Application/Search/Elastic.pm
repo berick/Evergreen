@@ -59,7 +59,6 @@ sub bib_search {
 
     return {count => 0} unless $results;
 
-    format_facets($results->{aggregations});
 
     return {
         count => $results->{hits}->{total},
@@ -67,7 +66,7 @@ sub bib_search {
             map { [$_->{_id}, undef, $_->{_score}] } 
                 grep {defined $_} @{$results->{hits}->{hits}}
         ],
-        facets => $results->{aggregations},
+        facets => format_facets($results->{aggregations}),
         # Note at time of writing no search caching is used for 
         # Elasticsearch, but providing cache keys allows the caller to 
         # know if this search matches another search.
@@ -83,7 +82,8 @@ sub format_facets {
 
     for my $fname (keys %$aggregations) {
 
-        my ($name, $field_class) = split('|', $fname);
+        my ($field_class, $name) = split(/\|/, $fname);
+
         my ($bib_field) = grep {
             $_->name eq $name && $_->search_group eq $field_class
         } @$bib_search_fields;

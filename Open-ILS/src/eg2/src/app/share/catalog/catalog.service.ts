@@ -291,42 +291,54 @@ export class CatalogService {
             return Promise.resolve();
         }
 
+        if (ctx.result.facets) {
+            // No need to fetch pre-compiled facets
+            console.debug('Showing pre-compiled facets');
+            ctx.result.facetData = this.formatFacets(ctx.result.facets);
+            return Promise.resolve();
+        }
+
         return new Promise((resolve, reject) => {
             this.net.request('open-ils.search',
                 'open-ils.search.facet_cache.retrieve',
                 ctx.result.facet_key
             ).subscribe(facets => {
-                const facetData = {};
-                Object.keys(facets).forEach(cmfId => {
-                    const facetHash = facets[cmfId];
-                    const cmf = this.cmfMap[cmfId];
-
-                    const cmfData = [];
-                    Object.keys(facetHash).forEach(value => {
-                        const count = facetHash[value];
-                        cmfData.push({value : value, count : count});
-                    });
-
-                    if (!facetData[cmf.field_class()]) {
-                        facetData[cmf.field_class()] = {};
-                    }
-
-                    facetData[cmf.field_class()][cmf.name()] = {
-                        cmfLabel : cmf.label(),
-                        valueList : cmfData.sort((a, b) => {
-                            if (a.count > b.count) { return -1; }
-                            if (a.count < b.count) { return 1; }
-                            // secondary alpha sort on display value
-                            return a.value < b.value ? -1 : 1;
-                        })
-                    };
-                });
-
+                const facetData = this.formatFacets(facets);
                 this.lastFacetKey = ctx.result.facet_key;
                 this.lastFacetData = ctx.result.facetData = facetData;
                 resolve();
             });
         });
+    }
+
+    formatFacets(facets: any) {
+        const facetData = {};
+        Object.keys(facets).forEach(cmfId => {
+            const facetHash = facets[cmfId];
+            const cmf = this.cmfMap[cmfId];
+
+            const cmfData = [];
+            Object.keys(facetHash).forEach(value => {
+                const count = facetHash[value];
+                cmfData.push({value : value, count : count});
+            });
+
+            if (!facetData[cmf.field_class()]) {
+                facetData[cmf.field_class()] = {};
+            }
+
+            facetData[cmf.field_class()][cmf.name()] = {
+                cmfLabel : cmf.label(),
+                valueList : cmfData.sort((a, b) => {
+                    if (a.count > b.count) { return -1; }
+                    if (a.count < b.count) { return 1; }
+                    // secondary alpha sort on display value
+                    return a.value < b.value ? -1 : 1;
+                })
+            };
+        });
+
+        return facetData;
     }
 
     fetchCcvms(): Promise<void> {
