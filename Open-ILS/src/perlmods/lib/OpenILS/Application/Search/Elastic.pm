@@ -22,6 +22,7 @@ use OpenSRF::Utils::SettingsClient;
 use OpenILS::Utils::CStoreEditor q/:funcs/;
 use OpenILS::Elastic::BibSearch;
 use List::Util qw/min/;
+use Digest::MD5 qw(md5_hex);
 
 use OpenILS::Application::AppUtils;
 my $U = "OpenILS::Application::AppUtils";
@@ -36,13 +37,14 @@ my %org_data_cache = (by_shortname => {}, ancestors_at => {});
 # Translate search results into a structure consistent with a bib search
 # API response.
 sub bib_search {
-    my ($class, $query, $offset, $limit) = @_;
+    my ($class, $query, $staff, $offset, $limit) = @_;
 
     $bib_search_fields = 
         new_editor()->retrieve_all_elastic_bib_field()
         unless $bib_search_fields;
 
-    my $elastic_query = translate_elastic_query($query, $offset, $limit);
+    my ($elastic_query, $cache_key) = 
+        translate_elastic_query($query, $staff, $offset, $limit);
 
     $logger->info("ES sending query to elasticsearch: ".
         OpenSRF::Utils::JSON->perl2JSON($elastic_query));
@@ -57,17 +59,48 @@ sub bib_search {
 
     return {count => 0} unless $results;
 
+    format_facets($results->{aggregations});
+
     return {
         count => $results->{hits}->{total},
         ids => [
             map { [$_->{_id}, undef, $_->{_score}] } 
                 grep {defined $_} @{$results->{hits}->{hits}}
-        ]
+        ],
+        facets => $results->{aggregations},
+        # Note at time of writing no search caching is used for 
+        # Elasticsearch, but providing cache keys allows the caller to 
+        # know if this search matches another search.
+        cache_key => $cache_key,
+        facet_key => $cache_key.'_facets'
     };
 }
 
+
+sub format_facets {
+    my $aggregations = shift;
+    my $facets = {}; # cmf.id => {"Facet Value" => count}
+
+    for my $fname (keys %$aggregations) {
+
+        my ($name, $field_class) = split('|', $fname);
+        my ($bib_field) = grep {
+            $_->{name} eq $name && $_->{search_group} eq $field_class
+        } @$bib_search_fields;
+
+        my $hash = $facets->{$bib_field->metabib_field} = {};
+
+        my $values = $aggregations->{$fname}->{buckets};
+        for my $bucket (@$values) {
+            $hash->{$bucket->{key}} = $bucket->{doc_count};
+        }
+    }
+
+    return $facets;
+}
+
 sub translate_elastic_query {
-    my ($query, $offset, $limit) = @_;
+    my ($query, $staff, $offset, $limit) = @_;
 
     # Scrub functions and tags from the bare query so they may
     # be translated to elastic equivalents.  We only want the 
@@ -90,6 +123,15 @@ sub translate_elastic_query {
             $calls{$func} = $val;
         }
     }
+
+    my $cache_seed = "$query $staff $available ";
+    # TODO: confirm matches @funcs above where needed
+    for my $key (qw/site depth item_lang/) { 
+        $cache_seed .= " $key=" . $calls{$key} if defined $calls{$key};
+    }
+
+    my $cache_key = md5_hex($cache_seed);
+    $logger->info("ES cache seed = $cache_seed | $cache_key");
 
     my $elastic_query = {
         _source => ['id'], # Fetch bib ID only
@@ -118,7 +160,7 @@ sub translate_elastic_query {
 
     add_elastic_facets($elastic_query);
         
-    return $elastic_query;
+    return ($elastic_query, $cache_key);
 }
 
 sub add_elastic_facets {
@@ -160,6 +202,9 @@ sub add_elastic_holdings_filter {
     my ($type) = grep {$_->id == $org->ou_type} @$types;
 
     $depth = defined $depth ? min($depth, $type->depth) : $type->depth;
+
+    # TODO: if $staff is false, add a holdings filter for 
+    # opac_visble / location.opac_visible / status.opac_visible
 
     if ($depth > 0) {
 
