@@ -128,7 +128,7 @@ sub connect {
             $server->proto, $server->host, $server->port));
     }
 
-    $logger->info("ES connecting to nodes @nodes");
+    $logger->debug("ES connecting to nodes @nodes");
 
     eval { $self->{es} = Search::Elasticsearch->new(nodes => \@nodes) };
 

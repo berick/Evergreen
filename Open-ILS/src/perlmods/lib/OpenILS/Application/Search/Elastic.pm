@@ -39,6 +39,8 @@ my %org_data_cache = (by_shortname => {}, ancestors_at => {});
 sub bib_search {
     my ($class, $query, $staff, $offset, $limit) = @_;
 
+    $logger->info("ES parsing API query $query");
+
     $bib_search_fields = 
         new_editor()->retrieve_all_elastic_bib_field()
         unless $bib_search_fields;
@@ -54,11 +56,10 @@ sub bib_search {
     $es->connect;
     my $results = $es->search($elastic_query);
 
-    $logger->info("ES elasticsearch returned: ".
+    $logger->debug("ES elasticsearch returned: ".
         OpenSRF::Utils::JSON->perl2JSON($results));
 
     return {count => 0} unless $results;
-
 
     return {
         count => $results->{hits}->{total},
@@ -112,35 +113,27 @@ sub translate_elastic_query {
     # Remove unsupported tags (e.g. #deleted)
     $query =~ s/\#[a-z]+//ig;
 
-    my @funcs = qw/site depth sort item_lang/; 
+    my @funcs = qw/site depth sort item_lang format/; 
     my %calls;
 
     for my $func (@funcs) {
         my ($val) = ($query =~ /$func\(([^\)]+)\)/);
+
         if (defined $val) {
-            # scrub from query string
-            $query =~ s/$func\(([^\)]+)\)//g;
+            $query =~ s/$func\(([^\)]+)\)//g; # scrub
             $calls{$func} = $val;
         }
     }
 
-
     my @facets = ($query =~ /([a-z]+\|[a-z]+\[[^\]]+\])/g);
-    
-    if (@facets) {
-        # scrub the query of facets
-        $query =~ s/([a-z]+\|[a-z]+\[[^\]]+\])//g;
-    }
-
+    $query =~ s/([a-z]+\|[a-z]+\[[^\]]+\])//g if @facets; # scrub
 
     my $cache_seed = "$query $staff $available ";
-    # TODO: confirm matches @funcs above where needed
-    for my $key (qw/site depth item_lang/) { 
+    for my $key (qw/site depth item_lang format/) { 
         $cache_seed .= " $key=" . $calls{$key} if defined $calls{$key};
     }
 
     my $cache_key = md5_hex($cache_seed);
-    $logger->info("ES cache seed = $cache_seed | $cache_key");
 
     my $elastic_query = {
         _source => ['id'], # Fetch bib ID only
@@ -161,6 +154,12 @@ sub translate_elastic_query {
         }
     };
 
+    if ($calls{format}) {
+        push(
+            @{$elastic_query->{query}->{bool}->{filter}},
+            {term => {search_format => $calls{format}}}
+        );
+    }
 
     add_elastic_facet_filters($elastic_query, @facets);
 
