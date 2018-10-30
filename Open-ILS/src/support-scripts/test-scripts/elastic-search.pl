@@ -39,55 +39,66 @@ help() if $help;
 OpenSRF::System->bootstrap_client(config_file => $osrf_config);
 Fieldmapper->import(
     IDL => OpenSRF::Utils::SettingsClient->new->config_value("IDL"));
+OpenILS::Utils::CStoreEditor::init();
 
 my $query = {
   _source => ['id'] , # return only the ID field
+  from => 0,
+  size => 5,
   sort => [
-    {'title.raw' => 'asc'},
-    {'author.raw' => 'asc'},
+    {'titlesort' => 'asc'},
     '_score'
   ],
   query => {
     bool => {
       must => {
         query_string => {
+          default_operator => 'AND',
           default_field => 'keyword',
           query => $query_string
         }
       },
-      filter => {
-        nested => {
-          path => 'holdings',
-          query => {
-            bool => {
-              must => [
-                {
-                  bool => {
-                    should => [
-                      {term => {'holdings.status' => '0'}},
-                      {term => {'holdings.status' => '7'}}
-                    ]
+      filter => [
+        #{term => {"subject|topic.raw" => "Piano music"}},
+        {
+          nested => {
+            path => 'holdings',
+            query => {
+              bool => {
+                must => [
+                  {
+                    bool => {
+                      should => [
+                        {term => {'holdings.status' => '0'}},
+                        {term => {'holdings.status' => '7'}}
+                      ]
+                    }
+                  },
+                  {
+                    bool => {
+                      should => [
+                        {term => {'holdings.circ_lib' => '4'}},
+                        {term => {'holdings.circ_lib' => '5'}}
+                      ]
+                    }
                   }
-                },
-                {
-                  bool => {
-                    should => [
-                      {term => {'holdings.circ_lib' => '4'}},
-                      {term => {'holdings.circ_lib' => '5'}}
-                    ]
-                  }
-                }
-              ]
+                ]
+              }
             }
           }
         }
-      }
+      ]
     }
   },
   aggs => {
     genres => {
       terms => {
-        field => 'identifier|genre.raw'
+        field => 'identifier|genre'
+      }
+    },
+    'author|corporate' => {
+      terms => {
+        field => 'author|corporate.raw'
       }
     },
     'subject|topic' => {
@@ -101,6 +112,8 @@ my $query = {
 my $es = OpenILS::Elastic::BibSearch->new($cluster);
 
 $es->connect;
+
+print OpenSRF::Utils::JSON->perl2JSON($query) . "\n\n";
 
 my $start = time();
 my $results = $es->search($query);

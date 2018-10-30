@@ -67,8 +67,8 @@ sub bib_search {
                 grep {defined $_} @{$results->{hits}->{hits}}
         ],
         facets => format_facets($results->{aggregations}),
-        # Note at time of writing no search caching is used for 
-        # Elasticsearch, but providing cache keys allows the caller to 
+        # Elastic has its own search cacheing, so external caching is
+        # performed, but providing cache keys allows the caller to 
         # know if this search matches another search.
         cache_key => $cache_key,
         facet_key => $cache_key.'_facets'
@@ -124,6 +124,15 @@ sub translate_elastic_query {
         }
     }
 
+
+    my @facets = ($query =~ /([a-z]+\|[a-z]+\[[^\]]+\])/g);
+    
+    if (@facets) {
+        # scrub the query of facets
+        $query =~ s/([a-z]+\|[a-z]+\[[^\]]+\])//g;
+    }
+
+
     my $cache_seed = "$query $staff $available ";
     # TODO: confirm matches @funcs above where needed
     for my $key (qw/site depth item_lang/) { 
@@ -139,31 +148,61 @@ sub translate_elastic_query {
         from => $offset,
         query => {
             bool => {
+                # TODO fix must array below
                 must => {
                     query_string => {
+                        default_operator => 'AND',
                         default_field => 'keyword',
                         query => $query
                     }
-                }
+                },
+                filter => []
             }
         }
     };
+
+
+    add_elastic_facet_filters($elastic_query, @facets);
 
     add_elastic_holdings_filter(
         $elastic_query, $calls{site}, $calls{depth}, $available)
         if $calls{site};
 
+    add_elastic_facet_aggregations($elastic_query);
+
     if (my $sf = $calls{sort}) {
         my $dir = $descending ? 'desc' : 'asc';
         $elastic_query->{sort} = [{$sf => $dir}];
     }
-
-    add_elastic_facets($elastic_query);
         
     return ($elastic_query, $cache_key);
 }
 
-sub add_elastic_facets {
+sub add_elastic_facet_filters {
+    my ($elastic_query, @facets) = @_;
+    return unless @facets;
+
+    for my $facet (@facets) {
+        # e.g. subject|topic[Piano music]
+        my ($name, $value) = ($facet =~ /([a-z]+\|[a-z]+)\[([^\]]+)\]/g);
+
+        my ($field) = grep {
+            (($_->search_group || '') . '|' . $_->name) eq $name}
+            @$bib_search_fields;
+        
+        # Search fields have a .raw multi-field for indexing the raw
+        # (keyword) value for aggregation.  Non-search fields use
+        # the base field, since it's already a keyword field.
+        $name .= ".raw" if $field->search_field eq 't';
+
+        push(
+            @{$elastic_query->{query}->{bool}->{filter}}, 
+            {term => {$name => $value}}
+        );
+    }
+}
+
+sub add_elastic_facet_aggregations {
     my ($elastic_query) = @_;
 
     my @facet_fields = grep {$_->facet_field eq 't'} @$bib_search_fields;
@@ -205,6 +244,9 @@ sub add_elastic_holdings_filter {
 
     # TODO: if $staff is false, add a holdings filter for 
     # opac_visble / location.opac_visible / status.opac_visible
+    
+    # array of filters in progress
+    my $filters = $elastic_query->{query}->{bool}->{filter};
 
     if ($depth > 0) {
 
@@ -222,15 +264,17 @@ sub add_elastic_holdings_filter {
         # Add a boolean OR-filter on holdings circ lib and optionally
         # add a boolean AND-filter on copy status for availability
         # checking.
-        $elastic_query->{query}->{bool}->{filter} = {
+
+        my $filter = {
             nested => {
                 path => 'holdings',
                 query => {bool => {should => []}}
             }
         };
 
-        my $should = 
-            $elastic_query->{query}{bool}{filter}{nested}{query}{bool}{should};
+        push(@$filters, $filter);
+
+        my $should = $filter->{nested}{query}{bool}{should};
 
         for my $org_id (@$org_ids) {
 
@@ -258,7 +302,7 @@ sub add_elastic_holdings_filter {
         # Limit to results that have an available copy, but don't worry
         # about where the copy lives, since we're searching globally.
 
-        $elastic_query->{query}->{bool}->{filter} = {
+        my $filter = {
             nested => {
                 path => 'holdings',
                 query => {bool => {must => [
@@ -267,6 +311,8 @@ sub add_elastic_holdings_filter {
                 ]}}
             }
         };
+
+        push(@$filters, $filter);
     }
 }
 
