@@ -27,6 +27,9 @@ use Digest::MD5 qw(md5_hex);
 use OpenILS::Application::AppUtils;
 my $U = "OpenILS::Application::AppUtils";
 
+# Use the QueryParser module to make sense of the inbound search query.
+use OpenILS::Application::Storage::Driver::Pg::QueryParser;
+
 # bib fields defined in the elastic bib-search index
 my $bib_search_fields;
 
@@ -46,7 +49,7 @@ sub bib_search {
         unless $bib_search_fields;
 
     my ($elastic_query, $cache_key) = 
-        translate_elastic_query($query, $staff, $offset, $limit);
+        compile_elastic_query($query, $staff, $offset, $limit);
 
     $logger->info("ES sending query to elasticsearch: ".
         OpenSRF::Utils::JSON->perl2JSON($elastic_query));
@@ -76,10 +79,215 @@ sub bib_search {
     };
 }
 
+sub compile_elastic_query {
+    my ($query, $staff, $offset, $limit) = @_;
 
+    my $parser = init_query_parser($query);
+
+    $parser->parse;
+    my $query_struct = $parser->parse_tree->to_abstract_query;
+
+    my $elastic = {
+        _source => ['id'], # Fetch bib ID only
+        size => $limit,
+        from => $offset,
+        sort => [],
+        query => {
+            bool => {
+                must => [],
+                filter => []
+            }
+        }
+    };
+
+    $elastic->{query}->{bool}->{must} = 
+        [translate_query_node($elastic, $query_struct)];
+
+    add_elastic_holdings_filter($elastic, $elastic->{__site}, 
+        $elastic->{__depth}, $elastic->{__available}) if $elastic->{__site};
+
+    add_elastic_facet_aggregations($elastic);
+
+    # delete __-prefixed state maintenance keys.
+    delete $elastic->{$_} for (grep {$_ =~ /^__/} keys %$elastic);
+
+    return $elastic;
+}
+
+sub translate_query_node {
+    my ($elastic, $node) = @_;
+
+    if ($node->{type} eq 'query_plan') {
+
+        my ($joiner) = keys %{$node->{children}};
+        my $children = $node->{children}->{$joiner};
+        my $filters  = $node->{filters};
+        my $modifiers = $node->{modifiers};
+
+        if (grep {$_ eq 'descending'} @$modifiers) {
+            $elastic->{__sort_dir} = 'desc';
+        }
+
+        if (grep {$_ eq 'available'} @$modifiers) {
+            $elastic->{__available} = 1;
+        }
+
+        return unless @$children || @$filters;
+
+        my $bool_op = $joiner eq '&' ? 'must' : 'should';
+        my $bool_nodes = [];
+        my $filter_nodes = [];
+        my $query = {
+            bool => {
+                $bool_op => $bool_nodes,
+                filter => $filter_nodes
+            }
+        };
+
+        for my $child (@$children) {
+            my $type = $child->{type};
+
+            if ($type eq 'node' || $type eq 'query_plan') {
+                push(@$bool_nodes, translate_query_node($elastic, $child));
+
+            } elsif ($type eq 'facet') {
+
+                # Our ES filters are indexes under the .raw multi-field.
+                my $name = $child->{name} . '.raw';
+
+                for my $value (@{$child->{values}}) {
+                    # TODO $filter->{negate}
+                    push(@$filter_nodes, {term => {$name => $value}});
+                }
+            }
+        }
+
+        for my $filter (@$filters) {
+            my $name = $filter->{name};
+            my @values = @{$filter->{args}};
+
+            # Sorting is managed at the root of the ES search structure.
+            # QP assumes all sorts are ascending or descending -- possible
+            # only one sort filter per struct is supported?
+            if ($name eq 'sort') {
+                my $dir = $elastic->{__sort_dir} || 'asc';
+                push(@{$elastic->{sort}}, {$_ => $dir}) for @values;
+
+            } elsif ($name =~ /site|depth/) {
+                # site and depth are copy-level filters.
+                # Apply those after the main structure is built.
+                $elastic->{"__$name"} = $values[0];
+
+            } else {
+                if (@values > 1) {
+                    push(@$filter_nodes, {terms => {$name => \@values}});
+                } else {
+                    push(@$filter_nodes, {term => {$name => $values[0]}});
+                }
+            }
+        }
+
+        # trim and compress branches
+        if (!@$filter_nodes) {
+            delete $query->{bool}{filter};
+            return $bool_nodes->[0] if scalar(@$bool_nodes) == 1;
+
+        } elsif (!@$bool_nodes) {
+           # If this is a filter-only node, add a match-all 
+           # query for the filter to have something to match on.
+           $query->{bool}{$bool_op} = {match_all => {}};
+        }
+
+        return $query;
+
+    } elsif ($node->{type} eq 'node') {
+
+        my ($joiner) = keys %{$node->{children}};
+        my $children = $node->{children}->{$joiner};
+        my $bool_op = $joiner eq '&' ? 'must' : 'should';
+        my $field_class = $node->{class}; # e.g. subject
+        my @fields = @{$node->{fields}};  # e.g. temporal (optional)
+
+        my $bool_nodes = [];
+        my $query = {bool => {$bool_op => $bool_nodes}};
+
+        for my $child (@$children) {
+            if (@fields) {
+                for my $field (@fields) {
+                    push(@$bool_nodes, 
+                        {match => {"$field_class|$field" => $child->{content}}});
+                }
+            } else {
+                push(@$bool_nodes, 
+                    {match => {$field_class => $child->{content}}});
+            }
+        }
+
+        # avoid unnecessary nesting.
+        $query = $bool_nodes->[0] if scalar(@$bool_nodes) == 1;
+
+        return $query;
+    }
+}
+
+sub init_query_parser {
+    my $query = shift;
+
+    my $query_parser = 
+        OpenILS::Application::Storage::Driver::Pg::QueryParser->new(
+            query => $query
+        );
+
+    my %attrs = get_qp_attrs();
+    $query_parser->initialize(%attrs);
+
+    return $query_parser;
+}
+
+my %qp_attrs;
+sub get_qp_attrs {
+    return %qp_attrs if %qp_attrs;
+
+    # Fetch and cache the QP configuration attributes
+    # TODO: call this in service child_init()?
+
+    $logger->debug("ES initializing query parser attributes");
+    my $e = new_editor();
+
+    %qp_attrs = (
+        config_record_attr_index_norm_map  =>
+            $e->search_config_record_attr_index_norm_map([
+                { id => { "!=" => undef } },
+                { flesh => 1, flesh_fields  => { crainm => [qw/norm/] }, 
+                    order_by => [{ class => "crainm", field => "pos" }] }
+            ]),
+        search_relevance_adjustment =>
+            $e->retrieve_all_search_relevance_adjustment,
+        config_metabib_field => 
+            $e->retrieve_all_config_metabib_field,
+        config_metabib_field_virtual_map => 
+            $e->retrieve_all_config_metabib_field_virtual_map,
+        config_metabib_search_alias =>
+            $e->retrieve_all_config_metabib_search_alias,
+        config_metabib_field_index_norm_map =>
+            $e->search_config_metabib_field_index_norm_map([
+                { id => { "!=" => undef } },
+                { flesh => 1, flesh_fields => { cmfinm => [qw/norm/] }, 
+                    order_by => [{ class => "cmfinm", field => "pos" }] }
+            ]),
+        config_record_attr_definition =>
+            $e->retrieve_all_config_record_attr_definition
+    );
+
+    return %qp_attrs;
+}
+
+
+# Format ES search aggregations to match the API response facet structure
+# {$cmf_id => {"Value" => $count}, $cmf_id2 => {"Value Two" => $count2}, ...}
 sub format_facets {
     my $aggregations = shift;
-    my $facets = {}; # cmf.id => {"Facet Value" => count}
+    my $facets = {}; 
 
     for my $fname (keys %$aggregations) {
 
@@ -98,107 +306,6 @@ sub format_facets {
     }
 
     return $facets;
-}
-
-sub translate_elastic_query {
-    my ($query, $staff, $offset, $limit) = @_;
-
-    # Scrub functions and tags from the bare query so they may
-    # be translated to elastic equivalents.  We only want the 
-    # query portion to be passed as-is for the elastic query string
-
-    my ($available) = ($query =~ s/(\#available)//g);
-    my ($descending) = ($query =~ s/(\#descending)//g);
-
-    # Remove unsupported tags (e.g. #deleted)
-    $query =~ s/\#[a-z]+//ig;
-
-    my @funcs = qw/site depth sort item_lang format/; 
-    my %calls;
-
-    for my $func (@funcs) {
-        my ($val) = ($query =~ /$func\(([^\)]+)\)/);
-
-        if (defined $val) {
-            $query =~ s/$func\(([^\)]+)\)//g; # scrub
-            $calls{$func} = $val;
-        }
-    }
-
-    my @facets = ($query =~ /([a-z]+\|[a-z]+\[[^\]]+\])/g);
-    $query =~ s/([a-z]+\|[a-z]+\[[^\]]+\])//g if @facets; # scrub
-
-    my $cache_seed = "$query $staff $available ";
-    for my $key (qw/site depth item_lang format/) { 
-        $cache_seed .= " $key=" . $calls{$key} if defined $calls{$key};
-    }
-
-    my $cache_key = md5_hex($cache_seed);
-
-    my $elastic_query = {
-        _source => ['id'], # Fetch bib ID only
-        size => $limit,
-        from => $offset,
-        query => {
-            bool => {
-                # TODO fix must array below
-                must => {
-                    query_string => {
-                        default_operator => 'AND',
-                        default_field => 'keyword',
-                        query => $query
-                    }
-                },
-                filter => []
-            }
-        }
-    };
-
-    if ($calls{format}) {
-        push(
-            @{$elastic_query->{query}->{bool}->{filter}},
-            {term => {search_format => $calls{format}}}
-        );
-    }
-
-    add_elastic_facet_filters($elastic_query, @facets);
-
-    add_elastic_holdings_filter(
-        $elastic_query, $calls{site}, $calls{depth}, $available)
-        if $calls{site};
-
-    add_elastic_facet_aggregations($elastic_query);
-
-    if (my $sf = $calls{sort}) {
-        my $dir = $descending ? 'desc' : 'asc';
-        $elastic_query->{sort} = [{$sf => $dir}];
-    }
-        
-    return ($elastic_query, $cache_key);
-}
-
-sub add_elastic_facet_filters {
-    my ($elastic_query, @facets) = @_;
-    return unless @facets;
-
-    for my $facet (@facets) {
-        # e.g. subject|topic[Piano music]
-        my ($name, $value) = ($facet =~ /([a-z]+\|[a-z]+)\[([^\]]+)\]/g);
-
-        my ($field) = grep {
-            (($_->search_group || '') . '|' . $_->name) eq $name}
-            @$bib_search_fields;
-        
-        # Search fields have a .raw multi-field for indexing the raw
-        # (keyword) value for aggregation.  Non-search fields use
-        # the base field, since it's already a keyword field.
-        $name .= ".raw" if $field->search_field eq 't';
-
-        push(
-            @{$elastic_query->{query}->{bool}->{filter}}, 
-            {term => {$name => $value}}
-        );
-    }
 }
 
 sub add_elastic_facet_aggregations {
@@ -224,7 +331,6 @@ sub add_elastic_facet_aggregations {
         $elastic_query->{aggs}{$fname} = {terms => {field => $index}};
     }
 }
-
 
 sub add_elastic_holdings_filter {
     my ($elastic_query, $shortname, $depth, $available) = @_;
