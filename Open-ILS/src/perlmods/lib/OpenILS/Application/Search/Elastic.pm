@@ -51,9 +51,6 @@ sub bib_search {
     my ($elastic_query, $cache_key) = 
         compile_elastic_query($query, $staff, $offset, $limit);
 
-    $logger->info("ES sending query to elasticsearch: ".
-        OpenSRF::Utils::JSON->perl2JSON($elastic_query));
-
     my $es = OpenILS::Elastic::BibSearch->new('main');
 
     $es->connect;
@@ -111,6 +108,8 @@ sub compile_elastic_query {
     # delete __-prefixed state maintenance keys.
     delete $elastic->{$_} for (grep {$_ =~ /^__/} keys %$elastic);
 
+    $elastic->{sort} = ['_score'] unless @{$elastic->{sort}};
+
     return $elastic;
 }
 
@@ -148,7 +147,8 @@ sub translate_query_node {
             my $type = $child->{type};
 
             if ($type eq 'node' || $type eq 'query_plan') {
-                push(@$bool_nodes, translate_query_node($elastic, $child));
+                my $subq = translate_query_node($elastic, $child);
+                push(@$bool_nodes, $subq) if defined $subq;
 
             } elsif ($type eq 'facet') {
 
@@ -195,38 +195,106 @@ sub translate_query_node {
         } elsif (!@$bool_nodes) {
            # If this is a filter-only node, add a match-all 
            # query for the filter to have something to match on.
-           $query->{bool}{$bool_op} = {match_all => {}};
+           $query->{bool}{must} = {match_all => {}};
         }
 
         return $query;
 
     } elsif ($node->{type} eq 'node') {
 
-        my ($joiner) = keys %{$node->{children}};
-        my $children = $node->{children}->{$joiner};
-        my $bool_op = $joiner eq '&' ? 'must' : 'should';
         my $field_class = $node->{class}; # e.g. subject
         my @fields = @{$node->{fields}};  # e.g. temporal (optional)
 
-        my $bool_nodes = [];
-        my $query = {bool => {$bool_op => $bool_nodes}};
+        # note: $joiner is always '&' for type=node
+        my ($joiner) = keys %{$node->{children}};
+        my $children = $node->{children}->{$joiner};
 
-        for my $child (@$children) {
-            if (@fields) {
-                for my $field (@fields) {
-                    push(@$bool_nodes, 
-                        {match => {"$field_class|$field" => $child->{content}}});
-                }
-            } else {
-                push(@$bool_nodes, 
-                    {match => {$field_class => $child->{content}}});
+        my $bool_nodes = [];
+
+        # phrase match
+        # keyword:"piano music"
+        # prefix '"'
+        # suffix '"'
+        # content 'piano music'
+
+        # exact match
+        # keyword:^piano music$'
+        # 2 children
+        #   content '^piano'
+        #   content 'music$'
+
+        # negate phrase match
+        # keyword:-"piano music"
+        # prefix '-"'
+        # suffic '"'
+        # content 'piano music'
+
+        # Content is only split across children when multiple words
+        # are part of the same query structure, e.g. kw:piano music
+        # This equates to a match search with multiple words in ES.
+        my $content = join(' ', map {$_->{content}} @$children);
+
+        # not sure how/why this happens sometimes.
+        return undef unless $content;
+
+        my $first_char = substr($content, 0, 1);
+        my $last_char = substr($content, -1, 1);
+        my $prefix = $children->[0]->{prefix};
+
+        my $match_op = 'match';
+
+        # "Contains Phrase"
+        $match_op = 'match_phrase' if $prefix eq '"';
+
+        # Should we use the .raw keyword field?
+        my $use_keyword = '';
+
+        # Matchiness specificiers embedded in the content override
+        # the query node prefix.
+        if ($first_char eq '^') {
+            $use_keyword = '.raw';
+            $content = substr($content, 1);
+
+            if ($last_char eq '$') { # "Matches Exactly" 
+
+                $match_op = 'term';
+                $content = substr($content, 0, -1);
+
+            } else { # "Starts With"
+
+                $match_op = 'match_phrase_prefix';
             }
         }
 
-        # avoid unnecessary nesting.
-        $query = $bool_nodes->[0] if scalar(@$bool_nodes) == 1;
+        # TODO TODO
+        # avoid indexing "title" and instead only create field-specific
+        # indexes.  When searching "title" perform an OR search across
+        # all title:* fields.
+        # title:^Harry potter -- this is not guaranteed to work on a 
+        # grouped 'title' index since it may start with an unexpected
+        # variation of the title.
 
-        return $query;
+        if (@fields) { # field-level search
+            for my $field (@fields) {
+                push(@$bool_nodes, 
+                    {$match_op => {"$field_class|$field$use_keyword" => $content}});
+            }
+        } else { # class-level search
+            push(@$bool_nodes, {$match_op => {$field_class => $content}});
+        }
+
+        $logger->info("ES content = $content / bools = ". 
+            OpenSRF::Utils::JSON->perl2JSON($bool_nodes));
+
+        # check for negate queries
+        my $bool_op = $prefix eq '-"' ? 'must_not' : 'must';
+
+        # only add the bool nesting when necessary.
+        if (@$bool_nodes > 1 || $bool_op eq 'must_not') {
+            return {bool => {$bool_op => $bool_nodes}};
+        } else {
+            return $bool_nodes->[0];
+        }
     }
 }
 
