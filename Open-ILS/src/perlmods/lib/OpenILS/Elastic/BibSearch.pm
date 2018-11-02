@@ -39,6 +39,12 @@ my $BASE_INDEX_SETTINGS = {
                 filter => ['lowercase', 'asciifolding'],
                 tokenizer => 'standard'
             }
+        },
+        normalizer =>  {
+            custom_lowercase => {
+                type => 'custom',
+                filter => ['lowercase']
+            }
         }
     }
 };
@@ -60,50 +66,7 @@ my $BASE_PROPERTIES = {
             circulate => {type => 'boolean'},
             opac_visible => {type => 'boolean'}
         }
-    },
-
-    # Combo fields for field-class level searches.
-    # The value for every (for example) title|* search field will be 
-    # copied to the "title" field for searching accross all title entries.
-    title => {
-        type => 'text',
-        analyzer => $LANG_ANALYZER,
-        fields => {
-            folded => {type => 'text', analyzer => 'folding'}
-        }
-    },
-    author => {
-        type => 'text',
-        analyzer => $LANG_ANALYZER,
-        fields => {
-            folded => {type => 'text', analyzer => 'folding'}
-        }
-    },
-    subject => {
-        type => 'text',
-        analyzer => $LANG_ANALYZER,
-        fields => {
-            folded => {type => 'text', analyzer => 'folding'}
-        }
-    },
-    series => {
-        type => 'text',
-        analyzer => $LANG_ANALYZER,
-        fields => {
-            folded => {type => 'text', analyzer => 'folding'}
-        }
-    },
-
-    keyword => {
-        type => 'text',
-        analyzer => $LANG_ANALYZER,
-        fields => {
-            folded => {type => 'text', analyzer => 'folding'}
-        }
-    },
-
-    # Avoid full-text analysis on identifer fields.
-    identifier => {type => 'keyword'}
+    }
 };
 
 sub index_name {
@@ -138,35 +101,32 @@ sub create_index {
         my $search_group = $field->search_group;
         $field_name = "$search_group|$field_name" if $search_group;
 
-        my $def;
-        if ($field->search_field eq 't') {
-            # Search fields get full text indexing and analysis
-
-            $def = {
-                type => 'text',
-                analyzer => $LANG_ANALYZER,
-                fields => {
-                    folded => {type => 'text', analyzer => 'folding'}
+        # Every field gets a keyword index (default) for aggregation and 
+        # a lower-case keyword index (.lower) for sorting and certain
+        # types of searches (exact match, starts with)
+        my $def = {
+            type => 'keyword',
+            fields => {
+                lower => {
+                    type => 'keyword', 
+                    normalizer => 'custom_lowercase'
                 }
+            }
+        };
+
+        if ($field->search_field eq 't') {
+            # Search fields also get full text indexing and analysis
+            # plus a "folded" variation for ascii folded searches.
+
+            $def->{fields}->{text} = {
+                type => 'text',
+                analyzer => $LANG_ANALYZER
             };
 
-            if ($field->facet_field eq 't' || $field->sorter eq 't') {
-                # If it's also a sort/facet field, add a keyword version
-                # of the field to use for sorting and aggregation
-                $def->{fields}{raw} = {type => 'keyword'};
-            }
-
-            if ($search_group) {
-                # Fields in a search group are copied to the group field
-                # for searching acrosss all fields of a given type.
-                $def->{copy_to} = $search_group;
-            }
-
-        } else {
-            # Non-search fields -- used for sorting, aggregation,
-            # and "code" (raw value) searches -- are only indexed
-            # as (non-analyzed) keyword fields.
-            $def = {type => 'keyword'};
+            $def->{fields}->{text_folded} = {
+                type => 'text', 
+                analyzer => 'folding'
+            };
         }
 
         # Apply field boost.

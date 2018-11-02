@@ -152,12 +152,8 @@ sub translate_query_node {
 
             } elsif ($type eq 'facet') {
 
-                # Our ES filters are indexes under the .raw multi-field.
-                my $name = $child->{name} . '.raw';
-
                 for my $value (@{$child->{values}}) {
-                    # TODO $filter->{negate}
-                    push(@$filter_nodes, {term => {$name => $value}});
+                    push(@$filter_nodes, {term => {$child->{name} => $value}});
                 }
             }
         }
@@ -205,29 +201,15 @@ sub translate_query_node {
         my $field_class = $node->{class}; # e.g. subject
         my @fields = @{$node->{fields}};  # e.g. temporal (optional)
 
+        # class-level searches are OR/should searches across all
+        # fields in the selected class.
+        @fields = map {$_->name} 
+            grep {$_->search_group eq $field_class} @$bib_search_fields
+            unless @fields;
+
         # note: $joiner is always '&' for type=node
         my ($joiner) = keys %{$node->{children}};
         my $children = $node->{children}->{$joiner};
-
-        my $bool_nodes = [];
-
-        # phrase match
-        # keyword:"piano music"
-        # prefix '"'
-        # suffix '"'
-        # content 'piano music'
-
-        # exact match
-        # keyword:^piano music$'
-        # 2 children
-        #   content '^piano'
-        #   content 'music$'
-
-        # negate phrase match
-        # keyword:-"piano music"
-        # prefix '-"'
-        # suffic '"'
-        # content 'piano music'
 
         # Content is only split across children when multiple words
         # are part of the same query structure, e.g. kw:piano music
@@ -247,12 +229,12 @@ sub translate_query_node {
         $match_op = 'match_phrase' if $prefix eq '"';
 
         # Should we use the .raw keyword field?
-        my $use_keyword = '';
+        my $text_search = 1;
 
         # Matchiness specificiers embedded in the content override
         # the query node prefix.
         if ($first_char eq '^') {
-            $use_keyword = '.raw';
+            $text_search = 0;
             $content = substr($content, 1);
 
             if ($last_char eq '$') { # "Matches Exactly" 
@@ -266,35 +248,49 @@ sub translate_query_node {
             }
         }
 
-        # TODO TODO
-        # avoid indexing "title" and instead only create field-specific
-        # indexes.  When searching "title" perform an OR search across
-        # all title:* fields.
-        # title:^Harry potter -- this is not guaranteed to work on a 
-        # grouped 'title' index since it may start with an unexpected
-        # variation of the title.
+        # for match queries, treat multi-word search as AND searches
+        # instead of the default ES OR searches.
+        $content = {query => $content, operator => 'and'} 
+            if $match_op eq 'match';
 
-        if (@fields) { # field-level search
-            for my $field (@fields) {
-                push(@$bool_nodes, 
-                    {$match_op => {"$field_class|$field$use_keyword" => $content}});
+        my $field_nodes = [];
+        for my $field (@fields) {
+            my $key = "$field_class|$field";
+
+
+            if ($text_search) {
+                # use the full-text indices
+                
+                push(@$field_nodes, 
+                    {$match_op => {"$key.text" => $content}});
+
+                push(@$field_nodes, 
+                    {$match_op => {"$key.text_folded" => $content}});
+
+            } else {
+
+                # Use the lowercase normalized keyword index for non-text searches.
+                push(@$field_nodes, {$match_op => {"$key.lower" => $content}});
             }
-        } else { # class-level search
-            push(@$bool_nodes, {$match_op => {$field_class => $content}});
         }
 
         $logger->info("ES content = $content / bools = ". 
-            OpenSRF::Utils::JSON->perl2JSON($bool_nodes));
+            OpenSRF::Utils::JSON->perl2JSON($field_nodes));
 
-        # check for negate queries
-        my $bool_op = $prefix eq '-"' ? 'must_not' : 'must';
-
-        # only add the bool nesting when necessary.
-        if (@$bool_nodes > 1 || $bool_op eq 'must_not') {
-            return {bool => {$bool_op => $bool_nodes}};
+        my $query;
+        if (scalar(@$field_nodes) == 1) {
+            $query = {bool => {must => $field_nodes}};
         } else {
-            return $bool_nodes->[0];
+            # Query multiple fields within a search class via OR query.
+            $query = {bool => {should => $field_nodes}};
         }
+
+        if ($prefix eq '-"') {
+            # Negation query.  Wrap the whole shebang in a must_not
+            $query = {bool => {must_not => $query}};
+        }
+
+        return $query;
     }
 }
 
@@ -389,14 +385,7 @@ sub add_elastic_facet_aggregations {
         my $fgrp = $facet->search_group;
         $fname = "$fgrp|$fname" if $fgrp;
 
-        # Search fields have a .raw multi-field for indexing the
-        # raw (keyword) value for aggregation.
-        # Non-search fields use the base field, since it's already a 
-        # keyword field.
-        my $index = $fname;
-        $index = "$fname.raw" if $facet->search_field eq 't';
-
-        $elastic_query->{aggs}{$fname} = {terms => {field => $index}};
+        $elastic_query->{aggs}{$fname} = {terms => {field => $fname}};
     }
 }
 
