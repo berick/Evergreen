@@ -30,11 +30,47 @@ my $U = "OpenILS::Application::AppUtils";
 # Use the QueryParser module to make sense of the inbound search query.
 use OpenILS::Application::Storage::Driver::Pg::QueryParser;
 
-# bib fields defined in the elastic bib-search index
-my $bib_search_fields;
 
 # avoid repetitive calls to DB for org info.
 my %org_data_cache = (by_shortname => {}, ancestors_at => {});
+
+# bib fields defined in the elastic bib-search index
+my $bib_fields;
+my $hidden_copy_statuses;
+my $hidden_copy_locations;
+my $avail_copy_statuses;
+
+sub init_data {
+    return if $bib_fields;
+
+    my $e = new_editor();
+
+    $bib_fields = $e->retrieve_all_elastic_bib_field;
+
+    my $stats = $e->json_query({
+        select => {ccs => ['id', 'opac_visible', 'is_available']},
+        from => 'ccs',
+        where => {'-or' => [
+            {opac_visible => 'f'},
+            {is_available => 't'}
+        ]}
+    });
+
+    $hidden_copy_statuses =
+        [map {$_->{id}} grep {$_->{opac_visible} eq 'f'} @$stats];
+
+    $avail_copy_statuses =
+        [map {$_->{id}} grep {$_->{is_available} eq 't'} @$stats];
+
+    # Include deleted copy locations since this is an exclusion set.
+    my $locs = $e->json_query({
+        select => {acpl => ['id']},
+        from => 'acpl',
+        where => {opac_visible => 'f'}
+    });
+
+    $hidden_copy_locations = [map {$_->{id}} @$locs];
+}
 
 # Translate a bib search API call into something consumable by Elasticsearch
 # Translate search results into a structure consistent with a bib search
@@ -42,11 +78,9 @@ my %org_data_cache = (by_shortname => {}, ancestors_at => {});
 sub bib_search {
     my ($class, $query, $staff, $offset, $limit) = @_;
 
-    $logger->info("ES parsing API query $query");
+    $logger->info("ES parsing API query $query staff=$staff");
 
-    $bib_search_fields = 
-        new_editor()->retrieve_all_elastic_bib_field()
-        unless $bib_search_fields;
+    init_data();
 
     my ($elastic_query, $cache_key) = 
         compile_elastic_query($query, $staff, $offset, $limit);
@@ -100,8 +134,8 @@ sub compile_elastic_query {
     $elastic->{query}->{bool}->{must} = 
         [translate_query_node($elastic, $query_struct)];
 
-    add_elastic_holdings_filter($elastic, $elastic->{__site}, 
-        $elastic->{__depth}, $elastic->{__available}) if $elastic->{__site};
+    add_elastic_holdings_filter($elastic, $staff, 
+        $elastic->{__site}, $elastic->{__depth}, $elastic->{__available});
 
     add_elastic_facet_aggregations($elastic);
 
@@ -204,7 +238,7 @@ sub translate_query_node {
         # class-level searches are OR/should searches across all
         # fields in the selected class.
         @fields = map {$_->name} 
-            grep {$_->search_group eq $field_class} @$bib_search_fields
+            grep {$_->search_group eq $field_class} @$bib_fields
             unless @fields;
 
         # note: $joiner is always '&' for type=node
@@ -359,7 +393,7 @@ sub format_facets {
 
         my ($bib_field) = grep {
             $_->name eq $name && $_->search_group eq $field_class
-        } @$bib_search_fields;
+        } @$bib_fields;
 
         my $hash = $facets->{$bib_field->metabib_field} = {};
 
@@ -375,7 +409,7 @@ sub format_facets {
 sub add_elastic_facet_aggregations {
     my ($elastic_query) = @_;
 
-    my @facet_fields = grep {$_->facet_field eq 't'} @$bib_search_fields;
+    my @facet_fields = grep {$_->facet_field eq 't'} @$bib_fields;
     return unless @facet_fields;
 
     $elastic_query->{aggs} = {};
@@ -390,22 +424,42 @@ sub add_elastic_facet_aggregations {
 }
 
 sub add_elastic_holdings_filter {
-    my ($elastic_query, $shortname, $depth, $available) = @_;
+    my ($elastic_query, $staff, $shortname, $depth, $available) = @_;
 
-    if (!$org_data_cache{by_shortname}{$shortname}) {
-        $org_data_cache{by_shortname}{$shortname} = 
-            $U->find_org_by_shortname($U->get_org_tree, $shortname);
+    # in non-staff mode, ensure at least on copy in scope is visible
+    my $visible = !$staff;
+
+    my $org;
+    if ($shortname) {
+
+        if (!$org_data_cache{by_shortname}{$shortname}) {
+            $org_data_cache{by_shortname}{$shortname} = 
+                $U->find_org_by_shortname($U->get_org_tree, $shortname);
+        }
+
+        $org = $org_data_cache{by_shortname}{$shortname};
+
+        my $types = $U->get_org_types; # pulls from cache
+        my ($type) = grep {$_->id == $org->ou_type} @$types;
+        $depth = defined $depth ? min($depth, $type->depth) : $type->depth;
     }
 
-    my $org = $org_data_cache{by_shortname}{$shortname};
-
-    my $types = $U->get_org_types; # pulls from cache
-    my ($type) = grep {$_->id == $org->ou_type} @$types;
-
-    $depth = defined $depth ? min($depth, $type->depth) : $type->depth;
-
-    # TODO: if $staff is false, add a holdings filter for 
-    # opac_visble / location.opac_visible / status.opac_visible
+    my $visible_filters = [
+        query => {
+            bool => {
+                must_not => {
+                    terms => {'holdings.status' => $hidden_copy_statuses}
+                }
+            }
+        },
+        query => {
+            bool => {
+                must_not => {
+                    terms => {'holdings.location' => $hidden_copy_locations}
+                }
+            }
+        }
+    ];
     
     # array of filters in progress
     my $filters = $elastic_query->{query}->{bool}->{filter};
@@ -449,13 +503,17 @@ sub add_elastic_holdings_filter {
                 }
             };
 
-            # When limiting to available, ensure at least one of the
-            # above copies is in status 0 or 7.
-            # TODO: consult config.copy_status.is_available
-            push(
-                @{$and->{bool}{must}}, 
-                {terms => {'holdings.status' => [0, 7]}}
-            ) if $available;
+            # When limiting to visible/available, ensure at least one of the
+            # copies from the above org-limited set is visible/available.
+            if ($available) {
+                push(
+                    @{$and->{bool}{must}}, 
+                    {terms => {'holdings.status' => $avail_copy_statuses}}
+                );
+
+            } elsif ($visible) {
+                push(@{$and->{bool}{must}}, @$visible_filters);
+            }
 
             push(@$should, $and);
         }
@@ -468,14 +526,26 @@ sub add_elastic_holdings_filter {
             nested => {
                 path => 'holdings',
                 query => {bool => {must => [
-                    # TODO: consult config.copy_status.is_available
-                    {terms => {'holdings.status' => [0, 7]}}
+                    {terms => {'holdings.status' => $avail_copy_statuses}}
                 ]}}
             }
         };
 
         push(@$filters, $filter);
+
+    } elsif ($visible) {
+        my $filter = {
+            nested => {
+                path => 'holdings',
+                query => {bool => {must => $visible_filters}}
+            }
+        };
+
+        push(@$filters, $filter);
     }
+
+    $logger->info("ES holdings filter is " . 
+        OpenSRF::Utils::JSON->perl2JSON(@$filters));
 }
 
 1;
