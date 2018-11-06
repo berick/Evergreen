@@ -444,25 +444,18 @@ sub add_elastic_holdings_filter {
         $depth = defined $depth ? min($depth, $type->depth) : $type->depth;
     }
 
-    my $visible_filters = [
+    my $visible_filters = {
         query => {
             bool => {
-                must_not => {
-                    terms => {'holdings.status' => $hidden_copy_statuses}
-                }
-            }
-        },
-        query => {
-            bool => {
-                must_not => {
-                    terms => {'holdings.location' => $hidden_copy_locations}
-                }
+                must_not => [
+                    {terms => {'holdings.status' => $hidden_copy_statuses}},
+                    {terms => {'holdings.location' => $hidden_copy_locations}}
+                ]
             }
         }
-    ];
+    };
     
-    # array of filters in progress
-    my $filters = $elastic_query->{query}->{bool}->{filter};
+    my $filter = {nested => {path => 'holdings', query => {bool => {}}}};
 
     if ($depth > 0) {
 
@@ -481,16 +474,8 @@ sub add_elastic_holdings_filter {
         # add a boolean AND-filter on copy status for availability
         # checking.
 
-        my $filter = {
-            nested => {
-                path => 'holdings',
-                query => {bool => {should => []}}
-            }
-        };
-
-        push(@$filters, $filter);
-
-        my $should = $filter->{nested}{query}{bool}{should};
+        my $should = [];
+        $filter->{nested}->{query}->{bool}->{should} = $should;
 
         for my $org_id (@$org_ids) {
 
@@ -512,7 +497,7 @@ sub add_elastic_holdings_filter {
                 );
 
             } elsif ($visible) {
-                push(@{$and->{bool}{must}}, @$visible_filters);
+                push(@{$and->{bool}{must}}, $visible_filters);
             }
 
             push(@$should, $and);
@@ -522,30 +507,20 @@ sub add_elastic_holdings_filter {
         # Limit to results that have an available copy, but don't worry
         # about where the copy lives, since we're searching globally.
 
-        my $filter = {
-            nested => {
-                path => 'holdings',
-                query => {bool => {must => [
-                    {terms => {'holdings.status' => $avail_copy_statuses}}
-                ]}}
-            }
-        };
-
-        push(@$filters, $filter);
+        $filter->{nested}->{query}->{bool}->{must} = 
+            [{terms => {'holdings.status' => $avail_copy_statuses}}];
 
     } elsif ($visible) {
-        my $filter = {
-            nested => {
-                path => 'holdings',
-                query => {bool => {must => $visible_filters}}
-            }
-        };
 
-        push(@$filters, $filter);
+        $filter->{nested}->{query} = $visible_filters->{query};
     }
 
     $logger->info("ES holdings filter is " . 
-        OpenSRF::Utils::JSON->perl2JSON(@$filters));
+        OpenSRF::Utils::JSON->perl2JSON($filter));
+
+    # array of filters in progress
+    push(@{$elastic_query->{query}->{bool}->{filter}}, $filter);
+
 }
 
 1;
