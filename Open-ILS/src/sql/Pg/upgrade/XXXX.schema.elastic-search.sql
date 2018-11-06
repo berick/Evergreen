@@ -134,6 +134,29 @@ BEGIN
     $$;
 END $FUNK$ LANGUAGE PLPGSQL;
 
+/* give me bibs I should upate */
+
+CREATE OR REPLACE VIEW elastic.bib_last_mod_date AS
+    WITH mod_dates AS (
+        SELECT bre.id, 
+            bre.edit_date, 
+            MAX(acn.edit_date) AS max_call_number_edit_date, 
+            MAX(acp.edit_date) AS max_copy_edit_date
+        FROM biblio.record_entry bre
+            JOIN asset.call_number acn ON (acn.record = bre.id)
+            JOIN asset.copy acp ON (acp.call_number = acn.id)
+        WHERE 
+            bre.active
+            AND NOT bre.deleted
+            AND NOT acn.deleted
+            AND NOT acp.deleted
+        GROUP BY 1, 2
+    ) SELECT dates.id, 
+        GREATEST(dates.edit_date, 
+            GREATEST(dates.max_call_number_edit_date, dates.max_copy_edit_date)
+        ) AS last_mod_date
+    FROM mod_dates dates;
+
 
 /* SEED DATA ------------------------------------------------------------ */
 

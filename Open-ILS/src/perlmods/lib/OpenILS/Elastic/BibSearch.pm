@@ -216,17 +216,25 @@ sub get_bib_ids {
 
     my $start_id = $state->{start_record} || 0;
     my $stop_id = $state->{stop_record}; # TODO
-
-    # TODO: implement start_date filtering.
-    # Requires checking edit dates on bibs, call numbers, and copies!
     my $start_date = $state->{start_date};
 
-    my $sql = <<SQL;
-SELECT bre.id
-FROM biblio.record_entry bre
-WHERE NOT bre.deleted AND bre.active AND bre.id >= $start_id
-ORDER BY bre.edit_date, bre.id LIMIT $BIB_BATCH_SIZE
-SQL
+    my ($select, $from, $where, $order);
+    if ($start_date) {
+        $select = "SELECT id";
+        $from   = "FROM elastic.bib_last_mod_date";
+        $where  = "WHERE last_mod_date > '$start_date'";
+        $order  = "ORDER BY last_mod_date";
+    } else {
+        $select = "SELECT id";
+        $from   = "FROM biblio.record_entry";
+        $where  = "WHERE NOT deleted AND active";
+        $order  = "ORDER BY edit_date, id";
+    }
+
+    $where .= " AND id >= $start_id" if $start_id;
+    $where .= " AND id <= $stop_id" if $stop_id;
+
+    my $sql = "$select $from $where $order LIMIT $BIB_BATCH_SIZE";
 
     my $ids = $self->get_db_rows($sql);
     return [ map {$_->{id}} @$ids ];
