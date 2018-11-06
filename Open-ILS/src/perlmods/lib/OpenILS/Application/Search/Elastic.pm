@@ -39,9 +39,31 @@ my $bib_fields;
 my $hidden_copy_statuses;
 my $hidden_copy_locations;
 my $avail_copy_statuses;
+our $enabled = undef;
 
-sub init_data {
-    return if $bib_fields;
+# Returns true if the Elasticsearch 'bib-search' index is active.
+sub is_enabled {
+
+    return $enabled if defined $enabled;
+
+    # Elastic bib search is enabled if a "bib-search" index is enabled.
+    my $index = new_editor()->search_elastic_index(
+        {active => 't', code => 'bib-search'})->[0];
+
+    if ($index) {
+
+        $logger->info("ES bib-search index is enabled");
+        $enabled = 1;
+    } else {
+        $enabled = 0;
+    }
+
+    return $enabled;
+}
+
+sub child_init {
+    my $class = shift;
+    return unless $class->is_enabled();
 
     my $e = new_editor();
 
@@ -70,6 +92,8 @@ sub init_data {
     });
 
     $hidden_copy_locations = [map {$_->{id}} @$locs];
+
+    return 1;
 }
 
 # Translate a bib search API call into something consumable by Elasticsearch
@@ -79,8 +103,6 @@ sub bib_search {
     my ($class, $query, $staff, $offset, $limit) = @_;
 
     $logger->info("ES parsing API query $query staff=$staff");
-
-    init_data();
 
     my ($elastic_query, $cache_key) = 
         compile_elastic_query($query, $staff, $offset, $limit);

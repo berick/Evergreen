@@ -1157,16 +1157,11 @@ sub staged_search {
     $user_offset = ($user_offset >= 0) ? $user_offset :  0;
     $user_limit  = ($user_limit  >= 0) ? $user_limit  : 10;
 
-    # TODO: cache this.  Real-time lookups are better for testing, though.
-    my $use_elastic = new_editor()->search_elastic_index({
-        active => 't', code => 'bib-search'})->[0];
-
-    if ($use_elastic) {
-        return OpenILS::Application::Search::Elastic->bib_search(
-            $search_hash->{query}, ($method =~ /staff/ ? 1 : 0),
-            $user_offset, $user_limit
-        );
-    }
+    return OpenILS::Application::Search::Elastic->bib_search(
+        $search_hash->{query}, # query string
+        ($method =~ /staff/ ? 1 : 0),
+        $user_offset, $user_limit
+    ) if OpenILS::Application::Search::Elastic->is_enabled;
 
     # we're grabbing results on a per-superpage basis, which means the 
     # limit and offset should coincide with superpage boundaries

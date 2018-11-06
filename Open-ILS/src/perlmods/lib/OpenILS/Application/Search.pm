@@ -36,6 +36,7 @@ sub initialize {
 sub child_init {
     OpenILS::Application::Search::Z3950->child_init;
     OpenILS::Application::Search::Browse->child_init;
+    OpenILS::Application::Search::Elastic->child_init;
 }
     
 
