@@ -218,21 +218,25 @@ sub get_bib_ids {
     my $stop_id = $state->{stop_record}; # TODO
     my $start_date = $state->{start_date};
 
-    my ($select, $from, $where, $order);
+    my ($select, $from, $where);
     if ($start_date) {
         $select = "SELECT id";
         $from   = "FROM elastic.bib_last_mod_date";
         $where  = "WHERE last_mod_date > '$start_date'";
-        $order  = "ORDER BY last_mod_date";
     } else {
         $select = "SELECT id";
         $from   = "FROM biblio.record_entry";
         $where  = "WHERE NOT deleted AND active";
-        $order  = "ORDER BY edit_date, id";
     }
 
     $where .= " AND id >= $start_id" if $start_id;
     $where .= " AND id <= $stop_id" if $stop_id;
+
+    # Ordering by ID is the simplest way to guarantee all requested
+    # records are processed, given that edit dates may not be unique
+    # and that we're using start_id/stop_id instead of OFFSET to
+    # define the batches.
+    my $order = "ORDER BY id";
 
     my $sql = "$select $from $where $order LIMIT $BIB_BATCH_SIZE";
 
