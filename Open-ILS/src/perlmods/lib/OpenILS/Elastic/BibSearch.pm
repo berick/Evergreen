@@ -330,6 +330,9 @@ sub populate_bib_index_batch {
         $index_count++;
     }
 
+    $logger->info("ES indexing completed for records " . 
+        $bib_ids->[0] . '...' . $bib_ids->[-1]);
+
     return $index_count;
 }
 
