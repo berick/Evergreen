@@ -15,6 +15,7 @@ package OpenILS::Elastic::BibSearch;
 # ---------------------------------------------------------------
 use strict;
 use warnings;
+use Encode;
 use DateTime;
 use Time::HiRes qw/time/;
 use OpenSRF::Utils::Logger qw/:logger/;
@@ -302,25 +303,30 @@ sub populate_bib_index_batch {
 
             my $fclass = $field->{search_group};
             my $fname = $field->{name};
+            my $value = $field->{value};
             $fname = "$fclass|$fname" if $fclass;
+
+            # Lucene has a hard limit on the size of an indexable chunk.
+            # Avoid trying to index such data by lazily chopping it off
+            # at 1/4 the limit to accomodate all UTF-8 chars.
+            if (length(Encode::encode('UTF-8', $value)) > 32760) {
+                $value = substr($value, 0, 8190);
+            }
 
             if ($body->{$fname}) {
                 if (ref $body->{$fname}) {
                     # Three or more values encountered for field.
                     # Add to the list.
-                    push(@{$body->{$fname}}, $field->{value});
+                    push(@{$body->{$fname}}, $value);
                 } else {
                     # Second value encountered for field.
                     # Upgrade to array storage.
-                    $body->{$fname} = [
-                        $body->{$fname},
-                        $field->{value}
-                    ]
+                    $body->{$fname} = [$body->{$fname}, $value];
                 }
             } else {
                 # First value encountered for field.
                 # Assume for now there will only be one value.
-                $body->{$fname} = $field->{value}
+                $body->{$fname} = $value
             }
         }
 
