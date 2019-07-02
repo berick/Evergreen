@@ -177,9 +177,6 @@ sub populate_index {
         $self->{$db_key} = $settings->{$db_key};
     }
 
-    # TODO $settings->{stop_record}
-    # TODO $settings->{start_date}
-
     my $end_time;
     my $duration = $settings->{max_duration};
     if ($duration) {
@@ -216,7 +213,7 @@ sub get_bib_ids {
     return [$state->{index_record}] if $state->{index_record};
 
     my $start_id = $state->{start_record} || 0;
-    my $stop_id = $state->{stop_record}; # TODO
+    my $stop_id = $state->{stop_record};
     my $start_date = $state->{start_date};
 
     my ($select, $from, $where);
