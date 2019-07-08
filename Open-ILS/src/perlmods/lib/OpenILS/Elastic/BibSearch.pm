@@ -56,7 +56,7 @@ my $BASE_PROPERTIES = {
     create_date => {type => 'date', index => 'false'},
     edit_date   => {type => 'date', index => 'false'},
 
-    # Holdings summaries.  For bib-search codes, we don't need
+    # Holdings summaries.  For bib-search, we don't need
     # copy-specific details, only aggregate visibility information.
     holdings => {
         type => 'nested',
@@ -67,7 +67,15 @@ my $BASE_PROPERTIES = {
             circulate => {type => 'boolean'},
             opac_visible => {type => 'boolean'}
         }
-    }
+    }#,
+
+#    marc => {
+#        type => 'nested',
+#        properties => {
+#            tag => {type => 'text'}
+#            # subfields are added dynamically
+#        }
+#    }
 };
 
 sub index_name {
@@ -274,11 +282,13 @@ sub populate_bib_index_batch {
     my $bib_data = $self->get_bib_data($bib_ids);
 
     my $holdings = $self->load_holdings($bib_ids);
+    #my $marc = $self->load_marc($bib_ids);
 
     for my $bib_id (@$bib_ids) {
 
         my $body = {
             holdings => $holdings->{$bib_id} || []
+            #marc => $marc || []
         };
 
         # there are multiple rows per bib in the data list.
@@ -384,6 +394,60 @@ SQL
 
     return $holdings;
 }
+
+# TODO: Disabled for now because this approach leads to exceeding the
+# maximum number of indexed fields (1k).  Create a separate index
+# for MARC searches.
+# Load MARC record tags and subfields
+sub load_marc {
+    my ($self, $bib_ids) = @_;
+
+    my $bib_ids_str = join(',', @$bib_ids);
+
+    my $marc_data = $self->get_db_rows(<<SQL);
+SELECT record, tag, subfield, value
+FROM metabib.full_rec
+WHERE record IN ($bib_ids_str)
+SQL
+
+    $logger->info("ES found ".scalar(@$marc_data).
+        " full record rows for current record batch");
+
+    my $marc = {};
+    for my $row (@$marc_data) {
+
+        my $rec_id = $row->{record};
+        next unless defined $row->{value} && $row->{value} ne '';
+
+        $marc->{$rec_id} = [] unless $marc->{$rec_id};
+        delete $row->{subfield} unless defined $row->{subfield};
+
+        # Add values to existing record/tag/subfield rows.
+  
+        my ($existing) = grep {
+            $_->{record} == $row->{record} &&
+            $_->{tag} eq $row->{tag} && (
+                (not defined $_->{subfield} && not defined $row->{subfield}) ||
+                ($_->{subfield} eq $row->{subfield})
+            )
+        } @{$marc->{$rec_id}};
+
+        if ($existing) {
+
+            $existing->{subfield} = [$existing->{subfield}] 
+                unless ref $existing->{subfield};
+            push(@{$existing->{subfield}}, $row->{value});
+
+        } else {
+
+            push(@{$marc->{$rec_id}}, $row);
+        }
+    }
+
+    return $marc;
+}
+
+
 
 1;
 
