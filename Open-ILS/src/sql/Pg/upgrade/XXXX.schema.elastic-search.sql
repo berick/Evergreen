@@ -137,19 +137,20 @@ END $FUNK$ LANGUAGE PLPGSQL;
 /* give me bibs I should upate */
 
 CREATE OR REPLACE VIEW elastic.bib_last_mod_date AS
+    /**
+     * Last update date for each bib, which is taken from most recent
+     * edit for either the bib, a linked call number, or a linked copy.
+     * If no call numbers are linked, uses the bib edit date only.
+     * Includes deleted data since it can impact indexing.
+     */
     WITH mod_dates AS (
         SELECT bre.id, 
             bre.edit_date, 
-            MAX(acn.edit_date) AS max_call_number_edit_date, 
-            MAX(acp.edit_date) AS max_copy_edit_date
+            MAX(COALESCE(acn.edit_date, '1901-01-01')) AS max_call_number_edit_date, 
+            MAX(COALESCE(acp.edit_date, '1901-01-01')) AS max_copy_edit_date
         FROM biblio.record_entry bre
-            JOIN asset.call_number acn ON (acn.record = bre.id)
-            JOIN asset.copy acp ON (acp.call_number = acn.id)
-        WHERE 
-            bre.active
-            AND NOT bre.deleted
-            AND NOT acn.deleted
-            AND NOT acp.deleted
+            LEFT JOIN asset.call_number acn ON (acn.record = bre.id)
+            LEFT JOIN asset.copy acp ON (acp.call_number = acn.id)
         GROUP BY 1, 2
     ) SELECT dates.id, 
         GREATEST(dates.edit_date, 

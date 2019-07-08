@@ -17,7 +17,7 @@ my $populate;
 my $index_record;
 my $start_record;
 my $stop_record;
-my $start_date;
+my $modified_since;
 my $max_duration;
 my $batch_size = 500;
 
@@ -39,7 +39,7 @@ GetOptions(
     'index-record=s'    => \$index_record,
     'start-record=s'    => \$start_record,
     'stop-record=s'     => \$stop_record,
-    'start-date=s'      => \$start_date,
+    'modified-since=s'  => \$modified_since,
     'max-duration=s'    => \$max_duration,
     'batch-size=s'      => \$batch_size,
     'db-name=s'         => \$db_name,
@@ -97,9 +97,11 @@ sub help {
             --stop-record <id>
                 Stop indexing after the record with this ID has been indexed.
 
-            --start-date <YYYY-MM-DD[Thh::mm:ss]>
-                Start indexing records whose last edit date falls after
-                the provided date;
+            --modified-since <YYYY-MM-DD[Thh::mm:ss]>
+                Index new records and reindex existing records whose last
+                modification date falls after the date provided.  Use this
+                at regular intervals to keep the ES-indexed data in sync 
+                with the EG data.
 
             --max-duration <duration>
                 Stop indexing once the process has been running for this
@@ -151,12 +153,12 @@ if ($populate) {
         db_user => $db_user,
         db_pass => 'REDACTED',
         db_appn => $db_appn,
-        index_record => $index_record,
-        start_record => $start_record,
-        stop_record  => $stop_record,
-        start_date   => $start_date,
-        max_duration => $max_duration,
-        batch_size   => $batch_size
+        index_record   => $index_record,
+        start_record   => $start_record,
+        stop_record    => $stop_record,
+        modified_since => $modified_since,
+        max_duration   => $max_duration,
+        batch_size     => $batch_size
     };
 
     print "Commencing index populate with settings: " . 

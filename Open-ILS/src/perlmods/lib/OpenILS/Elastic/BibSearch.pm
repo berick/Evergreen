@@ -67,15 +67,7 @@ my $BASE_PROPERTIES = {
             circulate => {type => 'boolean'},
             opac_visible => {type => 'boolean'}
         }
-    }#,
-
-#    marc => {
-#        type => 'nested',
-#        properties => {
-#            tag => {type => 'text'}
-#            # subfields are added dynamically
-#        }
-#    }
+    }
 };
 
 sub index_name {
@@ -222,13 +214,13 @@ sub get_bib_ids {
 
     my $start_id = $state->{start_record} || 0;
     my $stop_id = $state->{stop_record};
-    my $start_date = $state->{start_date};
+    my $modified_since = $state->{modified_since};
 
     my ($select, $from, $where);
-    if ($start_date) {
+    if ($modified_since) {
         $select = "SELECT id";
         $from   = "FROM elastic.bib_last_mod_date";
-        $where  = "WHERE last_mod_date > '$start_date'";
+        $where  = "WHERE last_mod_date > '$modified_since'";
     } else {
         $select = "SELECT id";
         $from   = "FROM biblio.record_entry";
@@ -261,6 +253,7 @@ SELECT
     bre.create_date, 
     bre.edit_date, 
     bre.source AS bib_source,
+    bre.deleted,
     (elastic.bib_record_properties(bre.id)).*
 FROM biblio.record_entry bre
 WHERE id IN ($ids_str)
@@ -281,14 +274,30 @@ sub populate_bib_index_batch {
 
     my $bib_data = $self->get_bib_data($bib_ids);
 
+    # Remove records that are marked deleted.
+    # This should only happen when running in refresh mode.
+
+    my @active_ids;
+    for my $bib_id (@$bib_ids) {
+
+        # Every row in the result data contains the 'deleted' value.
+        my ($field) = grep {$_->{id} == $bib_id} @$bib_data;
+
+        if ($field->{deleted} == 1) { # not 't' / 'f'
+           $self->delete_documents($bib_id); 
+        } else {
+            push(@active_ids, $bib_id);
+        }
+    }
+
+    $bib_ids = [@active_ids];
+
     my $holdings = $self->load_holdings($bib_ids);
-    #my $marc = $self->load_marc($bib_ids);
 
     for my $bib_id (@$bib_ids) {
 
         my $body = {
             holdings => $holdings->{$bib_id} || []
-            #marc => $marc || []
         };
 
         # there are multiple rows per bib in the data list.
@@ -395,10 +404,8 @@ SQL
     return $holdings;
 }
 
-# TODO: Disabled for now because this approach leads to exceeding the
-# maximum number of indexed fields (1k).  Create a separate index
-# for MARC searches.
-# Load MARC record tags and subfields
+# Example pulling marc tag/subfield data.
+# TODO: Create a separate bib-marc index if needed.
 sub load_marc {
     my ($self, $bib_ids) = @_;
 

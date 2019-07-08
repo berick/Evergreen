@@ -21,6 +21,8 @@ use OpenSRF::Utils::Logger qw/:logger/;
 use OpenILS::Utils::CStoreEditor qw/:funcs/;
 use Search::Elasticsearch;
 use OpenSRF::Utils::JSON;
+use Data::Dumper;
+$Data::Dumper::Indent = 0;
 
 sub new {
     my ($class, $cluster) = @_;
@@ -154,6 +156,32 @@ sub delete_index {
     }
 }
 
+# Remove multiple documents from the index by ID.
+# $ids can be a single ID or an array ref of IDs.
+sub delete_documents {
+    my ($self, $ids) = @_;
+    $ids = [$ids] unless ref $ids;
+
+    my $result;
+
+    eval {
+    
+        $result = $self->es->delete_by_query(
+            index => $self->index_name,
+            type => 'record',
+            body => {query => {terms => {id => $ids}}}
+        );
+    };
+
+    if ($@) {
+        $logger->error("ES delete document failed with $@");
+        return undef;
+    } 
+
+    $logger->debug("ES delete removed " . $result->{deleted} . " document");
+    return $result;
+}
+
 sub index_document {
     my ($self, $id, $body) = @_;
 
@@ -162,7 +190,7 @@ sub index_document {
     eval {
         $result = $self->es->index(
             index => $self->index_name,
-            type => 'record', # deprecated in v6
+            type => 'record',
             id => $id,
             body => $body
         );
@@ -173,7 +201,12 @@ sub index_document {
         return undef;
     } 
 
-    $logger->debug("ES index command returned $result");
+    if ($result->{failed}) {
+        $logger->error("ES index document $id failed " . Dumper($result));
+        return undef;
+    }
+
+    $logger->debug("ES index => $id succeeded");
     return $result;
 }
 
