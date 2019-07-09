@@ -169,7 +169,7 @@ sub delete_documents {
         $result = $self->es->delete_by_query(
             index => $self->index_name,
             type => 'record',
-            body => {query => {terms => {id => $ids}}}
+            body => {query => {terms => {_id => $ids}}}
         );
     };
 
