@@ -133,7 +133,7 @@ sub create_index {
         # Apply field boost.
         $def->{boost} = $field->weight if ($field->weight || 1) > 1;
 
-        $logger->info("ES adding field $field_name: ". 
+        $logger->debug("ES adding field $field_name: ". 
             OpenSRF::Utils::JSON->perl2JSON($def));
 
         $mappings->{$field_name} = $def;
@@ -145,20 +145,45 @@ sub create_index {
 
     my $conf = {
         index => $INDEX_NAME,
-        body => {
-            settings => $settings,
-            mappings => {record => {properties => $mappings}}
-        }
+        body => {settings => $settings}
     };
 
-    # Send the index definition to Elastic
+
+    $logger->info("ES creating index '$INDEX_NAME'");
+
+    # Create the base index with settings
     eval { $self->es->indices->create($conf) };
 
     if ($@) {
         $logger->error("ES failed to create index cluster=".  
             $self->cluster. "index=$INDEX_NAME error=$@");
-        print "$@\n\n";
+        warn "$@\n\n";
         return 0;
+    }
+
+    # Create each mapping one at a time instead of en masse so we 
+    # can more easily report when mapping creation fails.
+
+    for my $field (keys %$mappings) {
+        $logger->info("ES Creating index mapping for field $field");
+
+        eval { 
+            $self->es->indices->put_mapping({
+                index => $INDEX_NAME,
+                type  => 'record',
+                body  => {properties => {$field => $mappings->{$field}}}
+            });
+        };
+
+        if ($@) {
+            my $mapjson = OpenSRF::Utils::JSON->perl2JSON($mappings->{$field});
+
+            $logger->error("ES failed to create index mapping: " .
+                "index=$INDEX_NAME field=$field error=$@ mapping=$mapjson");
+
+            warn "$@\n\n";
+            return 0;
+        }
     }
 
     return 1;

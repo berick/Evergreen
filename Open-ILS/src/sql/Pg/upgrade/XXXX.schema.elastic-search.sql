@@ -16,6 +16,7 @@ CREATE TABLE elastic.node (
     host    TEXT    NOT NULL,
     proto   TEXT    NOT NULL,
     port    INTEGER NOT NULL,
+    path    TEXT    NOT NULL DEFAULT '/',
     active  BOOLEAN NOT NULL DEFAULT FALSE,
     cluster TEXT    NOT NULL 
             REFERENCES elastic.cluster (code) ON DELETE CASCADE,

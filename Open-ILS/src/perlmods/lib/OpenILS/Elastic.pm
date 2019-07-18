@@ -126,8 +126,8 @@ sub connect {
 
     my @nodes;
     for my $server (@{$self->nodes}) {
-        push(@nodes, sprintf("%s://%s:%d", 
-            $server->proto, $server->host, $server->port));
+        push(@nodes, sprintf("%s://%s:%d%s", 
+            $server->proto, $server->host, $server->port, $server->path));
     }
 
     $logger->debug("ES connecting to nodes @nodes");
