@@ -241,6 +241,20 @@ sub search {
     return $result;
 }
 
+# Lucene has a hard limit on the size of an indexable chunk.
+# Avoid trying to index such data by lazily chopping it off
+# at 1/4 the limit to accomodate all UTF-8 chars.
+sub truncate_value {
+    my ($self, $value) = @_;
+
+    if (length(Encode::encode('UTF-8', $value)) > 32760) {
+        $value = substr($value, 0, 8190);
+    }
+
+    return $value;
+}
+
+
 
 
 1;

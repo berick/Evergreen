@@ -1,6 +1,6 @@
-package OpenILS::Elastic::BibSearch;
+package OpenILS::Elastic::BibMarc;
 # ---------------------------------------------------------------
-# Copyright (C) 2018 King County Library System
+# Copyright (C) 2019 King County Library System
 # Author: Bill Erickson <berickxx@gmail.com>
 #
 # This program is free software; you can redistribute it and/or
@@ -24,8 +24,10 @@ use OpenILS::Utils::CStoreEditor qw/:funcs/;
 use OpenILS::Utils::DateTime qw/interval_to_seconds/;
 use OpenILS::Elastic;
 use base qw/OpenILS::Elastic/;
+use Data::Dumper;
+$Data::Dumper::Indent = 0;
 
-my $INDEX_NAME = 'bib-search';
+my $INDEX_NAME = 'bib-marc';
 
 # number of bibs to index per batch.
 my $BIB_BATCH_SIZE = 500;
@@ -50,22 +52,17 @@ my $BASE_INDEX_SETTINGS = {
     }
 };
 
-# Well-known bib-search index properties
 my $BASE_PROPERTIES = {
-    source      => {type => 'integer', index => 'false'},
-    create_date => {type => 'date', index => 'false'},
-    edit_date   => {type => 'date', index => 'false'},
-
-    # Holdings summaries.  For bib-search, we don't need
-    # copy-specific details, only aggregate visibility information.
-    holdings => {
+    source => {type => 'integer', index => 'false'},
+    create_date => {type => 'date'},
+    edit_date => {type => 'date'},
+    bib_source => {type => 'integer'},
+    marc => {
         type => 'nested',
         properties => {
-            status => {type => 'integer'},
-            circ_lib => {type => 'integer'},
-            location => {type => 'integer'},
-            circulate => {type => 'boolean'},
-            opac_visible => {type => 'boolean'}
+            tag => {type => 'keyword'},
+            subfield => {type => 'keyword'},
+            value => {type => 'text'}
         }
     }
 };
@@ -78,6 +75,12 @@ sub index {
     my $self = shift;
     return $self->{index} if $self->{index};
     ($self->{index}) = grep {$_->code eq $INDEX_NAME} @{$self->indices};
+
+    if (!$self->{index}) {
+        $logger->error("No index configuration exists for '$INDEX_NAME'");
+        return undef;
+    }
+
     return $self->{index};
 }
 
@@ -93,52 +96,6 @@ sub create_index {
         "ES creating index '$INDEX_NAME' on cluster '".$self->cluster."'");
 
     my $mappings = $BASE_PROPERTIES;
-
-    my $fields = new_editor()->retrieve_all_elastic_bib_field();
-
-    for my $field (@$fields) {
-
-        my $field_name = $field->name;
-        my $search_group = $field->search_group;
-        $field_name = "$search_group|$field_name" if $search_group;
-
-        # Every field gets a keyword index (default) for aggregation and 
-        # a lower-case keyword index (.lower) for sorting and certain
-        # types of searches (exact match, starts with)
-        my $def = {
-            type => 'keyword',
-            fields => {
-                lower => {
-                    type => 'keyword', 
-                    normalizer => 'custom_lowercase'
-                }
-            }
-        };
-
-        if ($field->search_field eq 't') {
-            # Search fields also get full text indexing and analysis
-            # plus a "folded" variation for ascii folded searches.
-
-            $def->{fields}->{text} = {
-                type => 'text',
-                analyzer => $LANG_ANALYZER
-            };
-
-            $def->{fields}->{text_folded} = {
-                type => 'text', 
-                analyzer => 'folding'
-            };
-        }
-
-        # Apply field boost.
-        $def->{boost} = $field->weight if ($field->weight || 1) > 1;
-
-        $logger->debug("ES adding field $field_name: ". 
-            OpenSRF::Utils::JSON->perl2JSON($def));
-
-        $mappings->{$field_name} = $def;
-    }
-
     my $settings = $BASE_INDEX_SETTINGS;
     $settings->{number_of_replicas} = scalar(@{$self->nodes});
     $settings->{number_of_shards} = $self->index->num_shards;
@@ -147,7 +104,6 @@ sub create_index {
         index => $INDEX_NAME,
         body => {settings => $settings}
     };
-
 
     $logger->info("ES creating index '$INDEX_NAME'");
 
@@ -189,7 +145,6 @@ sub create_index {
     return 1;
 }
 
-# Add data to the bib-search index
 sub populate_index {
     my ($self, $settings) = @_;
     $settings ||= {};
@@ -278,10 +233,9 @@ SELECT
     bre.create_date, 
     bre.edit_date, 
     bre.source AS bib_source,
-    bre.deleted,
-    (elastic.bib_record_properties(bre.id)).*
+    bre.deleted
 FROM biblio.record_entry bre
-WHERE id IN ($ids_str)
+WHERE bre.id IN ($ids_str)
 SQL
 
     return $self->get_db_rows($sql);
@@ -317,53 +271,19 @@ sub populate_bib_index_batch {
 
     $bib_ids = [@active_ids];
 
-    my $holdings = $self->load_holdings($bib_ids);
+    my $marc = $self->load_marc($bib_ids);
 
     for my $bib_id (@$bib_ids) {
 
+        my ($record) = grep {$_->{id} == $bib_id} @$bib_data;
+
         my $body = {
-            holdings => $holdings->{$bib_id} || []
+            marc => $marc->{$bib_id} || [],
+            bib_source => $record->{bib_source},
         };
 
-        # there are multiple rows per bib in the data list.
-        my @fields = grep {$_->{id} == $bib_id} @$bib_data;
-
-        my $first = 1;
-        for my $field (@fields) {
-        
-            if ($first) {
-                $first = 0;
-                # some values are repeated per field. 
-                # extract them from the first entry.
-                $body->{bib_source} = $field->{bib_source};
-
-                # ES ikes the "T" separator for ISO dates
-                ($body->{create_date} = $field->{create_date}) =~ s/ /T/g;
-                ($body->{edit_date} = $field->{edit_date}) =~ s/ /T/g;
-            }
-
-            my $fclass = $field->{search_group};
-            my $fname = $field->{name};
-            my $value = $field->{value};
-            $fname = "$fclass|$fname" if $fclass;
-            $value = $self->truncate_value($value);
-
-            if ($body->{$fname}) {
-                if (ref $body->{$fname}) {
-                    # Three or more values encountered for field.
-                    # Add to the list.
-                    push(@{$body->{$fname}}, $value);
-                } else {
-                    # Second value encountered for field.
-                    # Upgrade to array storage.
-                    $body->{$fname} = [$body->{$fname}, $value];
-                }
-            } else {
-                # First value encountered for field.
-                # Assume for now there will only be one value.
-                $body->{$fname} = $value
-            }
-        }
+        ($body->{create_date} = $record->{create_date}) =~ s/ /T/g;
+        ($body->{edit_date} = $record->{edit_date}) =~ s/ /T/g;
 
         return 0 unless $self->index_document($bib_id, $body);
 
@@ -377,54 +297,6 @@ sub populate_bib_index_batch {
     return $index_count;
 }
 
-# Load holdings summary blobs for requested bibs
-sub load_holdings {
-    my ($self, $bib_ids) = @_;
-
-    my $bib_ids_str = join(',', @$bib_ids);
-
-    my $copy_data = $self->get_db_rows(<<SQL);
-SELECT 
-    COUNT(*) AS count,
-    acn.record, 
-    acp.status AS status, 
-    acp.circ_lib AS circ_lib, 
-    acp.location AS location,
-    acp.circulate AS circulate,
-    acp.opac_visible AS opac_visible
-FROM asset.copy acp
-JOIN asset.call_number acn ON acp.call_number = acn.id
-WHERE 
-    NOT acp.deleted AND
-    NOT acn.deleted AND
-    acn.record IN ($bib_ids_str)
-GROUP BY 2, 3, 4, 5, 6, 7
-SQL
-
-    $logger->info("ES found ".scalar(@$copy_data).
-        " holdings summaries for current record batch");
-
-    my $holdings = {};
-    for my $copy (@$copy_data) {
-
-        $holdings->{$copy->{record}} = [] 
-            unless $holdings->{$copy->{record}};
-
-        push(@{$holdings->{$copy->{record}}}, {
-            count => $copy->{count},
-            status => $copy->{status},
-            circ_lib => $copy->{circ_lib},
-            location => $copy->{location},
-            circulate => $copy->{circulate} ? 'true' : 'false',
-            opac_visbile => $copy->{opac_visible} ? 'true' : 'false'
-        });
-    }
-
-    return $holdings;
-}
-
-# Example pulling marc tag/subfield data.
-# TODO: Create a separate bib-marc index if needed.
 sub load_marc {
     my ($self, $bib_ids) = @_;
 
@@ -442,27 +314,42 @@ SQL
     my $marc = {};
     for my $row (@$marc_data) {
 
+        my $value = $row->{value};
+        next unless defined $value && $value ne '';
+
+        my $subfield = $row->{subfield};
         my $rec_id = $row->{record};
-        next unless defined $row->{value} && $row->{value} ne '';
+        delete $row->{record}; # avoid adding this to the index
+
+        $row->{value} = $value = $self->truncate_value($value);
 
         $marc->{$rec_id} = [] unless $marc->{$rec_id};
-        delete $row->{subfield} unless defined $row->{subfield};
+        delete $row->{subfield} unless defined $subfield;
 
         # Add values to existing record/tag/subfield rows.
   
-        my ($existing) = grep {
-            $_->{record} == $row->{record} &&
-            $_->{tag} eq $row->{tag} && (
-                (not defined $_->{subfield} && not defined $row->{subfield}) ||
-                ($_->{subfield} eq $row->{subfield})
-            )
-        } @{$marc->{$rec_id}};
+        my $existing;
+        for my $entry (@{$marc->{$rec_id}}) {
+            next unless $entry->{tag} eq $row->{tag};
+
+            if (defined $subfield) {
+                if (defined $entry->{subfield}) {
+                    if ($subfield eq $entry->{subfield}) {
+                        $existing = $entry;
+                        last;
+                    }
+                }
+            } elsif (!defined $entry->{subfield}) {
+                # Neither has a subfield value / not all tags have subfields
+                $existing = $entry;
+                last;
+            }
+        }
 
         if ($existing) {
-
-            $existing->{subfield} = [$existing->{subfield}] 
-                unless ref $existing->{subfield};
-            push(@{$existing->{subfield}}, $row->{value});
+            
+            $existing->{value} = [$existing->{value}] unless ref $existing->{value};
+            push(@{$existing->{value}}, $value);
 
         } else {
 
@@ -472,7 +359,6 @@ SQL
 
     return $marc;
 }
-
 
 
 1;

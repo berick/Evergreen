@@ -6,6 +6,7 @@ use OpenSRF::Utils::JSON;
 use OpenILS::Utils::Fieldmapper;
 use OpenILS::Utils::CStoreEditor;
 use OpenILS::Elastic::BibSearch;
+use OpenILS::Elastic::BibMarc;
 
 my $help;
 my $osrf_config = '/openils/conf/opensrf_core.xml';
@@ -128,6 +129,8 @@ my $es;
 
 if ($index_name eq 'bib-search') {
     $es = OpenILS::Elastic::BibSearch->new($cluster);
+} elsif ($index_name eq 'bib-marc') {
+    $es = OpenILS::Elastic::BibMarc->new($cluster);
 }
 
 if (!$es) {
