@@ -60,9 +60,35 @@ my $BASE_PROPERTIES = {
     marc => {
         type => 'nested',
         properties => {
+            # tag is assumed to be composed of numbers, so no lowercase.
             tag => {type => 'keyword'},
-            subfield => {type => 'keyword'},
-            value => {type => 'text'}
+            subfield => {
+                type => 'keyword',
+                fields => {
+                    lower => {
+                        type => 'keyword', 
+                        normalizer => 'custom_lowercase'
+                    }
+                }
+            },
+            value => {
+                type => 'keyword',
+                fields => {
+                    lower => {
+                        type => 'keyword', 
+                        normalizer => 'custom_lowercase'
+                    },
+                    text => {
+                        type => 'text',
+                        analyzer => $LANG_ANALYZER
+                    },
+                    text_folded => {
+                        type => 'text',
+                        analyzer => 'folding'
+                    }
+                }
+            }
+ 
         }
     }
 };

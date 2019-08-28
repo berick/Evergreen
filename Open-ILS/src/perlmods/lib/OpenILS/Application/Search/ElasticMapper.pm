@@ -1,4 +1,4 @@
-package OpenILS::Application::Search::Elastic;
+package OpenILS::Application::Search::ElasticMapper;
 # ---------------------------------------------------------------
 # Copyright (C) 2018 King County Library System
 # Author: Bill Erickson <berickxx@gmail.com>
@@ -21,6 +21,7 @@ use OpenILS::Utils::Fieldmapper;
 use OpenSRF::Utils::SettingsClient;
 use OpenILS::Utils::CStoreEditor q/:funcs/;
 use OpenILS::Elastic::BibSearch;
+use OpenILS::Elastic::BibMarc;
 use List::Util qw/min/;
 use Digest::MD5 qw(md5_hex);
 
@@ -39,31 +40,34 @@ my $bib_fields;
 my $hidden_copy_statuses;
 my $hidden_copy_locations;
 my $avail_copy_statuses;
-our $enabled = undef;
+our $enabled = {};
 
 # Returns true if the Elasticsearch 'bib-search' index is active.
 sub is_enabled {
+    my ($class, $index) = @_;
 
-    return $enabled if defined $enabled;
+    $class->init;
+
+    return $enabled->{$index} if exists $enabled->{$index};
 
     # Elastic bib search is enabled if a "bib-search" index is enabled.
-    my $index = new_editor()->search_elastic_index(
-        {active => 't', code => 'bib-search'})->[0];
+    my $config = new_editor()->search_elastic_index(
+        {active => 't', code => $index})->[0];
 
-    if ($index) {
-
-        $logger->info("ES bib-search index is enabled");
-        $enabled = 1;
+    if ($config) {
+        $logger->info("ES '$index' index is enabled");
+        $enabled->{$index} = 1;
     } else {
-        $enabled = 0;
+        $enabled->{$index} = 0;
     }
 
-    return $enabled;
+    return $enabled->{$index};
 }
 
-sub child_init {
+my $init_complete = 0;
+sub init {
     my $class = shift;
-    return unless $class->is_enabled();
+    return if $init_complete;
 
     my $e = new_editor();
 
@@ -93,6 +97,7 @@ sub child_init {
 
     $hidden_copy_locations = [map {$_->{id}} @$locs];
 
+    $init_complete = 1;
     return 1;
 }
 
@@ -257,7 +262,9 @@ sub translate_query_node {
         my $field_class = $node->{class}; # e.g. subject
         my @fields = @{$node->{fields}};  # e.g. temporal (optional)
 
-        # class-level searches are OR/should searches across all
+        $logger->info("ES query node field_class=$field_class fields=@fields");
+
+        # class-level searches are OR ("should") searches across all
         # fields in the selected class.
         @fields = map {$_->name} 
             grep {$_->search_group eq $field_class} @$bib_fields
@@ -313,7 +320,6 @@ sub translate_query_node {
         for my $field (@fields) {
             my $key = "$field_class|$field";
 
-
             if ($text_search) {
                 # use the full-text indices
                 
@@ -330,8 +336,10 @@ sub translate_query_node {
             }
         }
 
-        $logger->info("ES content = $content / bools = ". 
-            OpenSRF::Utils::JSON->perl2JSON($field_nodes));
+        $logger->info(
+            "ES content = ". OpenSRF::Utils::JSON->perl2JSON($content) . 
+            "; bools = ". OpenSRF::Utils::JSON->perl2JSON($field_nodes)
+        );
 
         my $query;
         if (scalar(@$field_nodes) == 1) {
@@ -345,6 +353,8 @@ sub translate_query_node {
             # Negation query.  Wrap the whole shebang in a must_not
             $query = {bool => {must_not => $query}};
         }
+
+        $logger->info("ES sub-query = ". OpenSRF::Utils::JSON->perl2JSON($query));
 
         return $query;
     }
@@ -544,6 +554,100 @@ sub add_elastic_holdings_filter {
     push(@{$elastic_query->{query}->{bool}->{filter}}, $filter);
 
 }
+
+
+
+sub compile_elastic_marc_query {
+    my ($args, $staff, $offset, $limit) = @_;
+
+    # args->{searches} = 
+    #   [{term => "harry", restrict => [{tag => 245, subfield => "a"}]}]
+
+    my $root_and = [];
+    for my $search (@{$args->{searches}}) {
+
+        # NOTE Assume only one tag/subfield will be queried per search term.
+        my $tag = $search->{restrict}->[0]->{tag};
+        my $sf = $search->{restrict}->[0]->{subfield};
+        my $value = $search->{term};
+
+        # Use text searching on the value field
+        my $value_query = {
+            bool => {
+                should => [
+                    {match => {'marc.value.text' => 
+                        {query => $value, operator => 'and'}}},
+                    {match => {'marc.value.text_folded' => 
+                        {query => $value, operator => 'and'}}}
+                ]
+            }
+        };
+
+        my $sub_query = {
+            bool => {
+                must => [
+                    {term => {'marc.tag' => $tag}},
+                    {term => {'marc.subfield.lower' => $sf}},
+                    $value_query
+                ]
+            }
+        };
+
+        push (@$root_and, {
+            nested => {
+                path => 'marc',
+                query => {bool => {must => $sub_query}}
+            }
+        });
+    }
+
+    return { 
+        _source => ['id'], # Fetch bib ID only
+        size => $limit,
+        from => $offset,
+        sort => [],
+        query => {
+            bool => {
+                must => $root_and,
+                filter => []
+            }
+        }
+    };
+}
+
+
+
+# Translate a MARC search API call into something consumable by Elasticsearch
+# Translate search results into a structure consistent with a bib search
+# API response.
+sub marc_search {
+    my ($class, $args, $staff, $limit, $offset) = @_;
+
+    return {count => 0} unless $args->{searches} && @{$args->{searches}};
+
+    my $elastic_query =
+        compile_elastic_marc_query($args, $staff, $offset, $limit);
+
+    my $es = OpenILS::Elastic::BibMarc->new('main');
+
+    $es->connect;
+    my $results = $es->search($elastic_query);
+
+    $logger->debug("ES elasticsearch returned: ".
+        OpenSRF::Utils::JSON->perl2JSON($results));
+
+    return {count => 0} unless $results;
+
+    my @bib_ids = map {$_->{_id}} 
+        grep {defined $_} @{$results->{hits}->{hits}};
+
+    return {
+        ids => \@bib_ids,
+        count => $results->{hits}->{total}
+    };
+}
+
+
 
 1;
 
