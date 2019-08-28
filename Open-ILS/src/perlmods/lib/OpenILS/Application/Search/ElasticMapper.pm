@@ -120,7 +120,7 @@ sub bib_search {
     $logger->debug("ES elasticsearch returned: ".
         OpenSRF::Utils::JSON->perl2JSON($results));
 
-    return {count => 0} unless $results;
+    return {count => 0, ids => []} unless $results;
 
     return {
         count => $results->{hits}->{total},
@@ -583,15 +583,13 @@ sub compile_elastic_marc_query {
             }
         };
 
-        my $sub_query = {
-            bool => {
-                must => [
-                    {term => {'marc.tag' => $tag}},
-                    {term => {'marc.subfield.lower' => $sf}},
-                    $value_query
-                ]
-            }
-        };
+        my @must = ($value_query);
+
+        # tag (ES-only) and subfield are both optional
+        push (@must, {term => {'marc.tag' => $tag}}) if $tag;
+        push (@must, {term => {'marc.subfield' => $sf}}) if $sf && $sf ne '_';
+
+        my $sub_query = {bool => {must => \@must}};
 
         push (@$root_and, {
             nested => {
@@ -620,10 +618,13 @@ sub compile_elastic_marc_query {
 # Translate a MARC search API call into something consumable by Elasticsearch
 # Translate search results into a structure consistent with a bib search
 # API response.
+# TODO: This version is not currently holdings-aware, meaning it will return
+# results for all non-deleted bib records that match the query.
 sub marc_search {
     my ($class, $args, $staff, $limit, $offset) = @_;
 
-    return {count => 0} unless $args->{searches} && @{$args->{searches}};
+    return {count => 0, ids => []} 
+        unless $args->{searches} && @{$args->{searches}};
 
     my $elastic_query =
         compile_elastic_marc_query($args, $staff, $offset, $limit);
@@ -636,7 +637,7 @@ sub marc_search {
     $logger->debug("ES elasticsearch returned: ".
         OpenSRF::Utils::JSON->perl2JSON($results));
 
-    return {count => 0} unless $results;
+    return {count => 0, ids => []} unless $results;
 
     my @bib_ids = map {$_->{_id}} 
         grep {defined $_} @{$results->{hits}->{hits}};
