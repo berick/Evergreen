@@ -558,7 +558,7 @@ export class CatalogSearchContext {
         return query;
     }
 
-    compileTermSearchQuery(): string {
+    compileTermSearchQuery(): any {
         const ts = this.termSearch;
         let str = '';
 
@@ -692,6 +692,21 @@ export class CatalogSearchContext {
                 this.cnBrowseSearch.offset = 0;
                 break;
         }
+    }
+
+    getApiName(): string {
+        let method = 'open-ils.search.biblio.multiclass.query';
+
+        if (this.termSearch.groupByMetarecord 
+            && !this.termSearch.fromMetarecord) {
+            method = 'open-ils.search.metabib.multiclass.query';
+        }
+
+        if (this.isStaff) {
+            method += '.staff';
+        }
+
+        return method;
     }
 }
 

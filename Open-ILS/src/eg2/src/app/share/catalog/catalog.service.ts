@@ -110,7 +110,6 @@ export class CatalogService {
 
     termSearch(ctx: CatalogSearchContext): Promise<void> {
 
-        let method = 'open-ils.search.biblio.multiclass.query';
         let fullQuery;
 
         if (ctx.identSearch.isSearchable()) {
@@ -119,21 +118,14 @@ export class CatalogService {
         } else {
             fullQuery = ctx.compileTermSearchQuery();
 
-            if (ctx.termSearch.groupByMetarecord
-                && !ctx.termSearch.fromMetarecord) {
-                method = 'open-ils.search.metabib.multiclass.query';
-            }
-
             if (ctx.termSearch.hasBrowseEntry) {
                 this.fetchBrowseEntry(ctx);
             }
         }
 
-        console.debug(`search query: ${fullQuery}`);
+        console.debug('search query', JSON.stringify(fullQuery));
 
-        if (ctx.isStaff) {
-            method += '.staff';
-        }
+        const method = ctx.getApiName();
 
         return this.net.request(
             'open-ils.search', method, {
