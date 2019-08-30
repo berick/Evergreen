@@ -1,4 +1,4 @@
-package OpenILS::Elastic::BibSearch;
+package OpenILS::Elastic::Bib::Search;
 # ---------------------------------------------------------------
 # Copyright (C) 2018 King County Library System
 # Author: Bill Erickson <berickxx@gmail.com>
@@ -22,8 +22,8 @@ use OpenSRF::Utils::Logger qw/:logger/;
 use OpenSRF::Utils::JSON;
 use OpenILS::Utils::CStoreEditor qw/:funcs/;
 use OpenILS::Utils::DateTime qw/interval_to_seconds/;
-use OpenILS::Elastic;
-use base qw/OpenILS::Elastic/;
+use OpenILS::Elastic::Bib;
+use base qw/OpenILS::Elastic::Bib/;
 
 my $INDEX_NAME = 'bib-search';
 
@@ -72,13 +72,6 @@ my $BASE_PROPERTIES = {
 
 sub index_name {
     return $INDEX_NAME;
-}
-
-sub index {
-    my $self = shift;
-    return $self->{index} if $self->{index};
-    ($self->{index}) = grep {$_->code eq $INDEX_NAME} @{$self->indices};
-    return $self->{index};
 }
 
 sub create_index {
@@ -187,84 +180,6 @@ sub create_index {
     }
 
     return 1;
-}
-
-# Add data to the bib-search index
-sub populate_index {
-    my ($self, $settings) = @_;
-    $settings ||= {};
-
-    my $index_count = 0;
-    my $total_indexed = 0;
-
-    # extract the database settings.
-    for my $db_key (grep {$_ =~ /^db_/} keys %$settings) {
-        $self->{$db_key} = $settings->{$db_key};
-    }
-
-    my $end_time;
-    my $duration = $settings->{max_duration};
-    if ($duration) {
-        my $seconds = interval_to_seconds($duration);
-        $end_time = DateTime->now;
-        $end_time->add(seconds => $seconds);
-    }
-
-    while (1) {
-
-        $index_count = $self->populate_bib_index_batch($settings);
-        $total_indexed += $index_count;
-
-        $logger->info("ES indexed $total_indexed bib records");
-
-        # exit if we're only indexing a single record or if the 
-        # batch indexer says there are no more records to index.
-        last if !$index_count || $settings->{index_record};
-
-        if ($end_time && DateTime->now > $end_time) {
-            $logger->info(
-                "ES index populate exiting early on max_duration $duration");
-            last;
-        }
-    } 
-
-    $logger->info("ES bib indexing complete with $total_indexed records");
-}
-
-sub get_bib_ids {
-    my ($self, $state) = @_;
-
-    # A specific record is selected for indexing.
-    return [$state->{index_record}] if $state->{index_record};
-
-    my $start_id = $state->{start_record} || 0;
-    my $stop_id = $state->{stop_record};
-    my $modified_since = $state->{modified_since};
-
-    my ($select, $from, $where);
-    if ($modified_since) {
-        $select = "SELECT id";
-        $from   = "FROM elastic.bib_last_mod_date";
-        $where  = "WHERE last_mod_date > '$modified_since'";
-    } else {
-        $select = "SELECT id";
-        $from   = "FROM biblio.record_entry";
-        $where  = "WHERE NOT deleted AND active";
-    }
-
-    $where .= " AND id >= $start_id" if $start_id;
-    $where .= " AND id <= $stop_id" if $stop_id;
-
-    # Ordering by ID is the simplest way to guarantee all requested
-    # records are processed, given that edit dates may not be unique
-    # and that we're using start_id/stop_id instead of OFFSET to
-    # define the batches.
-    my $order = "ORDER BY id";
-
-    my $sql = "$select $from $where $order LIMIT $BIB_BATCH_SIZE";
-
-    my $ids = $self->get_db_rows($sql);
-    return [ map {$_->{id}} @$ids ];
 }
 
 sub get_bib_data {
@@ -422,58 +337,6 @@ SQL
 
     return $holdings;
 }
-
-# Example pulling marc tag/subfield data.
-# TODO: Create a separate bib-marc index if needed.
-sub load_marc {
-    my ($self, $bib_ids) = @_;
-
-    my $bib_ids_str = join(',', @$bib_ids);
-
-    my $marc_data = $self->get_db_rows(<<SQL);
-SELECT record, tag, subfield, value
-FROM metabib.full_rec
-WHERE record IN ($bib_ids_str)
-SQL
-
-    $logger->info("ES found ".scalar(@$marc_data).
-        " full record rows for current record batch");
-
-    my $marc = {};
-    for my $row (@$marc_data) {
-
-        my $rec_id = $row->{record};
-        next unless defined $row->{value} && $row->{value} ne '';
-
-        $marc->{$rec_id} = [] unless $marc->{$rec_id};
-        delete $row->{subfield} unless defined $row->{subfield};
-
-        # Add values to existing record/tag/subfield rows.
-  
-        my ($existing) = grep {
-            $_->{record} == $row->{record} &&
-            $_->{tag} eq $row->{tag} && (
-                (not defined $_->{subfield} && not defined $row->{subfield}) ||
-                ($_->{subfield} eq $row->{subfield})
-            )
-        } @{$marc->{$rec_id}};
-
-        if ($existing) {
-
-            $existing->{subfield} = [$existing->{subfield}] 
-                unless ref $existing->{subfield};
-            push(@{$existing->{subfield}}, $row->{value});
-
-        } else {
-
-            push(@{$marc->{$rec_id}}, $row);
-        }
-    }
-
-    return $marc;
-}
-
-
 
 1;
 

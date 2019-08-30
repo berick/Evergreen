@@ -20,8 +20,8 @@ use OpenSRF::Utils::Logger qw/:logger/;
 use OpenILS::Utils::Fieldmapper;
 use OpenSRF::Utils::SettingsClient;
 use OpenILS::Utils::CStoreEditor q/:funcs/;
-use OpenILS::Elastic::BibSearch;
-use OpenILS::Elastic::BibMarc;
+use OpenILS::Elastic::Bib::Search;
+use OpenILS::Elastic::Bib::Marc;
 use List::Util qw/min/;
 use Digest::MD5 qw(md5_hex);
 
@@ -112,7 +112,7 @@ sub bib_search {
     my ($elastic_query, $cache_key) = 
         compile_elastic_query($query, $staff, $offset, $limit);
 
-    my $es = OpenILS::Elastic::BibSearch->new('main');
+    my $es = OpenILS::Elastic::Bib::Search->new('main');
 
     $es->connect;
     my $results = $es->search($elastic_query);
@@ -629,7 +629,7 @@ sub marc_search {
     my $elastic_query =
         compile_elastic_marc_query($args, $staff, $offset, $limit);
 
-    my $es = OpenILS::Elastic::BibMarc->new('main');
+    my $es = OpenILS::Elastic::Bib::Marc->new('main');
 
     $es->connect;
     my $results = $es->search($elastic_query);
