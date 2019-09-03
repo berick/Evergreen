@@ -2135,7 +2135,7 @@ sub marc_search {
 
     return OpenILS::Application::Search::ElasticMapper->marc_search(
         $args, ($method =~ /staff/ ? 1 : 0), $limit, $offset
-    ) if OpenILS::Application::Search::ElasticMapper->is_enabled('bib-marc');
+    ) if OpenILS::Application::Search::ElasticMapper->is_enabled('bib-search');
 
     # allow caller to pass in a call timeout since MARC searches
     # can take longer than the default 60-second timeout.  

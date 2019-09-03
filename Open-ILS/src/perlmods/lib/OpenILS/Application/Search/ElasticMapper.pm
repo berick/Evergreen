@@ -619,7 +619,8 @@ sub compile_elastic_marc_query {
 # Translate search results into a structure consistent with a bib search
 # API response.
 # TODO: This version is not currently holdings-aware, meaning it will return
-# results for all non-deleted bib records that match the query.
+# results for all non-deleted bib records that match the query.  However,
+# the data does exist in the EL index.  Just need to integrate.
 sub marc_search {
     my ($class, $args, $staff, $limit, $offset) = @_;
 
@@ -629,7 +630,7 @@ sub marc_search {
     my $elastic_query =
         compile_elastic_marc_query($args, $staff, $offset, $limit);
 
-    my $es = OpenILS::Elastic::Bib::Marc->new('main');
+    my $es = OpenILS::Elastic::Bib::Search->new('main');
 
     $es->connect;
     my $results = $es->search($elastic_query);

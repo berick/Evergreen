@@ -67,7 +67,42 @@ my $BASE_PROPERTIES = {
             circulate => {type => 'boolean'},
             opac_visible => {type => 'boolean'}
         }
+    },
+    marc => {
+        type => 'nested',
+        properties => {
+            # tag is assumed to be composed of numbers, so no lowercase.
+            tag => {type => 'keyword'},
+            subfield => {
+                type => 'keyword',
+                fields => {
+                    lower => {
+                        type => 'keyword', 
+                        normalizer => 'custom_lowercase'
+                    }
+                }
+            },
+            value => {
+                type => 'keyword',
+                fields => {
+                    lower => {
+                        type => 'keyword', 
+                        normalizer => 'custom_lowercase'
+                    },
+                    text => {
+                        type => 'text',
+                        analyzer => $LANG_ANALYZER
+                    },
+                    text_folded => {
+                        type => 'text',
+                        analyzer => 'folding'
+                    }
+                }
+            }
+ 
+        }
     }
+
 };
 
 sub index_name {
@@ -233,10 +268,12 @@ sub populate_bib_index_batch {
     $bib_ids = [@active_ids];
 
     my $holdings = $self->load_holdings($bib_ids);
+    my $marc = $self->load_marc($bib_ids);
 
     for my $bib_id (@$bib_ids) {
 
         my $body = {
+            marc => $marc->{$bib_id} || [],
             holdings => $holdings->{$bib_id} || []
         };
 
@@ -336,6 +373,69 @@ SQL
     }
 
     return $holdings;
+}
+
+sub load_marc {
+    my ($self, $bib_ids) = @_;
+
+    my $bib_ids_str = join(',', @$bib_ids);
+
+    my $marc_data = $self->get_db_rows(<<SQL);
+SELECT record, tag, subfield, value
+FROM metabib.real_full_rec
+WHERE record IN ($bib_ids_str)
+SQL
+
+    $logger->info("ES found ".scalar(@$marc_data).
+        " MARC rows for current record batch");
+
+    my $marc = {};
+    for my $row (@$marc_data) {
+
+        my $value = $row->{value};
+        next unless defined $value && $value ne '';
+
+        my $subfield = $row->{subfield};
+        my $rec_id = $row->{record};
+        delete $row->{record}; # avoid adding this to the index
+
+        $row->{value} = $value = $self->truncate_value($value);
+
+        $marc->{$rec_id} = [] unless $marc->{$rec_id};
+        delete $row->{subfield} unless defined $subfield;
+
+        # Add values to existing record/tag/subfield rows.
+  
+        my $existing;
+        for my $entry (@{$marc->{$rec_id}}) {
+            next unless $entry->{tag} eq $row->{tag};
+
+            if (defined $subfield) {
+                if (defined $entry->{subfield}) {
+                    if ($subfield eq $entry->{subfield}) {
+                        $existing = $entry;
+                        last;
+                    }
+                }
+            } elsif (!defined $entry->{subfield}) {
+                # Neither has a subfield value / not all tags have subfields
+                $existing = $entry;
+                last;
+            }
+        }
+
+        if ($existing) {
+            
+            $existing->{value} = [$existing->{value}] unless ref $existing->{value};
+            push(@{$existing->{value}}, $value);
+
+        } else {
+
+            push(@{$marc->{$rec_id}}, $row);
+        }
+    }
+
+    return $marc;
 }
 
 1;
