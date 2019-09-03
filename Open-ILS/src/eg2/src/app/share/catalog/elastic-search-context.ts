@@ -6,7 +6,8 @@ class ElasticSearchParams {
     search_depth: number;
     available: boolean;
     sort: any[] = [];
-    query: any = {bool: {must: [], filter: []}};
+    searches: any[] = [];
+    filters: any[] = [];
 }
 
 export class ElasticSearchContext extends CatalogSearchContext {
@@ -17,63 +18,31 @@ export class ElasticSearchContext extends CatalogSearchContext {
     compileTerms(params: ElasticSearchParams) {
 
         const ts = this.termSearch;
-        const terms: any = {
-            bool: {
-                should: [
-                    {bool: {must: []}} // ANDs
-                    // ORs
-                ]
-            }
-        };
 
         ts.joinOp.forEach((op, idx) => {
             let matchOp = 'match';
 
-            // The 'and' operator here tells EL to treat multi-word search
-            // terms as an ANDed pair (e.g. "harry potter" = "harry and potter")
-            let operator = 'and';
-
             switch (ts.matchOp[idx]) {
                 case 'phrase':
                     matchOp = 'match_phrase';
-                    operator = null;
                     break;
                 case 'nocontains':
                     matchOp = 'must_not';
                     break;
                 case 'exact':
                     matchOp = 'term';
-                    operator = null;
                     break;
                 case 'starts':
                     matchOp = 'match_phrase_prefix';
-                    operator = null;
                     break;
             }
 
-            let node: any = {};
-            node[matchOp] = {};
-
-            if (operator) {
-                node[matchOp][ts.fieldClass[idx]] = 
-                    {query: ts.query[idx], operator: operator};
-            } else {
-                node[matchOp][ts.fieldClass[idx]] = ts.query[idx];
-            }
-
-            if (matchOp === 'must_not') {
-                // adds a boolean sub-node
-                node = {bool: node};
-            }
-
-            if (ts.joinOp[idx] === 'or') {
-                terms.bool.should.push(node);
-            } else {
-                terms.bool.should[0].bool.must.push(node);
-            }
+            params.searches.push({
+                field: ts.fieldClass[idx],
+                match_op: matchOp,
+                value: ts.query[idx]
+            });
         });
-
-        params.query.bool.must.push(terms);
     }
 
     addFilter(params: ElasticSearchParams, name: string, value: any) {
@@ -81,9 +50,28 @@ export class ElasticSearchContext extends CatalogSearchContext {
             value === null || 
             value === undefined) { return; }
 
+        // Multiple filter values for a single filter are OR'ed.
+        for (let idx = 0; idx < params.filters.length; idx++) {
+            const filter = params.filters[idx];
+
+            if (filter.term && name in filter.term) {
+                // Pluralize an existing filter
+                filter.terms = {};
+                filter.terms[name] = [filter.term[name], value];
+                delete filter.term;
+                return;
+
+            } else if (filter.terms && name in filter.terms) {
+                // Append a filter value to an already pluralized filter.
+                filter.terms[name].push(value);
+                return;
+            }
+        }
+
+        // New filter type
         const node: any = {term: {}};
         node.term[name] = value;
-        params.query.bool.filter.push(node);
+        params.filters.push(node);
     }
 
     compileTermSearchQuery(): any {
@@ -101,20 +89,21 @@ export class ElasticSearchContext extends CatalogSearchContext {
         }
 
         if (ts.date1 && ts.dateOp) {
+            const dateFilter: Object = {};
             switch (ts.dateOp) {
                 case 'is':
                     this.addFilter(params, 'date1', ts.date1);
                     break;
                 case 'before':
-                    this.addFilter(params, 'range', {date1: {'lt': ts.date1}});
+                    params.filters.push({range: {date1: {lt: ts.date1}}});
                     break;
                 case 'after':
-                    this.addFilter(params, 'range', {date1: {'gt': ts.date1}});
+                    params.filters.push({range: {date1: {gt: ts.date1}}});
                     break;
                 case 'between':
                     if (ts.date2) {
-                        this.addFilter(params, 'range', 
-                            {date1: {'gt': ts.date1, 'lt': ts.date2}});
+                        params.filters.push(
+                            {range: {date1: {gt: ts.date1, lt: ts.date2}}});
                     }
             }
         }
@@ -147,7 +136,7 @@ export class ElasticSearchContext extends CatalogSearchContext {
 
         ts.facetFilters.forEach(f => {
             this.addFilter(params, 
-                `${f.facetClass}:${f.facetName}`, f.facetValue);
+                `${f.facetClass}|${f.facetName}`, f.facetValue);
         });
 
         return params;

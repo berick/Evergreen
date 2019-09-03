@@ -10,7 +10,6 @@ use OpenSRF::Utils::SettingsClient;
 use OpenILS::Utils::CStoreEditor q/:funcs/;
 use OpenSRF::Utils::Cache;
 use Encode;
-use OpenILS::Application::Search::Elastic;
 use OpenILS::Application::Search::ElasticMapper;
 
 use OpenSRF::Utils::Logger qw/:logger/;
@@ -1162,7 +1161,7 @@ sub staged_search {
         $search_hash->{query}, # query string
         ($method =~ /staff/ ? 1 : 0),
         $user_offset, $user_limit
-    ) if OpenILS::Application::Search::Elastic->is_enabled('bib-search');
+    ) if OpenILS::Application::Search::ElasticMapper->is_enabled('bib-search');
 
     # we're grabbing results on a per-superpage basis, which means the 
     # limit and offset should coincide with superpage boundaries
