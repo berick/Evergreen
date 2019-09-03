@@ -21,7 +21,7 @@ use OpenILS::Utils::Fieldmapper;
 use OpenSRF::Utils::SettingsClient;
 use OpenILS::Utils::CStoreEditor q/:funcs/;
 use OpenILS::Elastic::Bib::Search;
-use OpenILS::Elastic::Bib::Marc;
+#use OpenILS::Elastic::Bib::Marc;
 use List::Util qw/min/;
 use Digest::MD5 qw(md5_hex);
 

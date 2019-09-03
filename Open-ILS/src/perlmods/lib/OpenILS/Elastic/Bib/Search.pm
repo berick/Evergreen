@@ -87,6 +87,7 @@ my $BASE_PROPERTIES = {
             }
         }
     }
+
 };
 
 sub index_name {

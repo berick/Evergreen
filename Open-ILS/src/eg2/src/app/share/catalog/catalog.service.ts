@@ -95,6 +95,8 @@ export class CatalogService {
         let method = 'open-ils.search.biblio.marc';
         if (ctx.isStaff) { method += '.staff'; }
 
+        const method = ctx.getApiName();
+
         const queryStruct = ctx.compileMarcSearchArgs();
 
         return this.net.request('open-ils.search', method, queryStruct)
@@ -125,7 +127,19 @@ export class CatalogService {
 
         console.debug('search query', JSON.stringify(fullQuery));
 
-        const method = ctx.getApiName();
+        let method = ctx.getApiName();
+        if (method === null) {
+            method = 'open-ils.search.biblio.multiclass.query';
+    
+            if (ctx.termSearch.groupByMetarecord 
+            && !ctx.termSearch.fromMetarecord) {
+                method = 'open-ils.search.metabib.multiclass.query';
+            }
+    
+            if (ctx.isStaff) {
+                method += '.staff';
+            }
+        }
 
         return this.net.request(
             'open-ils.search', method, {

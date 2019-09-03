@@ -22,7 +22,6 @@ use OpenILS::Utils::Fieldmapper;
 use OpenSRF::Utils::SettingsClient;
 use OpenILS::Utils::CStoreEditor q/:funcs/;
 use OpenILS::Elastic::BibSearch;
-use OpenILS::Elastic::BibMarc;
 use List::Util qw/min/;
 
 use OpenILS::Application::AppUtils;
@@ -138,6 +137,8 @@ sub compile_elastic_query {
     };
 
     append_search_nodes($elastic, $_) for @{$query->{searches}};
+
+    append_marc_nodes($elastic, $_) for @{$query->{marc_searches}};
 
     add_elastic_holdings_filter($elastic, $staff, 
         $query->{search_org}, $query->{search_depth}, $query->{available});
@@ -363,98 +364,40 @@ sub add_elastic_holdings_filter {
 }
 
 
-sub compile_elastic_marc_query {
-    my ($args, $staff, $offset, $limit) = @_;
+sub append_marc_nodes {
+    my ($marc_search) = @_;
 
-    # args->{searches} = 
-    #   [{term => "harry", restrict => [{tag => 245, subfield => "a"}]}]
+    my $tag = $marc_search->{tag};
+    my $sf = $marc_search->{subfield};
+    my $value = $marc_search->{value};
 
-    my $root_and = [];
-    for my $search (@{$args->{searches}}) {
+    # Use text searching on the value field
+    my $value_query = {
+        bool => {
+            should => [
+                {match => {'marc.value.text' => 
+                    {query => $value, operator => 'and'}}},
+                {match => {'marc.value.text_folded' => 
+                    {query => $value, operator => 'and'}}}
+            ]
+        }
+    };
 
-        # NOTE Assume only one tag/subfield will be queried per search term.
-        my $tag = $search->{restrict}->[0]->{tag};
-        my $sf = $search->{restrict}->[0]->{subfield};
-        my $value = $search->{term};
+    my @must = ($value_query);
 
-        # Use text searching on the value field
-        my $value_query = {
-            bool => {
-                should => [
-                    {match => {'marc.value.text' => 
-                        {query => $value, operator => 'and'}}},
-                    {match => {'marc.value.text_folded' => 
-                        {query => $value, operator => 'and'}}}
-                ]
-            }
-        };
+    # tag (ES-only) and subfield are both optional
+    push (@must, {term => {'marc.tag' => $tag}}) if $tag;
+    push (@must, {term => {'marc.subfield' => $sf}}) if $sf;
 
-        my @must = ($value_query);
+    my $sub_query = {bool => {must => \@must}};
 
-        # tag (ES-only) and subfield are both optional
-        push (@must, {term => {'marc.tag' => $tag}}) if $tag;
-        push (@must, {term => {'marc.subfield' => $sf}}) if $sf && $sf ne '_';
-
-        my $sub_query = {bool => {must => \@must}};
-
-        push (@$root_and, {
-            nested => {
-                path => 'marc',
-                query => {bool => {must => $sub_query}}
-            }
-        });
-    }
-
-    return { 
-        _source => ['id'], # Fetch bib ID only
-        size => $limit,
-        from => $offset,
-        sort => [],
-        query => {
-            bool => {
-                must => $root_and,
-                filter => []
-            }
+    return {
+        nested => {
+            path => 'marc',
+            query => {bool => {must => $sub_query}}
         }
     };
 }
-
-
-
-# Translate a MARC search API call into something consumable by Elasticsearch
-# Translate search results into a structure consistent with a bib search
-# API response.
-# TODO: This version is not currently holdings-aware, meaning it will return
-# results for all non-deleted bib records that match the query.
-sub marc_search {
-    my ($class, $args, $staff, $limit, $offset) = @_;
-
-    return {count => 0, ids => []} 
-        unless $args->{searches} && @{$args->{searches}};
-
-    my $elastic_query =
-        compile_elastic_marc_query($args, $staff, $offset, $limit);
-
-    my $es = OpenILS::Elastic::BibMarc->new('main');
-
-    $es->connect;
-    my $results = $es->search($elastic_query);
-
-    $logger->debug("ES elasticsearch returned: ".
-        OpenSRF::Utils::JSON->perl2JSON($results));
-
-    return {count => 0, ids => []} unless $results;
-
-    my @bib_ids = map {$_->{_id}} 
-        grep {defined $_} @{$results->{hits}->{hits}};
-
-    return {
-        ids => \@bib_ids,
-        count => $results->{hits}->{total}
-    };
-}
-
-
 
 1;
 

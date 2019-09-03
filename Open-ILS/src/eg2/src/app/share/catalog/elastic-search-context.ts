@@ -7,11 +7,11 @@ class ElasticSearchParams {
     available: boolean;
     sort: any[] = [];
     searches: any[] = [];
+    marc_searches: any[] = [];
     filters: any[] = [];
 }
 
 export class ElasticSearchContext extends CatalogSearchContext {
-
 
     // The UI is ambiguous re: mixing ANDs and ORs.
     // Here booleans are grouped ANDs first, then each OR is given its own node.
@@ -45,7 +45,7 @@ export class ElasticSearchContext extends CatalogSearchContext {
         });
     }
 
-    addFilter(params: ElasticSearchParams, name: string, value: any) {
+    addTermFilter(params: ElasticSearchParams, name: string, value: any) {
         if (value === ''   || 
             value === null || 
             value === undefined) { return; }
@@ -76,23 +76,15 @@ export class ElasticSearchContext extends CatalogSearchContext {
 
     compileTermSearchQuery(): any {
         const ts = this.termSearch;
-        const params = new ElasticSearchParams();
+        const params = this.newParams();
 
         params.available = ts.available;
-
-        if (this.sort) {
-            // e.g. title, title.descending => [{title => 'desc'}]
-            const parts = this.sort.split(/\./);
-            const sort: any = {};
-            sort[parts[0]] = parts[1] ? 'desc' : 'asc';
-            params.sort = [sort];
-        }
 
         if (ts.date1 && ts.dateOp) {
             const dateFilter: Object = {};
             switch (ts.dateOp) {
                 case 'is':
-                    this.addFilter(params, 'date1', ts.date1);
+                    this.addTermFilter(params, 'date1', ts.date1);
                     break;
                 case 'before':
                     params.filters.push({range: {date1: {lt: ts.date1}}});
@@ -109,7 +101,6 @@ export class ElasticSearchContext extends CatalogSearchContext {
         }
 
         this.compileTerms(params);
-        params.search_org = this.searchOrg.id();
 
         if (this.global) {
             params.search_depth = this.org.root().ou_type().depth();
@@ -123,20 +114,54 @@ export class ElasticSearchContext extends CatalogSearchContext {
         */
 
         if (ts.format) {
-            this.addFilter(params, ts.formatCtype, ts.format);
+            this.addTermFilter(params, ts.formatCtype, ts.format);
         }
 
         Object.keys(ts.ccvmFilters).forEach(field => {
             ts.ccvmFilters[field].forEach(value => {
                 if (value !== '') {
-                    this.addFilter(params, field, value);
+                    this.addTermFilter(params, field, value);
                 }
             });
         });
 
         ts.facetFilters.forEach(f => {
-            this.addFilter(params, 
+            this.addTermFilter(params, 
                 `${f.facetClass}|${f.facetName}`, f.facetValue);
+        });
+
+        return params;
+    }
+
+    newParams(): ElasticSearchParams {
+        const params = new ElasticSearchParams();
+        params.limit = this.pager.limit;
+        params.offset = this.pager.offset;
+        params.search_org = this.searchOrg.id()
+
+        if (this.sort) {
+            // e.g. title, title.descending => [{title => 'desc'}]
+            const parts = this.sort.split(/\./);
+            const sort: any = {};
+            sort[parts[0]] = parts[1] ? 'desc' : 'asc';
+            params.sort = [sort];
+        }
+
+        return params;
+    }
+
+    compileMarcSearchArgs(): any {
+        const ms = this.marcSearch;
+        const params = this.newParams();
+
+        ms.values.forEach((val, idx) => {
+            if (val !== '') {
+                params.marc_searches.push({
+                    tag: ms.tags[idx],
+                    subfield: ms.subfields[idx] ? ms.subfields[idx] : null,
+                    value: ms.values[idx]
+                });
+            }
         });
 
         return params;
@@ -145,16 +170,21 @@ export class ElasticSearchContext extends CatalogSearchContext {
     getApiName(): string {
 
         // Elastic covers only a subset of available search types.
-        if (!this.termSearch.isSearchable() || 
-            this.termSearch.groupByMetarecord || 
-            this.termSearch.fromMetarecord
+        if (this.marcSearch.isSearchable() || 
+            (
+                 this.termSearch.isSearchable() &&
+                !this.termSearch.groupByMetarecord &&
+                !this.termSearch.fromMetarecord
+            )
         ) {
-            return super.getApiName();
-        }
 
-        return this.isStaff ?
-            'open-ils.search.elastic.bib_search.staff' :
-            'open-ils.search.elastic.bib_search';
+            return this.isStaff ?
+                'open-ils.search.elastic.bib_search.staff' :
+                'open-ils.search.elastic.bib_search';
+        }
+            
+        // Fall back to existing APIs.
+        return super.getApiName();
     }
 }
 
