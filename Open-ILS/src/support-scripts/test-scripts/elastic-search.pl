@@ -18,16 +18,16 @@ GetOptions(
     'help'              => \$help,
     'osrf-config=s'     => \$osrf_config,
     'cluster=s'         => \$cluster,
-    'index=s'           => \$index,
     'quiet'             => \$quiet,
-    'query-string=s'    => \$query_string
 ) || die "\nSee --help for more\n";
 
 sub help {
     print <<HELP;
         Synopsis:
 
-        $0 --query-string "author:mozart || title:piano"
+            $0
+
+        Performs a canned bib record search
 
 HELP
     exit(0);
@@ -41,8 +41,9 @@ Fieldmapper->import(
     IDL => OpenSRF::Utils::SettingsClient->new->config_value("IDL"));
 OpenILS::Utils::CStoreEditor::init();
 
+# Title search AND author search AND MARC tag=100 search
 my $query = {
-  _source => ['id'] , # return only the ID field
+  _source => ['id', 'title|proper'] , # return only the ID field
   from => 0,
   size => 5,
   sort => [
@@ -51,60 +52,39 @@ my $query = {
   ],
   query => {
     bool => {
-      must => {
-        query_string => {
-          default_operator => 'AND',
-          default_field => 'keyword',
-          query => $query_string
+      must => [{ 
+        multi_match => {
+          query => 'ready',
+          fields => ['title|*.text*'],
+          operator => 'and',
+          type => 'most_fields'
         }
-      },
-      filter => [
-        #{term => {"subject|topic.raw" => "Piano music"}},
-        {
-          nested => {
-            path => 'holdings',
-            query => {
-              bool => {
-                must => [
-                  {
-                    bool => {
-                      should => [
-                        {term => {'holdings.status' => '0'}},
-                        {term => {'holdings.status' => '7'}}
-                      ]
-                    }
-                  },
-                  {
-                    bool => {
-                      should => [
-                        {term => {'holdings.circ_lib' => '4'}},
-                        {term => {'holdings.circ_lib' => '5'}}
-                      ]
-                    }
-                  }
-                ]
-              }
+      }, {
+        multi_match => {
+          query => 'puzzle',
+          fields => ['subject|*.text*'],
+          operator => 'and',
+          type => 'most_fields'
+        }
+      }, {
+        nested => {
+          path => 'marc',
+          query => {
+            bool => { 
+              must => [{
+                multi_match => {
+                  query => 'cline',
+                  fields => ['marc.value.text*'],
+                  operator => 'and',
+                  type => 'most_fields'
+                }
+              }, {
+                term => {'marc.tag' => 100}
+              }]
             }
           }
         }
-      ]
-    }
-  },
-  aggs => {
-    genres => {
-      terms => {
-        field => 'identifier|genre'
-      }
-    },
-    'author|corporate' => {
-      terms => {
-        field => 'author|corporate.raw'
-      }
-    },
-    'subject|topic' => {
-      terms => {
-        field => 'subject|topic.raw'
-      }
+      }]
     }
   }
 };
