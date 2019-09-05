@@ -443,7 +443,7 @@ sub add_elastic_facet_aggregations {
         my $fgrp = $facet->search_group;
         $fname = "$fgrp|$fname" if $fgrp;
 
-        $elastic_query->{aggs}{$fname} = {terms => {field => $fname}};
+        $elastic_query->{aggs}{$fname} = {terms => {field => "$fname.raw"}};
     }
 }
 

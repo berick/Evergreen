@@ -127,38 +127,42 @@ sub create_index {
         my $search_group = $field->search_group;
         $field_name = "$search_group|$field_name" if $search_group;
 
-        # Every field gets a keyword index (default) for aggregation and 
-        # a lower-case keyword index (.lower) for sorting and certain
-        # types of searches (exact match, starts with)
+        # Every field gets a lowercase keyword index for term 
+        # searches/filters and sorting.
         my $def = {
             type => 'keyword',
-            fields => {
-                lower => {
-                    type => 'keyword', 
-                    normalizer => 'custom_lowercase'
-                }
-            }
+            normalizer => 'custom_lowercase'
         };
 
+        my $fields = {};
+
+        if ($field->facet_field eq 't') {
+            # Facet fields are used for aggregation which requires
+            # an unaltered keyword field.
+            $fields->{raw} = {type => 'keyword'};
+        }
+
         if ($field->search_field eq 't') {
-            # Search fields also get full text indexing and analysis
-            # plus a "folded" variation for ascii folded searches.
+            # Text search fields get an additional variety of indexes to
+            # support full text searching
+            # The 'raw' field is used for aggregation.
 
-            $def->{fields}->{text} = {type => 'text'};
-
-            $def->{fields}->{text_folded} = {
+            $fields->{text} = {type => 'text'},
+            $fields->{text_folded} = {
                 type => 'text', 
                 analyzer => 'folding'
             };
 
             # Add the language analyzers
             for my $lang_analyzer ($self->language_analyzers) {
-                $def->{fields}->{"text_$lang_analyzer"} = {
+                $fields->{"text_$lang_analyzer"} = {
                     type => 'text',
                     analyzer => $lang_analyzer
                 };
             }
         }
+
+        $def->{fields} = $fields if keys %$fields;
 
         # Apply field boost.
         $def->{boost} = $field->weight if ($field->weight || 1) > 1;
