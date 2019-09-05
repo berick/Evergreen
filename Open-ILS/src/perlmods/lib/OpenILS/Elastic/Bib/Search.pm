@@ -30,9 +30,6 @@ my $INDEX_NAME = 'bib-search';
 # number of bibs to index per batch.
 my $BIB_BATCH_SIZE = 500;
 
-# TODO: it's possible to apply multiple language analyzers.
-my $LANG_ANALYZER = 'english';
-
 my $BASE_INDEX_SETTINGS = {
     analysis => {
         analyzer => {
@@ -71,42 +68,34 @@ my $BASE_PROPERTIES = {
     marc => {
         type => 'nested',
         properties => {
-            # tag is assumed to be composed of numbers, so no lowercase.
-            tag => {type => 'keyword'},
+            tag => {
+                type => 'keyword',
+                normalizer => 'custom_lowercase'
+            },
             subfield => {
                 type => 'keyword',
-                fields => {
-                    lower => {
-                        type => 'keyword', 
-                        normalizer => 'custom_lowercase'
-                    }
-                }
+                normalizer => 'custom_lowercase'
             },
             value => {
-                type => 'keyword',
+                type => 'text',
                 fields => {
-                    lower => {
-                        type => 'keyword', 
-                        normalizer => 'custom_lowercase'
-                    },
-                    text => {
-                        type => 'text',
-                        analyzer => $LANG_ANALYZER
-                    },
                     text_folded => {
                         type => 'text',
                         analyzer => 'folding'
                     }
                 }
             }
- 
         }
     }
-
 };
 
 sub index_name {
     return $INDEX_NAME;
+}
+
+# TODO: add index-specific language analyzers to DB config
+sub language_analyzers {
+    return ("english");
 }
 
 sub create_index {
@@ -121,6 +110,14 @@ sub create_index {
         "ES creating index '$INDEX_NAME' on cluster '".$self->cluster."'");
 
     my $mappings = $BASE_PROPERTIES;
+
+    # Add the language analyzers to the MARC mappings
+    for my $lang_analyzer ($self->language_analyzers) {
+        $mappings->{marc}->{properties}->{value}->{fields}->{"text_$lang_analyzer"} = {
+            type => 'text',
+            analyzer => $lang_analyzer
+        };
+    }
 
     my $fields = new_editor()->retrieve_all_elastic_bib_field();
 
@@ -147,15 +144,20 @@ sub create_index {
             # Search fields also get full text indexing and analysis
             # plus a "folded" variation for ascii folded searches.
 
-            $def->{fields}->{text} = {
-                type => 'text',
-                analyzer => $LANG_ANALYZER
-            };
+            $def->{fields}->{text} = {type => 'text'};
 
             $def->{fields}->{text_folded} = {
                 type => 'text', 
                 analyzer => 'folding'
             };
+
+            # Add the language analyzers
+            for my $lang_analyzer ($self->language_analyzers) {
+                $def->{fields}->{"text_$lang_analyzer"} = {
+                    type => 'text',
+                    analyzer => $lang_analyzer
+                };
+            }
         }
 
         # Apply field boost.

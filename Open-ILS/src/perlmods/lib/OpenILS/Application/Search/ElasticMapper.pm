@@ -286,67 +286,59 @@ sub translate_query_node {
         my $last_char = substr($content, -1, 1);
         my $prefix = $children->[0]->{prefix};
 
-        my $match_op = 'match';
+        my $match_type = 'most_fields';
 
         # "Contains Phrase"
-        $match_op = 'match_phrase' if $prefix eq '"';
+        $match_type = 'phrase' if $prefix eq '"';
 
-        # Should we use the .raw keyword field?
-        my $text_search = 1;
+        my @field_nodes;
 
         # Matchiness specificiers embedded in the content override
         # the query node prefix.
         if ($first_char eq '^') {
-            $text_search = 0;
             $content = substr($content, 1);
 
             if ($last_char eq '$') { # "Matches Exactly" 
 
-                $match_op = 'term';
+                $match_type = undef;
                 $content = substr($content, 0, -1);
+
+                for my $field (@fields) {
+                    my $key = "$field_class|$field";
+                    # Use the lowercase normalized keyword index for 
+                    # exact match searches.
+                    push(@field_nodes, {term => {"$key.lower" => $content}});
+                }
 
             } else { # "Starts With"
 
-                $match_op = 'match_phrase_prefix';
+                $match_type = 'phrase_prefix';
             }
         }
 
-        # for match queries, treat multi-word search as AND searches
-        # instead of the default ES OR searches.
-        $content = {query => $content, operator => 'and'} 
-            if $match_op eq 'match';
+        if ($match_type) {
 
-        my $field_nodes = [];
-        for my $field (@fields) {
-            my $key = "$field_class|$field";
-
-            if ($text_search) {
-                # use the full-text indices
-                
-                push(@$field_nodes, 
-                    {$match_op => {"$key.text" => $content}});
-
-                push(@$field_nodes, 
-                    {$match_op => {"$key.text_folded" => $content}});
-
-            } else {
-
-                # Use the lowercase normalized keyword index for non-text searches.
-                push(@$field_nodes, {$match_op => {"$key.lower" => $content}});
-            }
+            push(@field_nodes, {
+                multi_match => {
+                    query => $content,
+                    operator => 'and',
+                    fields => ["$field_class|*.text*"],
+                    type => $match_type
+                }
+            });
         }
 
         $logger->info(
             "ES content = ". OpenSRF::Utils::JSON->perl2JSON($content) . 
-            "; bools = ". OpenSRF::Utils::JSON->perl2JSON($field_nodes)
+            "; bools = ". OpenSRF::Utils::JSON->perl2JSON(\@field_nodes)
         );
 
         my $query;
-        if (scalar(@$field_nodes) == 1) {
-            $query = {bool => {must => $field_nodes}};
+        if (scalar(@field_nodes) == 1) {
+            $query = {bool => {must => \@field_nodes}};
         } else {
             # Query multiple fields within a search class via OR query.
-            $query = {bool => {should => $field_nodes}};
+            $query = {bool => {should => \@field_nodes}};
         }
 
         if ($prefix eq '-"') {
@@ -573,13 +565,11 @@ sub compile_elastic_marc_query {
 
         # Use text searching on the value field
         my $value_query = {
-            bool => {
-                should => [
-                    {match => {'marc.value.text' => 
-                        {query => $value, operator => 'and'}}},
-                    {match => {'marc.value.text_folded' => 
-                        {query => $value, operator => 'and'}}}
-                ]
+            multi_match => {
+                query => $value,
+                fields => ['marc.value*'],
+                type => 'most_fields',
+                operator => 'and'
             }
         };
 

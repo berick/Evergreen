@@ -60,6 +60,11 @@ sub index_name {
     die "Index name must be provided by sub-class\n";
 }
 
+sub language_analyzers {
+    # Override in subclass as needed
+    return ("english");
+}
+
 # Provide a direct DB connection so some high-volume activities,
 # like indexing bib records, can take advantage of a direct connection.
 # Returns database connection object -- connects if necessary.

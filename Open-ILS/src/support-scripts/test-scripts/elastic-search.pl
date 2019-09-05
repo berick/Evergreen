@@ -41,7 +41,7 @@ Fieldmapper->import(
     IDL => OpenSRF::Utils::SettingsClient->new->config_value("IDL"));
 OpenILS::Utils::CStoreEditor::init();
 
-# Title search AND author search AND MARC tag=100 search
+# Title search AND subject search AND MARC tag=100 search
 my $query = {
   _source => ['id', 'title|proper'] , # return only the ID field
   from => 0,
@@ -74,7 +74,7 @@ my $query = {
               must => [{
                 multi_match => {
                   query => 'cline',
-                  fields => ['marc.value.text*'],
+                  fields => ['marc.value*'],
                   operator => 'and',
                   type => 'most_fields'
                 }
