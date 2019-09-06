@@ -93,6 +93,16 @@ export class CatalogService {
     }
 
     marcSearch(ctx: CatalogSearchContext): Promise<void> {
+
+        if (this.elastic.canSearch(ctx)) {
+            return this.elastic.performSearch(ctx)
+            .then(result => {
+                this.applyResultData(ctx, result);
+                ctx.searchState = CatalogSearchState.COMPLETE;
+                this.onSearchComplete.emit(ctx);
+            });
+        }
+
         let method = 'open-ils.search.biblio.marc';
         if (ctx.isStaff) { method += '.staff'; }
 
