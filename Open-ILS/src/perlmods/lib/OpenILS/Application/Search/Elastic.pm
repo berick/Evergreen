@@ -85,7 +85,7 @@ __PACKAGE__->register_method(
 # Translate search results into a structure consistent with a bib search
 # API response.
 sub bib_search {
-    my ($self, $client, $options, $query) = @_;
+    my ($self, $client, $query, $options) = @_;
     $options ||= {};
 
     my $staff = ($self->api_name =~ /staff/);
@@ -93,7 +93,7 @@ sub bib_search {
     $logger->info("ES parsing API query $query staff=$staff");
 
     my ($elastic_query, $cache_key) = 
-        compile_elastic_query($query, $options, $options);
+        compile_elastic_query($query, $options, $staff);
 
     my $es = OpenILS::Elastic::BibSearch->new('main');
 
@@ -121,109 +121,17 @@ sub bib_search {
 }
 
 sub compile_elastic_query {
-    my ($query, $options, $staff) = @_;
-
-    my $elastic = {
-        _source => ['id'], # Fetch bib ID only
-        size => $options->{limit},
-        from => $options->{offset},
-        sort => $query->{sort},
-        query => {
-            bool => {
-                must => [],
-                filter => $query->{filters} || []
-            }
-        }
-    };
-
-    append_search_nodes($elastic, $_) for @{$query->{searches}};
-
-    append_marc_nodes($elastic, $_) for @{$query->{marc_searches}};
+    my ($elastic, $options, $staff) = @_;
 
     add_elastic_holdings_filter($elastic, $staff, 
-        $query->{search_org}, $query->{search_depth}, $query->{available});
+        $options->{search_org}, $options->{search_depth}, $options->{available});
 
     add_elastic_facet_aggregations($elastic);
 
-    $elastic->{sort} = ['_score'] unless @{$elastic->{sort}};
+    $elastic->{sort} = ['_score'] unless @{$elastic->{sort} || []};
 
     return $elastic;
 }
-
-
-# Translate the simplified boolean search nodes into an Elastic
-# boolean structure with the appropriate index names.
-sub append_search_nodes {
-    my ($elastic, $search) = @_;
-
-    my ($field_class, $field_name) = split(/\|/, $search->{field});
-    my $match_op = $search->{match_op};
-    my $value = $search->{value};
-
-    my @fields;
-    if ($field_name) {
-        @fields = ($field_name);
-
-    } else {
-        # class-level searches are OR ("should") searches across all
-        # fields in the selected class.
-
-        @fields = map {$_->name} 
-            grep {$_->search_group eq $field_class} @$bib_fields;
-    }
-
-    $logger->info("ES adding searches for class=$field_class and fields=@fields");
-
-    my $must_not = $match_op eq 'must_not';
-
-    # Build a must_not query as a collection of must queries, which will 
-    # be combined under a single must_not parent query.
-    $match_op = 'must' if $must_not; 
-
-    # for match queries, treat multi-word search as AND searches
-    # instead of the default ES OR searches.
-    $value = {query => $value, operator => 'and'} if $match_op eq 'match';
-
-    my $field_nodes = [];
-    for my $field (@fields) {
-        my $key = "$field_class|$field";
-
-        if ($match_op eq 'term' || $match_op eq 'match_phrase_prefix') {
-
-            # Use the lowercase normalized keyword index for exact-match searches.
-            push(@$field_nodes, {$match_op => {"$key.lower" => $value}});
-
-        } else {
-
-            # use the full-text indices
-            
-            push(@$field_nodes, 
-                {$match_op => {"$key.text" => $value}});
-
-            push(@$field_nodes, 
-                {$match_op => {"$key.text_folded" => $value}});
-        }
-    }
-
-    my $query_part;
-    if (scalar(@$field_nodes) == 1) {
-        $query_part = {bool => {must => $field_nodes}};
-    } else {
-        # Query multiple fields within a search class via OR query.
-        $query_part = {bool => {should => $field_nodes}};
-    }
-
-    if ($must_not) {
-        # Negation query.  Wrap the whole shebang in a must_not
-        $query_part = {bool => {must_not => $query_part}};
-    }
-
-    $logger->info("ES field search part: ". 
-        OpenSRF::Utils::JSON->perl2JSON($query_part));
-
-    push(@{$elastic->{query}->{bool}->{must}}, $query_part);
-}
-
 
 # Format ES search aggregations to match the API response facet structure
 # {$cmf_id => {"Value" => $count}, $cmf_id2 => {"Value Two" => $count2}, ...}
@@ -361,42 +269,6 @@ sub add_elastic_holdings_filter {
 
     # array of filters in progress
     push(@{$elastic_query->{query}->{bool}->{filter}}, $filter);
-}
-
-
-sub append_marc_nodes {
-    my ($marc_search) = @_;
-
-    my $tag = $marc_search->{tag};
-    my $sf = $marc_search->{subfield};
-    my $value = $marc_search->{value};
-
-    # Use text searching on the value field
-    my $value_query = {
-        bool => {
-            should => [
-                {match => {'marc.value.text' => 
-                    {query => $value, operator => 'and'}}},
-                {match => {'marc.value.text_folded' => 
-                    {query => $value, operator => 'and'}}}
-            ]
-        }
-    };
-
-    my @must = ($value_query);
-
-    # tag (ES-only) and subfield are both optional
-    push (@must, {term => {'marc.tag' => $tag}}) if $tag;
-    push (@must, {term => {'marc.subfield' => $sf}}) if $sf;
-
-    my $sub_query = {bool => {must => \@must}};
-
-    return {
-        nested => {
-            path => 'marc',
-            query => {bool => {must => $sub_query}}
-        }
-    };
 }
 
 1;

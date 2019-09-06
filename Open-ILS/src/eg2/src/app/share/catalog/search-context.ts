@@ -3,8 +3,6 @@ import {IdlObject} from '@eg/core/idl.service';
 import {Pager} from '@eg/share/util/pager';
 import {ArrayUtil} from '@eg/share/util/array';
 
-import {RequestBodySearch, MatchQuery} from 'elastic-builder';
-
 // CCVM's we care about in a catalog context
 // Don't fetch them all because there are a lot.
 export const CATALOG_CCVM_FILTERS = [
@@ -194,6 +192,7 @@ export class CatalogTermContext {
     matchOp: string[];
     format: string;
     available = false;
+
     // TODO: configurable 
     // format limiter default to using the search_format filter
     formatCtype = 'search_format';
@@ -642,41 +641,6 @@ export class CatalogSearchContext {
         });
 
         return str;
-    }
-
-    compileElasticSearchQuery(): any {
-        const search = new RequestBodySearch();
-        search.query(new MatchQuery('body', 'hello, ma!'));
-
-        const ts = this.termSearch;
-
-        ts.joinOp.forEach((op, idx) => {
-            let matchOp = 'match';
-
-            switch (ts.matchOp[idx]) {
-                case 'phrase':
-                    matchOp = 'match_phrase';
-                    break;
-                case 'nocontains':
-                    matchOp = 'must_not';
-                    break;
-                case 'exact':
-                    matchOp = 'term';
-                    break;
-                case 'starts':
-                    matchOp = 'match_phrase_prefix';
-                    break;
-            }
-
-            params.searches.push({
-                field: ts.fieldClass[idx],
-                match_op: matchOp,
-                value: ts.query[idx]
-            });
-
-        });
-
-        console.log(JSON.stringify(search));
     }
 
     // A search context can collect enough data for multiple search

@@ -10,6 +10,7 @@ import {CatalogSearchContext, CatalogSearchState} from './search-context';
 import {BibRecordService, BibRecordSummary} from './bib-record.service';
 import {BasketService} from './basket.service';
 import {CATALOG_CCVM_FILTERS} from './search-context';
+import {ElasticService} from './elastic.service';
 
 @Injectable()
 export class CatalogService {
@@ -34,10 +35,10 @@ export class CatalogService {
         private unapi: UnapiService,
         private pcrud: PcrudService,
         private bibService: BibRecordService,
-        private basket: BasketService
+        private basket: BasketService,
+        private elastic: ElasticService
     ) {
         this.onSearchComplete = new EventEmitter<CatalogSearchContext>();
-
     }
 
     search(ctx: CatalogSearchContext): Promise<void> {
@@ -110,6 +111,15 @@ export class CatalogService {
 
     termSearch(ctx: CatalogSearchContext): Promise<void> {
 
+        if (this.elastic.canSearch(ctx)) {
+            return this.elastic.performSearch(ctx)
+            .then(result => {
+                this.applyResultData(ctx, result);
+                ctx.searchState = CatalogSearchState.COMPLETE;
+                this.onSearchComplete.emit(ctx);
+            });
+        }
+
         let method = 'open-ils.search.biblio.multiclass.query';
         let fullQuery;
 
@@ -128,10 +138,6 @@ export class CatalogService {
                 this.fetchBrowseEntry(ctx);
             }
         }
-
-        // TODO XXX TESTING
-        method = 'open-ils.search.elastic.bib_search';
-        fullQuery = ctx.compileElasticSearchQuery();
 
         console.debug(`search query: ${fullQuery}`);
 

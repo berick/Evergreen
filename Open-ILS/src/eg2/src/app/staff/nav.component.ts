@@ -56,18 +56,11 @@ export class StaffNavComponent implements OnInit, OnDestroy {
         // NOTE: this can eventually go away.
         // Avoid attempts to fetch org settings if the user has not yet
         // logged in (e.g. this is the login page).
-
-        // Force-show the angular catalog for Elastic dev, since that's
-        // the only site that will support it for now.
-        this.showAngularCatalog = true;
-        /*
         if (this.user()) {
             this.org.settings('ui.staff.angular_catalog.enabled')
             .then(settings => this.showAngularCatalog =
                 Boolean(settings['ui.staff.angular_catalog.enabled']));
         }
-        */
-
 
         // Wire up our op-change component as the general purpose
         // permission failed handler.
