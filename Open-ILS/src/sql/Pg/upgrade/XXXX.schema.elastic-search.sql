@@ -38,6 +38,7 @@ CREATE OR REPLACE VIEW elastic.bib_field AS
         SELECT 
             NULL::INT AS metabib_field,
             crad.name,
+            crad.label,
             NULL AS search_group,
             crad.sorter,
             FALSE AS search_field,
@@ -49,6 +50,7 @@ CREATE OR REPLACE VIEW elastic.bib_field AS
         SELECT 
             cmf.id AS metabib_field,
             cmf.name,
+            cmf.label,
             cmf.field_class AS search_group,
             FALSE AS sorter,
             -- always treat identifier fields as non-search fields.
