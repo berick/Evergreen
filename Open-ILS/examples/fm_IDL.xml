@@ -13013,7 +13013,7 @@ SELECT  usr,
 			<link field="cluster" reltype="has_a" key="code" map="" class="ec"/>
 		</links>
 	</class>
-	<class id="ebip" 
+	<class id="ebf" 
 		controller="open-ils.cstore open-ils.pcrud"
 		oils_obj:fieldmapper="elastic::bib_field"
 		oils_persist:tablename="elastic.bib_field"
