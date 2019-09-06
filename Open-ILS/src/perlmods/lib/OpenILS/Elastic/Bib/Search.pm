@@ -145,13 +145,9 @@ sub create_index {
         if ($field->search_field eq 't') {
             # Text search fields get an additional variety of indexes to
             # support full text searching
-            # The 'raw' field is used for aggregation.
 
             $fields->{text} = {type => 'text'},
-            $fields->{text_folded} = {
-                type => 'text', 
-                analyzer => 'folding'
-            };
+            $fields->{text_folded} = {type => 'text', analyzer => 'folding'};
 
             # Add the language analyzers
             for my $lang_analyzer ($self->language_analyzers) {
