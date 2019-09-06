@@ -5,7 +5,6 @@ import {CatalogSearchContext, CatalogBrowseContext, CatalogMarcContext,
    CatalogTermContext, FacetFilter} from './search-context';
 import {CATALOG_CCVM_FILTERS} from './search-context';
 import {HashParams} from '@eg/share/util/hash-params';
-import {ElasticSearchContext} from './elastic-search-context';
 
 @Injectable()
 export class CatalogUrlService {
@@ -141,9 +140,7 @@ export class CatalogUrlService {
      * Creates a new search context from the active route params.
      */
     fromUrlParams(params: ParamMap): CatalogSearchContext {
-        //const context = new CatalogSearchContext();
-        // TODO: hard code for now
-        const context = new ElasticSearchContext();
+        const context = new CatalogSearchContext();
 
         this.applyUrlParams(context, params);
 

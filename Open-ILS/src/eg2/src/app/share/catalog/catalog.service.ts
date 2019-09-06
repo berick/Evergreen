@@ -95,8 +95,6 @@ export class CatalogService {
         let method = 'open-ils.search.biblio.marc';
         if (ctx.isStaff) { method += '.staff'; }
 
-        const method = ctx.getApiName();
-
         const queryStruct = ctx.compileMarcSearchArgs();
 
         return this.net.request('open-ils.search', method, queryStruct)
@@ -112,6 +110,7 @@ export class CatalogService {
 
     termSearch(ctx: CatalogSearchContext): Promise<void> {
 
+        let method = 'open-ils.search.biblio.multiclass.query';
         let fullQuery;
 
         if (ctx.identSearch.isSearchable()) {
@@ -120,25 +119,24 @@ export class CatalogService {
         } else {
             fullQuery = ctx.compileTermSearchQuery();
 
+            if (ctx.termSearch.groupByMetarecord
+                && !ctx.termSearch.fromMetarecord) {
+                method = 'open-ils.search.metabib.multiclass.query';
+            }
+
             if (ctx.termSearch.hasBrowseEntry) {
                 this.fetchBrowseEntry(ctx);
             }
         }
 
-        console.debug('search query', JSON.stringify(fullQuery));
+        // TODO XXX TESTING
+        method = 'open-ils.search.elastic.bib_search';
+        fullQuery = ctx.compileElasticSearchQuery();
 
-        let method = ctx.getApiName();
-        if (method === null) {
-            method = 'open-ils.search.biblio.multiclass.query';
-    
-            if (ctx.termSearch.groupByMetarecord 
-            && !ctx.termSearch.fromMetarecord) {
-                method = 'open-ils.search.metabib.multiclass.query';
-            }
-    
-            if (ctx.isStaff) {
-                method += '.staff';
-            }
+        console.debug(`search query: ${fullQuery}`);
+
+        if (ctx.isStaff) {
+            method += '.staff';
         }
 
         return this.net.request(

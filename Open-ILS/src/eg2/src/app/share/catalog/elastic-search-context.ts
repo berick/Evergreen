@@ -135,8 +135,10 @@ export class ElasticSearchContext extends CatalogSearchContext {
 
     newParams(): ElasticSearchParams {
         const params = new ElasticSearchParams();
+        /*
         params.limit = this.pager.limit;
         params.offset = this.pager.offset;
+        */
         params.search_org = this.searchOrg.id()
 
         if (this.sort) {
@@ -167,6 +169,7 @@ export class ElasticSearchContext extends CatalogSearchContext {
         return params;
     }
 
+    /*
     getApiName(): string {
 
         // Elastic covers only a subset of available search types.
@@ -186,5 +189,6 @@ export class ElasticSearchContext extends CatalogSearchContext {
         // Fall back to existing APIs.
         return super.getApiName();
     }
+    */
 }
 

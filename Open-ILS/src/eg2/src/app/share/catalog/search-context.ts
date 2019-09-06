@@ -3,6 +3,8 @@ import {IdlObject} from '@eg/core/idl.service';
 import {Pager} from '@eg/share/util/pager';
 import {ArrayUtil} from '@eg/share/util/array';
 
+import {RequestBodySearch, MatchQuery} from 'elastic-builder';
+
 // CCVM's we care about in a catalog context
 // Don't fetch them all because there are a lot.
 export const CATALOG_CCVM_FILTERS = [
@@ -558,7 +560,7 @@ export class CatalogSearchContext {
         return query;
     }
 
-    compileTermSearchQuery(): any {
+    compileTermSearchQuery(): string {
         const ts = this.termSearch;
         let str = '';
 
@@ -642,6 +644,41 @@ export class CatalogSearchContext {
         return str;
     }
 
+    compileElasticSearchQuery(): any {
+        const search = new RequestBodySearch();
+        search.query(new MatchQuery('body', 'hello, ma!'));
+
+        const ts = this.termSearch;
+
+        ts.joinOp.forEach((op, idx) => {
+            let matchOp = 'match';
+
+            switch (ts.matchOp[idx]) {
+                case 'phrase':
+                    matchOp = 'match_phrase';
+                    break;
+                case 'nocontains':
+                    matchOp = 'must_not';
+                    break;
+                case 'exact':
+                    matchOp = 'term';
+                    break;
+                case 'starts':
+                    matchOp = 'match_phrase_prefix';
+                    break;
+            }
+
+            params.searches.push({
+                field: ts.fieldClass[idx],
+                match_op: matchOp,
+                value: ts.query[idx]
+            });
+
+        });
+
+        console.log(JSON.stringify(search));
+    }
+
     // A search context can collect enough data for multiple search
     // types to be searchable (e.g. users navigate through parts of a
     // search form).  Calling this method and providing a search type
@@ -692,10 +729,6 @@ export class CatalogSearchContext {
                 this.cnBrowseSearch.offset = 0;
                 break;
         }
-    }
-
-    getApiName(): string {
-        return null;
     }
 }
 
