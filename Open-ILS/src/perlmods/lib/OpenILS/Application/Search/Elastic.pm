@@ -162,6 +162,8 @@ sub bib_search {
 
     $logger->info("ES parsing API query $query staff=$staff");
 
+    return {count => 0, ids => []} unless $query && $query->{query};
+
     my $elastic_query = compile_elastic_query($query, $options, $staff);
 
     my $es = OpenILS::Elastic::BibSearch->new('main');
@@ -196,10 +198,18 @@ sub bib_search {
 sub compile_elastic_query {
     my ($elastic, $options, $staff) = @_;
 
+    # We require a boolean root node to collect all the other stuff.
+    $elastic->{query}->{bool} = {must => $elastic->{query}}
+        unless $elastic->{query}->{bool};
+
     # coerce the filter into an array so we can append to it.
-    $elastic->{filter} = [] unless $elastic->{filter};
-    $elastic->{filter} = [$elastic->{filter}] 
-        unless ref $elastic->{filter} eq 'ARRAY';
+    my $filters = $elastic->{query}->{bool}->{filter};
+    if ($filters) {
+        $elastic->{query}->{bool}->{filter} = [$filters] 
+            unless ref $filters eq 'ARRAY';
+    } else {
+        $elastic->{query}->{bool}->{filter} = [];
+    }
 
     add_elastic_holdings_filter($elastic, $staff, 
         $options->{search_org}, $options->{search_depth}, $options->{available});

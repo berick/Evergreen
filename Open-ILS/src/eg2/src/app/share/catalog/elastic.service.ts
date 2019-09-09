@@ -94,11 +94,16 @@ export class ElasticService {
 
     addSort(ctx: CatalogSearchContext, search: RequestBodySearch) {
 
-        if (!ctx.sort) { return; }
+        if (ctx.sort) { // e.g. title, title.descending
 
-        // e.g. title, title.descending
-        const parts = ctx.sort.split(/\./);
-        search.sort(new Sort(parts[0], parts[1] ? 'desc' : 'asc'));
+            const parts = ctx.sort.split(/\./);
+            search.sort(new Sort(parts[0], parts[1] ? 'desc' : 'asc'));
+
+        } else {
+            
+            // Sort by match score by default.
+            search.sort(new Sort('_score', 'asc'));
+        }
     }
 
     addFilters(ctx: CatalogSearchContext, rootNode: BoolQuery) {
