@@ -79,12 +79,18 @@ __PACKAGE__->register_method(
         desc   => q/
             Performs a search on the Elastic 'bib-search' index.
 
+            The caller provides the core search struct, the API then
+            augments the struct, depending on various options.
+
             Facets (Aggregations) are automatically appended to the search
             based on the Evergreen Facets configuration.
 
             Org unit based item presence and availability filtering may
-            also be automatically added to the query.  See search options
+            optionally be added to the query.  See search options
             below.
+
+            See [ select * from elastic.bib_field where search_field; ] 
+            for full-text search fields and classes.
         /,
         params => [
             {   type => 'object',
