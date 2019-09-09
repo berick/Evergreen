@@ -5,8 +5,8 @@ import {OrgService} from '@eg/core/org.service';
 import {NetService} from '@eg/core/net.service';
 import {PcrudService} from '@eg/core/pcrud.service';
 import {CatalogSearchContext} from './search-context';
-import {RequestBodySearch, MatchQuery, MultiMatchQuery, TermsQuery, Query,
-    Sort, NestedQuery, BoolQuery, TermQuery, RangeQuery} from 'elastic-builder';
+import {RequestBodySearch, MatchQuery, MultiMatchQuery, TermsQuery, Query, Sort,
+    PrefixQuery, NestedQuery, BoolQuery, TermQuery, RangeQuery} from 'elastic-builder';
 
 @Injectable()
 export class ElasticService {
@@ -31,6 +31,7 @@ export class ElasticService {
             .toPromise();
     }
 
+    // Returns true if Elastic can provide search results.
     canSearch(ctx: CatalogSearchContext): boolean {
 
         if (ctx.marcSearch.isSearchable()) { return true; }
@@ -219,51 +220,64 @@ export class ElasticService {
 
         if (value === '' || value === null) { return; }
 
+        const matchOp = ts.matchOp[idx];
         const fieldClass = ts.fieldClass[idx];
         const textIndex = `${fieldClass}|*text*`;
         let query;
 
-        switch (ts.matchOp[idx]) {
-
+        switch (matchOp) {
             case 'contains':
                 query = new MultiMatchQuery([textIndex], value);
                 query.operator('and');
                 query.type('most_fields');
                 boolNode.must(query);
-                break;
+                return;
 
+            // Use full text searching for "contains phrase".  We could
+            // also support exact phrase searches with wildcard (term)
+            // queries, such that no text analysis occured.
             case 'phrase':
                 query = new MultiMatchQuery([textIndex], value);
                 query.type('phrase');
                 boolNode.must(query);
-                break;
+                return;
 
             case 'nocontains':
                 query = new MultiMatchQuery([textIndex], value);
                 query.operator('and');
                 query.type('most_fields');
                 boolNode.mustNot(query);
-                break;
+                return;
+        }
 
-            case 'exact':
+        // Under the covers, searches on a field class are OR searches
+        // across all fields within the class.  Unlike MultiMatch
+        // searches (above) where this can be accomplished with field
+        // name wildcards, term/prefix searches require explicit field
+        // names.
+        const shoulds: Query[] = [];
 
-                const shoulds: Query[] = [];
-                this.bibFields.filter(f => (
-                    f.search_field() === 't' &&
-                    f.search_group() === fieldClass
-                )).forEach(field => {
-                    shoulds.push(new TermQuery(field.name, value));
-                });
-
-                boolNode.should(shoulds);
-                break;
-
-            case 'starts':
-                query = new MultiMatchQuery([textIndex], value);
-                query.type('phrase_prefix');
-                boolNode.must(query);
-                break;
+        this.getSearchFieldsForClass(fieldClass).forEach(field => {
+            const fieldName = `${fieldClass}|${field.name()}`;
+            if (matchOp === 'exact') {
+                query = new TermQuery(fieldName, value);
+            } else if (matchOp === 'starts') {
+                query = new PrefixQuery(fieldName, value);
             }
+
+            shoulds.push(query);
+        });
+
+        // Wrap the 'shoulds' in a 'must' so that at least one of
+        // the shoulds must match for the group to match.
+        boolNode.must(new BoolQuery().should(shoulds));
+    }
+
+    getSearchFieldsForClass(fieldClass: string): any[] {
+        return this.bibFields.filter(f => (
+            f.search_field() === 't' &&
+            f.search_group() === fieldClass
+        ));
     }
 }
 
