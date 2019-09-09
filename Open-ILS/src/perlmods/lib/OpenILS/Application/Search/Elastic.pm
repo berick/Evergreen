@@ -22,6 +22,7 @@ use OpenILS::Utils::Fieldmapper;
 use OpenSRF::Utils::SettingsClient;
 use OpenILS::Utils::CStoreEditor q/:funcs/;
 use OpenILS::Elastic::BibSearch;
+use Digest::MD5 qw(md5_hex);
 use List::Util qw/min/;
 
 use OpenILS::Application::AppUtils;
@@ -73,12 +74,75 @@ sub child_init {
 
 __PACKAGE__->register_method(
     method   => 'bib_search',
-    api_name => 'open-ils.search.elastic.bib_search'
+    api_name => 'open-ils.search.elastic.bib_search',
+    signature => {
+        desc   => q/
+            Performs a search on the Elastic 'bib-search' index.
+
+            Facets (Aggregations) are automatically appended to the search
+            based on the Evergreen Facets configuration.
+
+            Org unit based item presence and availability filtering may
+            also be automatically added to the query.  See search options
+            below.
+        /,
+        params => [
+            {   type => 'object',
+                query => q/Elastic-compatible search query struct.  A typical
+                struct might look like:
+                {
+                  from: 0,
+                  size: 20,
+                  query: {
+                    bool: {
+                      must: [
+                        {
+                          multi_match: {
+                            type: "best_fields",
+                            query: "the piano",
+                            fields: ["title|*text*"]
+                          }
+                        },
+                         ...
+                      ]
+                    }
+                  },
+                  filter: [
+                    {"terms":{"item_type":["t","d","p","j"]}},
+                    ...
+                  ]
+                }
+                /,
+            }, {
+               type => 'object',
+               options => q/
+                    Hash of additional search options:
+
+                        search_org - Holdings filter org unit ID.
+    
+                        search_depth - Holdings filter search depth.
+
+                        available - Ensure that at least one item is 
+                            considered available within the search scope.
+                /
+            }
+        ],
+        return => { 
+            desc => q/A search result object formatted to be consistent
+                with the open-ils.search.biblio.multiclass and related APIs/
+        }
+    }
 );
 
 __PACKAGE__->register_method(
     method   => 'bib_search',
-    api_name => 'open-ils.search.elastic.bib_search.staff'
+    api_name => 'open-ils.search.elastic.bib_search.staff',
+    signature => {
+        desc => q/
+            Staff version of open-ils.search.elastic.bib_search
+
+        /
+    }
 );
 
 # Translate a bib search API call into something consumable by Elasticsearch
@@ -92,8 +156,7 @@ sub bib_search {
 
     $logger->info("ES parsing API query $query staff=$staff");
 
-    my ($elastic_query, $cache_key) = 
-        compile_elastic_query($query, $options, $staff);
+    my $elastic_query = compile_elastic_query($query, $options, $staff);
 
     my $es = OpenILS::Elastic::BibSearch->new('main');
 
@@ -105,6 +168,13 @@ sub bib_search {
 
     return {count => 0, ids => []} unless $results;
 
+    # Elastic has its own search cacheing, so no memcache'ing is 
+    # required , but providing cache keys allows the caller to 
+    # know if this search matches another search.
+    # Lazily generate a cache key from the JSON string of the search.
+    # This is not guaranteed to be 1-to-1 given key shuffling, but meh.
+    my $cache_key = md5_hex(OpenSRF::Utils::JSON->perl2JSON($elastic_query));
+
     return {
         count => $results->{hits}->{total},
         ids => [
@@ -112,9 +182,6 @@ sub bib_search {
                 grep {defined $_} @{$results->{hits}->{hits}}
         ],
         facets => format_facets($results->{aggregations}),
-        # Elastic has its own search cacheing, so external caching is
-        # performed, but providing cache keys allows the caller to 
-        # know if this search matches another search.
         cache_key => $cache_key,
         facet_key => $cache_key.'_facets'
     };
@@ -122,6 +189,11 @@ sub bib_search {
 
 sub compile_elastic_query {
     my ($elastic, $options, $staff) = @_;
+
+    # coerce the filter into an array so we can append to it.
+    $elastic->{filter} = [] unless $elastic->{filter};
+    $elastic->{filter} = [$elastic->{filter}] 
+        unless ref $elastic->{filter} eq 'ARRAY';
 
     add_elastic_holdings_filter($elastic, $staff, 
         $options->{search_org}, $options->{search_depth}, $options->{available});
