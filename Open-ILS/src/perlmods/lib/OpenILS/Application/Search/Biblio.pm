@@ -10,7 +10,6 @@ use OpenSRF::Utils::SettingsClient;
 use OpenILS::Utils::CStoreEditor q/:funcs/;
 use OpenSRF::Utils::Cache;
 use Encode;
-use OpenILS::Application::Search::ElasticMapper;
 
 use OpenSRF::Utils::Logger qw/:logger/;
 
@@ -1157,11 +1156,6 @@ sub staged_search {
     $user_offset = ($user_offset >= 0) ? $user_offset :  0;
     $user_limit  = ($user_limit  >= 0) ? $user_limit  : 10;
 
-    return OpenILS::Application::Search::ElasticMapper->bib_search(
-        $search_hash->{query}, # query string
-        ($method =~ /staff/ ? 1 : 0),
-        $user_offset, $user_limit
-    ) if OpenILS::Application::Search::ElasticMapper->is_enabled('bib-search');
 
     # we're grabbing results on a per-superpage basis, which means the 
     # limit and offset should coincide with superpage boundaries
@@ -2132,10 +2126,6 @@ sub marc_search {
 
     my $limit = $args->{limit} || 10;
     my $offset = $args->{offset} || 0;
-
-    return OpenILS::Application::Search::ElasticMapper->marc_search(
-        $args, ($method =~ /staff/ ? 1 : 0), $limit, $offset
-    ) if OpenILS::Application::Search::ElasticMapper->is_enabled('bib-search');
 
     # allow caller to pass in a call timeout since MARC searches
     # can take longer than the default 60-second timeout.  
