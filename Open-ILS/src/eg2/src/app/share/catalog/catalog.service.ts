@@ -44,6 +44,15 @@ export class CatalogService {
     search(ctx: CatalogSearchContext): Promise<void> {
         ctx.searchState = CatalogSearchState.SEARCHING;
 
+        if (this.elastic.canSearch(ctx)) {
+            return this.elastic.performSearch(ctx)
+            .then(result => {
+                this.applyResultData(ctx, result);
+                ctx.searchState = CatalogSearchState.COMPLETE;
+                this.onSearchComplete.emit(ctx);
+            });
+        }
+
         if (ctx.showBasket) {
             return this.basketSearch(ctx);
         } else if (ctx.marcSearch.isSearchable()) {
@@ -94,15 +103,6 @@ export class CatalogService {
 
     marcSearch(ctx: CatalogSearchContext): Promise<void> {
 
-        if (this.elastic.canSearch(ctx)) {
-            return this.elastic.performSearch(ctx)
-            .then(result => {
-                this.applyResultData(ctx, result);
-                ctx.searchState = CatalogSearchState.COMPLETE;
-                this.onSearchComplete.emit(ctx);
-            });
-        }
-
         let method = 'open-ils.search.biblio.marc';
         if (ctx.isStaff) { method += '.staff'; }
 
@@ -120,15 +120,6 @@ export class CatalogService {
     }
 
     termSearch(ctx: CatalogSearchContext): Promise<void> {
-
-        if (this.elastic.canSearch(ctx)) {
-            return this.elastic.performSearch(ctx)
-            .then(result => {
-                this.applyResultData(ctx, result);
-                ctx.searchState = CatalogSearchState.COMPLETE;
-                this.onSearchComplete.emit(ctx);
-            });
-        }
 
         let method = 'open-ils.search.biblio.multiclass.query';
         let fullQuery;
@@ -361,20 +352,22 @@ export class CatalogService {
         return facetData;
     }
 
-    fetchCcvms(): Promise<void> {
+    fetchCcvms(): Promise<any> {
 
-        if (Object.keys(this.ccvmMap).length) {
-            return Promise.resolve();
-        }
+        // XXX Putting the elastic initialization call here since
+        // the call is assumed to be run at page load time.
+        // TODO: migrate our fetch calls to generic init call.
 
-        return new Promise((resolve, reject) => {
-            this.pcrud.search('ccvm',
+        return this.elastic.init().then(ok => {
+
+            if (Object.keys(this.ccvmMap).length) {
+                return Promise.resolve();
+            }
+
+            return this.pcrud.search('ccvm',
                 {ctype : CATALOG_CCVM_FILTERS}, {},
                 {atomic: true, anonymous: true}
-            ).subscribe(list => {
-                this.compileCcvms(list);
-                resolve();
-            });
+            ).toPromise().then(list => this.compileCcvms(list));
         });
     }
 

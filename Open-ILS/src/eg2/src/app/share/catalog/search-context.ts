@@ -193,7 +193,7 @@ export class CatalogTermContext {
     format: string;
     available = false;
 
-    // TODO: configurable 
+    // TODO: configurable
     // format limiter default to using the search_format filter
     formatCtype = 'search_format';
     ccvmFilters: {[ccvmCode: string]: string[]};

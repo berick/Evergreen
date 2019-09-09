@@ -5,7 +5,7 @@ import {OrgService} from '@eg/core/org.service';
 import {NetService} from '@eg/core/net.service';
 import {PcrudService} from '@eg/core/pcrud.service';
 import {CatalogSearchContext} from './search-context';
-import {RequestBodySearch, MatchQuery, MultiMatchQuery, 
+import {RequestBodySearch, MatchQuery, MultiMatchQuery, TermsQuery, Query,
     Sort, NestedQuery, BoolQuery, TermQuery, RangeQuery} from 'elastic-builder';
 
 @Injectable()
@@ -32,7 +32,7 @@ export class ElasticService {
     }
 
     canSearch(ctx: CatalogSearchContext): boolean {
-        
+
         if (ctx.marcSearch.isSearchable()) { return true; }
 
         if ( ctx.termSearch.isSearchable() &&
@@ -70,16 +70,16 @@ export class ElasticService {
 
     compileRequestBody(ctx: CatalogSearchContext): RequestBodySearch {
 
-        const search = new RequestBodySearch()
+        const search = new RequestBodySearch();
 
         search.source(['id']); // only retrieve IDs
-        search.size(ctx.pager.limit)
+        search.size(ctx.pager.limit);
         search.from(ctx.pager.offset);
 
         const rootNode = new BoolQuery();
 
         if (ctx.termSearch.isSearchable()) {
-            this.addTermSearches(ctx, rootNode);
+            this.addFieldSearches(ctx, rootNode);
         } else if (ctx.marcSearch.isSearchable()) {
             this.addMarcSearches(ctx, rootNode);
         }
@@ -108,11 +108,12 @@ export class ElasticService {
         }
 
         Object.keys(ts.ccvmFilters).forEach(field => {
-            ts.ccvmFilters[field].forEach(value => {
-                if (value !== '') {
-                    rootNode.filter(new TermQuery(field, value));
-                }
-            });
+            // TermsQuery required since there may be multiple filter
+            // values for a given CCVM.  These are treated like OR filters.
+            const values: string[] = ts.ccvmFilters[field].filter(v => v !== '');
+            if (values.length > 0) {
+                rootNode.filter(new TermsQuery(field, values));
+            }
         });
 
         ts.facetFilters.forEach(f => {
@@ -129,7 +130,7 @@ export class ElasticService {
                 rootNode.filter(new TermQuery('date1', ts.date1));
 
             } else {
-                
+
                 const range = new RangeQuery('date1');
 
                 switch (ts.dateOp) {
@@ -155,7 +156,7 @@ export class ElasticService {
 
         ms.values.forEach((value, idx) => {
             if (value === '' || value === null) { return; }
-                
+
             const marcQuery = new BoolQuery();
             const tag = ms.tags[idx];
             const subfield = ms.subfields[idx];
@@ -178,66 +179,91 @@ export class ElasticService {
         });
     }
 
-    addTermSearches(ctx: CatalogSearchContext, rootNode: BoolQuery) {
-
-        // TODO: boolean OR support.  
+    addFieldSearches(ctx: CatalogSearchContext, rootNode: BoolQuery) {
         const ts = ctx.termSearch;
+        let boolNode: BoolQuery;
+        const shouldNodes: Query[] = [];
+
+        if (ts.joinOp.filter(op => op === '||').length > 0) {
+            // Searches containing ORs require a series of boolean buckets.
+            boolNode = new BoolQuery();
+            shouldNodes.push(boolNode);
+
+        } else {
+            // Searches composed entirely of ANDed terms can live on the
+            // root boolean AND node.
+            boolNode = rootNode;
+        }
+
         ts.joinOp.forEach((op, idx) => {
 
-            const value = ts.query[idx];
-
-            const fieldClass = ts.fieldClass[idx];
-            const textIndex = `${fieldClass}|*text*`;
-            let query;
-
-            switch (ts.matchOp[idx]) {
-
-                case 'contains':
-                    query = new MultiMatchQuery([textIndex], value);
-                    query.operator('and');
-                    query.type('most_fields');
-                    rootNode.must(query);
-                    break;
-
-                case 'phrase':
-                    query = new MultiMatchQuery([textIndex], value);
-                    query.type('phrase');
-                    rootNode.must(query);
-                    break;
-
-                case 'nocontains':
-                    query = new MultiMatchQuery([textIndex], value);
-                    query.operator('and');
-                    query.type('most_fields');
-                    rootNode.mustNot(query);
-                    break;
-
-                case 'exact':
-
-                    // TODO: these need to be grouped first by field
-                    // so we can search multiple values on a singel term
-                    // via 'terms' search.
-
-                    /*
-                    const shoulds = [];
-                    this.bibFields.filter(f => (
-                        f.search_field() === 't' && 
-                        f.search_group() === fieldClass
-                    )).forEach(field => {
-                        shoulds.push(
-                    });
-
-                    const should = new BoolQuery();
-                    */
-                    break;
-
-                case 'starts':
-                    query = new MultiMatchQuery([textIndex], value);
-                    query.type('phrase_prefix');
-                    rootNode.must(query);
-                    break;
+            if (op === '||') {
+                // Start a new OR sub-branch
+                // op on the first query term will never be 'or'.
+                boolNode = new BoolQuery();
+                shouldNodes.push(boolNode);
             }
+
+            this.addSearchField(ctx, idx, boolNode);
         });
+
+        if (shouldNodes.length > 0) {
+            rootNode.should(shouldNodes);
+        }
+    }
+
+
+    addSearchField(ctx: CatalogSearchContext, idx: number, boolNode: BoolQuery) {
+        const ts = ctx.termSearch;
+        const value = ts.query[idx];
+
+        if (value === '' || value === null) { return; }
+
+        const fieldClass = ts.fieldClass[idx];
+        const textIndex = `${fieldClass}|*text*`;
+        let query;
+
+        switch (ts.matchOp[idx]) {
+
+            case 'contains':
+                query = new MultiMatchQuery([textIndex], value);
+                query.operator('and');
+                query.type('most_fields');
+                boolNode.must(query);
+                break;
+
+            case 'phrase':
+                query = new MultiMatchQuery([textIndex], value);
+                query.type('phrase');
+                boolNode.must(query);
+                break;
+
+            case 'nocontains':
+                query = new MultiMatchQuery([textIndex], value);
+                query.operator('and');
+                query.type('most_fields');
+                boolNode.mustNot(query);
+                break;
+
+            case 'exact':
+
+                const shoulds: Query[] = [];
+                this.bibFields.filter(f => (
+                    f.search_field() === 't' &&
+                    f.search_group() === fieldClass
+                )).forEach(field => {
+                    shoulds.push(new TermQuery(field.name, value));
+                });
+
+                boolNode.should(shoulds);
+                break;
+
+            case 'starts':
+                query = new MultiMatchQuery([textIndex], value);
+                query.type('phrase_prefix');
+                boolNode.must(query);
+                break;
+            }
     }
 }
 
