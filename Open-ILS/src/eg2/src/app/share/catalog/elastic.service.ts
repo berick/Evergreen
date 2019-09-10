@@ -6,7 +6,8 @@ import {NetService} from '@eg/core/net.service';
 import {PcrudService} from '@eg/core/pcrud.service';
 import {CatalogSearchContext} from './search-context';
 import {RequestBodySearch, MatchQuery, MultiMatchQuery, TermsQuery, Query, Sort,
-    PrefixQuery, NestedQuery, BoolQuery, TermQuery, RangeQuery} from 'elastic-builder';
+    PrefixQuery, NestedQuery, BoolQuery, TermQuery, WildcardQuery, RangeQuery
+    } from 'elastic-builder';
 
 @Injectable()
 export class ElasticService {
@@ -38,8 +39,14 @@ export class ElasticService {
 
         if ( ctx.termSearch.isSearchable() &&
             !ctx.termSearch.groupByMetarecord &&
-            !ctx.termSearch.fromMetarecord
-        ) { return true; }
+            !ctx.termSearch.fromMetarecord) { 
+            return true; 
+        }
+
+        if (ctx.identSearch.isSearchable()
+            && ctx.identSearch.queryType !== 'item_barcode') {
+            return true;
+        }
 
         return false;
     }
@@ -83,7 +90,10 @@ export class ElasticService {
             this.addFieldSearches(ctx, rootNode);
         } else if (ctx.marcSearch.isSearchable()) {
             this.addMarcSearches(ctx, rootNode);
+        } else if (ctx.identSearch.isSearchable()) {
+            this.addIdentSearches(ctx, rootNode);
         }
+
         this.addFilters(ctx, rootNode);
         this.addSort(ctx, search);
 
@@ -155,6 +165,12 @@ export class ElasticService {
                 rootNode.filter(range);
             }
         }
+    }
+
+
+    addIdentSearches(ctx: CatalogSearchContext, rootNode: BoolQuery) {
+        rootNode.must(
+            new TermQuery(ctx.identSearch.queryType, ctx.identSearch.value));
     }
 
     addMarcSearches(ctx: CatalogSearchContext, rootNode: BoolQuery) {

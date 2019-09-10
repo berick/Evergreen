@@ -18,6 +18,8 @@ use warnings;
 use Encode;
 use DateTime;
 use Time::HiRes qw/time/;
+use Business::ISBN;
+use Business::ISSN;
 use OpenSRF::Utils::Logger qw/:logger/;
 use OpenSRF::Utils::JSON;
 use OpenILS::Utils::CStoreEditor qw/:funcs/;
@@ -87,7 +89,6 @@ my $BASE_PROPERTIES = {
             }
         }
     }
-
 };
 
 sub index_name {
@@ -303,20 +304,12 @@ sub populate_bib_index_batch {
             $fname = "$fclass|$fname" if $fclass;
             $value = $self->truncate_value($value);
 
-            if ($body->{$fname}) {
-                if (ref $body->{$fname}) {
-                    # Three or more values encountered for field.
-                    # Add to the list.
-                    push(@{$body->{$fname}}, $value);
-                } else {
-                    # Second value encountered for field.
-                    # Upgrade to array storage.
-                    $body->{$fname} = [$body->{$fname}, $value];
-                }
+            if ($fname eq 'identifier|isbn') {
+                index_isbns($body, $value);
+            } elsif ($fname eq 'identifier|issn') {
+                index_issns($body, $value);
             } else {
-                # First value encountered for field.
-                # Assume for now there will only be one value.
-                $body->{$fname} = $value
+                append_field_value($body, $fname, $value);
             }
         }
 
@@ -330,6 +323,71 @@ sub populate_bib_index_batch {
         $bib_ids->[0] . '...' . $bib_ids->[-1]);
 
     return $index_count;
+}
+
+
+# Indexes ISBN10, ISBN13, and formatted values of both (with hyphens)
+sub index_isbns {
+    my ($body, $value) = @_;
+    return unless $value;
+    
+    my %seen; # deduplicate values
+
+    # Chop up the collected raw values into parts and let
+    # Business::* tell us which parts looks like ISBNs.
+    for my $token (split(/ /, $value)) {
+        my $isbn = Business::ISBN->new($token);
+        if ($isbn && $isbn->is_valid) {
+            $seen{$isbn->as_isbn10->isbn} = 1;
+            $seen{$isbn->as_isbn10->as_string} = 1;
+            $seen{$isbn->as_isbn13->isbn} = 1;
+            $seen{$isbn->as_isbn13->as_string} = 1;
+        }
+    }
+
+    append_field_value($body, 'identifier|isbn', $_) foreach keys %seen;
+}
+
+# Indexes ISSN values with and wihtout hyphen formatting.
+sub index_issns {
+    my ($body, $value) = @_;
+    return unless $value;
+
+    my %seen; # deduplicate values
+    
+    # Chop up the collected raw values into parts and let
+    # Business::* tell us which parts looks valid.
+    for my $token (split(/ /, $value)) {
+        my $issn = Business::ISSN->new($token);
+        if ($issn && $issn->is_valid) {
+            # no option in business::issn to get the unformatted value.
+            (my $unformatted = $issn->as_string) =~ s/-//g;
+            $seen{$unformatted} = 1;
+            $seen{$issn->as_string} = 1;
+        }
+    }
+
+    append_field_value($body, 'identifier|issn', $_) foreach keys %seen;
+}
+
+sub append_field_value {
+    my ($body, $fname, $value) = @_;
+
+    if ($body->{$fname}) {
+        if (ref $body->{$fname}) {
+            # Three or more values encountered for field.
+            # Add to the list.
+            push(@{$body->{$fname}}, $value);
+        } else {
+            # Second value encountered for field.
+            # Upgrade to array storage.
+            $body->{$fname} = [$body->{$fname}, $value];
+        }
+    } else {
+        # First value encountered for field.
+        # Assume for now there will only be one value.
+        $body->{$fname} = $value
+    }
 }
 
 # Load holdings summary blobs for requested bibs
