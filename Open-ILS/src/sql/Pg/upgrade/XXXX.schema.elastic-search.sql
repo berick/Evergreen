@@ -20,7 +20,7 @@ CREATE TABLE elastic.node (
     active  BOOLEAN NOT NULL DEFAULT FALSE,
     cluster TEXT    NOT NULL 
             REFERENCES elastic.cluster (code) ON DELETE CASCADE,
-    CONSTRAINT node_once UNIQUE (host, port)
+    CONSTRAINT node_once UNIQUE (host, port, path, cluster)
 );
 
 CREATE TABLE elastic.index (
