@@ -342,10 +342,14 @@ sub index_isbns {
     for my $token (split(/ /, $value)) {
         my $isbn = Business::ISBN->new($token);
         if ($isbn && $isbn->is_valid) {
-            $seen{$isbn->as_isbn10->isbn} = 1;
-            $seen{$isbn->as_isbn10->as_string} = 1;
-            $seen{$isbn->as_isbn13->isbn} = 1;
-            $seen{$isbn->as_isbn13->as_string} = 1;
+            if ($isbn->as_isbn10) {
+                $seen{$isbn->as_isbn10->isbn} = 1;
+                $seen{$isbn->as_isbn10->as_string} = 1;
+            }
+            if ($isbn->as_isbn13) {
+                $seen{$isbn->as_isbn13->isbn} = 1;
+                $seen{$isbn->as_isbn13->as_string} = 1;
+            }
         }
     }
 
