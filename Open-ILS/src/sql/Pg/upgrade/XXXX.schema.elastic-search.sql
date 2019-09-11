@@ -170,7 +170,7 @@ INSERT INTO elastic.node
 VALUES ('Localhost', 'localhost', 'http', 9200, TRUE, 'main');
 
 INSERT INTO elastic.index (code, active, cluster)
-VALUES ('bib-search', TRUE, 'main'), ('bib-marc', TRUE, 'main');
+VALUES ('bib-search', TRUE, 'main');
 
 COMMIT;
 
