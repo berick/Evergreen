@@ -141,7 +141,11 @@ sub create_index {
         if ($field->facet_field eq 't') {
             # Facet fields are used for aggregation which requires
             # an unaltered keyword field.
-            $fields->{raw} = {type => 'keyword'};
+            $fields->{raw} = {
+                type => 'keyword', 
+                # https://www.elastic.co/guide/en/elasticsearch/reference/6.8/eager-global-ordinals.html
+                eager_global_ordinals => 'true'
+            };
         }
 
         if ($field->search_field eq 't') {
