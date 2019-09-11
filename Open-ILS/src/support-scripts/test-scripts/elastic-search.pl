@@ -27,7 +27,7 @@ sub help {
 
             $0
 
-        Performs a canned bib record search
+        Performs a series of canned bib record searches
 
 HELP
     exit(0);
@@ -35,19 +35,9 @@ HELP
 
 help() if $help;
 
-# connect to osrf...
-OpenSRF::System->bootstrap_client(config_file => $osrf_config);
-Fieldmapper->import(
-    IDL => OpenSRF::Utils::SettingsClient->new->config_value("IDL"));
-OpenILS::Utils::CStoreEditor::init();
+my $queries = [{
 
-# Title search AND subject search AND MARC tag=100 search
-my $query = {
-  _source => ['id', 'title|maintitle'] , # return only the ID field
-  from => 0,
-  size => 5,
-  sort => [{'_score' => 'desc'}],
-  query => {
+    # Title search AND subject search AND MARC tag=100 search
     bool => {
       must => [{ 
         multi_match => {
@@ -83,25 +73,70 @@ my $query = {
         }
       }]
     }
-  }
-};
+}, {
+    # Author search
+    bool => {
+      must => [{ 
+        multi_match => {
+          query => 'Cuthbert Morton Girdlestone',
+          fields => ['author|*text*'],
+          operator => 'and',
+          type => 'most_fields'
+        }
+      }]
+    }
+}, {
+    # Personal author exact match search
+    bool => {
+      must => [{ 
+        term => {'author|personal' => 'Rowling, J. K.'}
+      }]
+    }
+}, {
+    # Main title search
+    bool => {
+      must => [{ 
+        multi_match => {
+          query => 'ready player',
+          fields => ['title|maintitle.text*'],
+          operator => 'and',
+          type => 'most_fields'
+        }
+      }]
+    }
+}];
+
+# connect to osrf...
+print "Connecting...\n";
+OpenSRF::System->bootstrap_client(config_file => $osrf_config);
+Fieldmapper->import(
+    IDL => OpenSRF::Utils::SettingsClient->new->config_value("IDL"));
+OpenILS::Utils::CStoreEditor::init();
 
 my $es = OpenILS::Elastic::BibSearch->new($cluster);
-
 $es->connect;
 
-print OpenSRF::Utils::JSON->perl2JSON($query) . "\n\n";
+print "Searching...\n";
+for my $query_part (@$queries) {
 
-my $start = time();
-my $results = $es->search($query);
-my $duration = substr(time() - $start, 0, 6);
+    my $query = {
+      _source => ['id', 'title|maintitle'] , # return only the ID field
+      from => 0,
+      size => 5,
+      sort => [{'_score' => 'desc'}],
+      query => $query_part
+    };
 
-print OpenSRF::Utils::JSON->perl2JSON($results) . "\n";
+    print OpenSRF::Utils::JSON->perl2JSON($query) . "\n\n" unless $quiet;
 
-unless ($quiet) {
-    print "\nSearch returned ".$results->{hits}->{total}.
+    my $start = time();
+    my $results = $es->search($query);
+    my $duration = substr(time() - $start, 0, 6);
+
+    print OpenSRF::Utils::JSON->perl2JSON($results) . "\n\n" unless $quiet;
+
+    print "Search returned ".$results->{hits}->{total}.
         " hits with a reported duration of ".$results->{took}."ms.\n";
-    print "Full round-trip time was $duration seconds.\n";
+    print "Full round-trip time was $duration seconds.\n\n";
 }
-
 
