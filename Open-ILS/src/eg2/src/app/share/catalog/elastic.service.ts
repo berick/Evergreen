@@ -243,7 +243,7 @@ export class ElasticService {
 
         const matchOp = ts.matchOp[idx];
         const fieldClass = ts.fieldClass[idx];
-        const textIndex = `${fieldClass}|*text*`;
+        const textIndex = `${fieldClass}|*.text*`;
         let query;
 
         switch (matchOp) {
