@@ -147,7 +147,7 @@ sub create_index {
         if ($field->search_field eq 't') {
             # Text search fields get an additional variety of indexes to
             # support full text searching
-
+        
             $fields->{text} = {type => 'text'},
             $fields->{text_folded} = {type => 'text', analyzer => 'folding'};
 
@@ -158,12 +158,16 @@ sub create_index {
                     analyzer => $lang_analyzer
                 };
             }
+
+            if ((my $boost = ($field->weight || 1)) > 1) {
+                $fields->{text}->{boost} = $boost;
+                $fields->{text_folded}->{boost} = $boost;
+                $fields->{"text_$_"}->{boost} = $boost 
+                    foreach $self->language_analyzers;
+            }
         }
 
         $def->{fields} = $fields if keys %$fields;
-
-        # Apply field boost.
-        $def->{boost} = $field->weight if ($field->weight || 1) > 1;
 
         $logger->debug("ES adding field $field_name: ". 
             OpenSRF::Utils::JSON->perl2JSON($def));

@@ -131,11 +131,15 @@ sub connect {
 
     my @nodes;
     for my $server (@{$self->nodes}) {
-        push(@nodes, sprintf("%s://%s:%d%s", 
-            $server->proto, $server->host, $server->port, $server->path));
+        push(@nodes, {
+            scheme => $server->proto,
+            host   => $server->host,
+            port   => $server->port,
+            path   => $server->path
+        });
     }
 
-    $logger->debug("ES connecting to nodes @nodes");
+    $logger->debug("ES connecting to ".scalar(@nodes)." nodes");
 
     eval { $self->{es} = Search::Elasticsearch->new(nodes => \@nodes) };
 

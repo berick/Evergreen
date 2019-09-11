@@ -112,7 +112,7 @@ export class ElasticService {
         } else {
             
             // Sort by match score by default.
-            search.sort(new Sort('_score', 'asc'));
+            search.sort(new Sort('_score', 'desc'));
         }
     }
 

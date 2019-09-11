@@ -43,13 +43,10 @@ OpenILS::Utils::CStoreEditor::init();
 
 # Title search AND subject search AND MARC tag=100 search
 my $query = {
-  _source => ['id', 'title|proper'] , # return only the ID field
+  _source => ['id', 'title|maintitle'] , # return only the ID field
   from => 0,
   size => 5,
-  sort => [
-    {'titlesort' => 'asc'},
-    '_score'
-  ],
+  sort => [{'_score' => 'desc'}],
   query => {
     bool => {
       must => [{ 
