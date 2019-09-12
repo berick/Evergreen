@@ -7,6 +7,10 @@ use OpenSRF::Utils::JSON;
 use OpenILS::Utils::Fieldmapper;
 use OpenILS::Elastic::BibSearch;
 
+use utf8;
+binmode(STDIN, ':utf8');
+binmode(STDOUT, ':utf8');
+
 my $help;
 my $osrf_config = '/openils/conf/opensrf_core.xml';
 my $cluster = 'main';
@@ -27,7 +31,7 @@ sub help {
 
             $0
 
-        Performs a series of canned bib record searches
+        Performs query string searches.
 
 HELP
     exit(0);
@@ -35,79 +39,8 @@ HELP
 
 help() if $help;
 
-my $queries = [{
-
-    # Title search AND subject search AND MARC tag=100 search
-    bool => {
-      must => [{ 
-        multi_match => {
-          query => 'ready',
-          fields => ['title|*.text*'],
-          operator => 'and',
-          type => 'most_fields'
-        }
-      }, {
-        multi_match => {
-          query => 'puzzle',
-          fields => ['subject|*.text*'],
-          operator => 'and',
-          type => 'most_fields'
-        }
-      }, {
-        nested => {
-          path => 'marc',
-          query => {
-            bool => { 
-              must => [{
-                multi_match => {
-                  query => 'cline',
-                  fields => ['marc.value*'],
-                  operator => 'and',
-                  type => 'most_fields'
-                }
-              }, {
-                term => {'marc.tag' => 100}
-              }]
-            }
-          }
-        }
-      }]
-    }
-}, {
-    # Author search
-    bool => {
-      must => [{ 
-        multi_match => {
-          query => 'Cuthbert Morton Girdlestone',
-          fields => ['author|*text*'],
-          operator => 'and',
-          type => 'most_fields'
-        }
-      }]
-    }
-}, {
-    # Personal author exact match search
-    bool => {
-      must => [{ 
-        term => {'author|personal' => 'Rowling, J. K.'}
-      }]
-    }
-}, {
-    # Main title search
-    bool => {
-      must => [{ 
-        multi_match => {
-          query => 'ready player',
-          fields => ['title|maintitle.text*'],
-          operator => 'and',
-          type => 'most_fields'
-        }
-      }]
-    }
-}];
-
 # connect to osrf...
-print "Connecting...\n";
+print "Connecting to OpenSRF...\n";
 OpenSRF::System->bootstrap_client(config_file => $osrf_config);
 Fieldmapper->import(
     IDL => OpenSRF::Utils::SettingsClient->new->config_value("IDL"));
@@ -116,27 +49,57 @@ OpenILS::Utils::CStoreEditor::init();
 my $es = OpenILS::Elastic::BibSearch->new($cluster);
 $es->connect;
 
-print "Searching...\n";
-for my $query_part (@$queries) {
+print <<MESSAGE;
+
+Enter a query string to perform a search. Ctrl-c to exit.
+See https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl-query-string-query.html
+Some examples:
+
+harry potter
+title|maintitle.text\\*:piano
+author|\\*.text\\*:GrandPré
+author|\\*.text\\*:(johann brahms) OR (wolfgang mozart)
+MESSAGE
+
+while (1) {
+
+    print "\nEnter query string: ";
+
+    $query_string = <STDIN>;
+    chomp $query_string if $query_string;
+
+    next unless $query_string;
 
     my $query = {
-      _source => ['id', 'title|maintitle'] , # return only the ID field
-      from => 0,
-      size => 5,
-      sort => [{'_score' => 'desc'}],
-      query => $query_part
+        _source => ['id', 'title|maintitle'] , # return only a few fields
+        from => 0,
+        size => 10,
+        sort => [{'_score' => 'desc'}],
+        query => {      
+            query_string => {
+                query => $query_string,
+                default_operator => 'AND',
+                # Combine scores for matched indexes
+                type => 'most_fields',
+                # Search all keyword text indexes by default.
+                default_field => 'keyword|keyword.text'
+            } 
+        }
     };
-
-    print OpenSRF::Utils::JSON->perl2JSON($query) . "\n\n" unless $quiet;
 
     my $start = time();
     my $results = $es->search($query);
     my $duration = substr(time() - $start, 0, 6);
 
-    print OpenSRF::Utils::JSON->perl2JSON($results) . "\n\n" unless $quiet;
-
     print "Search returned ".$results->{hits}->{total}.
         " hits with a reported duration of ".$results->{took}."ms.\n";
     print "Full round-trip time was $duration seconds.\n\n";
+
+    for my $hit (@{$results->{hits}->{hits}}) {
+        printf("Record: %-8d | Score: %-11f | Title: %s\n", 
+            $hit->{_id}, $hit->{_score}, 
+            $hit->{_source}->{'title|maintitle'}
+        );
+    }
 }
 
