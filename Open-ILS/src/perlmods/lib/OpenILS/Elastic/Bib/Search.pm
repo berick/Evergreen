@@ -18,6 +18,7 @@ use warnings;
 use Encode;
 use DateTime;
 use Time::HiRes qw/time/;
+use Clone 'clone';
 use Business::ISBN;
 use Business::ISSN;
 use OpenSRF::Utils::Logger qw/:logger/;
@@ -88,6 +89,58 @@ my $BASE_PROPERTIES = {
                 }
             }
         }
+    },
+
+    # Make it possible to search across all fields in a search group.
+    # Values from grouped fields are copied into the group field.
+    # Here we make some assumptions about the general purpose of
+    # each group.
+    title => {
+        type => 'keyword',
+        normalizer => 'custom_lowercase',
+        fields => {
+            text => {type => 'text'},
+            text_folded => {type => 'text', analyzer => 'folding'}
+        }
+    },
+    author => {
+        type => 'keyword',
+        normalizer => 'custom_lowercase',
+        fields => {
+            text => {type => 'text'},
+            text_folded => {type => 'text', analyzer => 'folding'}
+        }
+    },
+    subject => {
+        type => 'keyword',
+        normalizer => 'custom_lowercase',
+        fields => {
+            text => {type => 'text'},
+            text_folded => {type => 'text', analyzer => 'folding'}
+        }
+    },
+    series => {
+        type => 'keyword',
+        normalizer => 'custom_lowercase',
+        fields => {
+            text => {type => 'text'},
+            text_folded => {type => 'text', analyzer => 'folding'}
+        }
+    },
+    keyword => {
+        # term (aka "keyword") searches are not used on the 
+        # keyword field, but we index it just the same (sans lowercase) 
+        # for structural consistency with other group fields.
+        type => 'keyword',
+        fields => {
+            text => {type => 'text'},
+            text_folded => {type => 'text', analyzer => 'folding'}
+        }
+    },
+    identifier => {
+        # Avoid full-text indexing on identifier fields.
+        type => 'keyword',
+        normalizer => 'custom_lowercase',
     }
 };
 
@@ -119,6 +172,14 @@ sub create_index {
             type => 'text',
             analyzer => $lang_analyzer
         };
+
+        # Apply language analysis to grouped fields, however skip
+        # the 'author' and 'identifier' groups since it makes less sense to 
+        # language-analyze proper names and identifiers.
+        $mappings->{$_}->{fields}->{"text_$lang_analyzer"} = {
+            type => 'text',
+            analyzer => $lang_analyzer
+        } foreach qw/title subject series keyword/;
     }
 
     my $fields = new_editor()->retrieve_all_elastic_bib_field();
@@ -129,45 +190,36 @@ sub create_index {
         my $search_group = $field->search_group;
         $field_name = "$search_group|$field_name" if $search_group;
 
-        # Every field gets a lowercase keyword index for term 
-        # searches/filters and sorting.
-        my $def = {
-            type => 'keyword',
-            normalizer => 'custom_lowercase'
-        };
+        my $def;
 
-        my $fields = {};
+        if ($search_group) {
 
-        if ($field->facet_field eq 't') {
+            # Use the same fields and analysis as the 'grouped' field.
+            $def = clone($mappings->{$search_group});
+            $def->{copy_to} = $search_group if $search_group;
+
+            # Apply ranking boost to each analysis variation.
+            my $flds = $def->{fields};
+            if ($flds && (my $boost = ($field->weight || 1)) > 1) {
+                $flds->{$_}->{boost} = $boost foreach keys %$flds;
+            }
+
+        } else {
+
+            # Non-grouped fields are used for filtering and sorting, so
+            # they don't need as much processing.
+
+            $def = {
+                type => 'keyword',
+                normalizer => 'custom_lowercase'
+            };
+        }
+
+        if ($field->facet_field eq 't' && $def->{fields}) {
             # Facet fields are used for aggregation which requires
-            # an unaltered keyword field.
-            $fields->{raw} = {type => 'keyword'};
+            # an additional unaltered keyword field.
+            $def->{fields}->{raw} = {type => 'keyword'};
         }
-
-        if ($field->search_field eq 't') {
-            # Text search fields get an additional variety of indexes to
-            # support full text searching
-        
-            $fields->{text} = {type => 'text'},
-            $fields->{text_folded} = {type => 'text', analyzer => 'folding'};
-
-            # Add the language analyzers
-            for my $lang_analyzer ($self->language_analyzers) {
-                $fields->{"text_$lang_analyzer"} = {
-                    type => 'text',
-                    analyzer => $lang_analyzer
-                };
-            }
-
-            if ((my $boost = ($field->weight || 1)) > 1) {
-                $fields->{text}->{boost} = $boost;
-                $fields->{text_folded}->{boost} = $boost;
-                $fields->{"text_$_"}->{boost} = $boost 
-                    foreach $self->language_analyzers;
-            }
-        }
-
-        $def->{fields} = $fields if keys %$fields;
 
         $logger->debug("ES adding field $field_name: ". 
             OpenSRF::Utils::JSON->perl2JSON($def));
