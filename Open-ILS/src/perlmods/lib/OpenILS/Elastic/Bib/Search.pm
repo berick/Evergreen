@@ -235,7 +235,7 @@ sub create_index {
         if ($field->facet_field eq 't' && $def->{fields}) {
             # Facet fields are used for aggregation which requires
             # an additional unaltered keyword field.
-            $def->{fields}->{raw} = {type => 'keyword'};
+            $def->{fields}->{facet} = {type => 'keyword'};
         }
 
         $logger->debug("ES adding field $field_name: ". 

@@ -64,7 +64,7 @@ export class ElasticService {
         // Extract just the bits that get sent to ES.
         const elasticStruct: Object = requestBody.toJSON();
 
-        console.log(JSON.stringify(elasticStruct));
+        console.debug(JSON.stringify(elasticStruct));
 
         const options: any = {search_org: ctx.searchOrg.id()};
         if (ctx.global) {
@@ -137,7 +137,7 @@ export class ElasticService {
         ts.facetFilters.forEach(f => {
             if (f.facetValue !== '') {
                 rootNode.filter(new TermQuery(
-                    `${f.facetClass}|${f.facetName}`, f.facetValue));
+                    `${f.facetClass}|${f.facetName}.facet`, f.facetValue));
             }
         });
 
