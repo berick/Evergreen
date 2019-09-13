@@ -46,14 +46,14 @@ my $queries = [{
       must => [{ 
         multi_match => {
           query => 'ready',
-          fields => ['title|*.text*'],
+          fields => ['title.text*'],
           operator => 'and',
           type => 'most_fields'
         }
       }, {
         multi_match => {
           query => 'puzzle',
-          fields => ['subject|*.text*'],
+          fields => ['subject.text*'],
           operator => 'and',
           type => 'most_fields'
         }
@@ -83,7 +83,7 @@ my $queries = [{
       must => [{ 
         multi_match => {
           query => 'Cuthbert Morton Girdlestone',
-          fields => ['author|*text*'],
+          fields => ['author.text*'],
           operator => 'and',
           type => 'most_fields'
         }

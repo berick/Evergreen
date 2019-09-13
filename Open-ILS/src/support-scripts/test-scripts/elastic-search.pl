@@ -57,8 +57,9 @@ Some examples:
 
 harry potter
 title|maintitle.text\\*:piano
-author|\\*.text\\*:GrandPré
-author|\\*.text\\*:(johann brahms) OR (wolfgang mozart)
+author.text\\*:GrandPré
+au:((johann brahms) OR (wolfgang mozart))
+su:history
 MESSAGE
 
 while (1) {
@@ -82,7 +83,7 @@ while (1) {
                 # Combine scores for matched indexes
                 type => 'most_fields',
                 # Search all keyword text indexes by default.
-                default_field => 'keyword|keyword.text'
+                default_field => 'keyword.text'
             } 
         }
     };

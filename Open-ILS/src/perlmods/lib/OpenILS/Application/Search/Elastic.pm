@@ -160,9 +160,11 @@ sub bib_search {
 
     my $staff = ($self->api_name =~ /staff/);
 
-    $logger->info("ES parsing API query $query staff=$staff");
-
     return {count => 0, ids => []} unless $query && $query->{query};
+
+    # Only ask ES to return the 'id' field from the source bibs in
+    # the response object, since that's all we need.
+    $query->{_source} = ['id'];
 
     my $elastic_query = compile_elastic_query($query, $options, $staff);
 

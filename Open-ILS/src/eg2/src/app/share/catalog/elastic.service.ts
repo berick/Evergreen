@@ -70,6 +70,9 @@ export class ElasticService {
         if (ctx.global) {
             options.search_depth = this.org.root().ou_type().depth();
         }
+        if (ctx.termSearch.available) {
+            options.available = true;
+        }
 
         return this.net.request(
             'open-ils.search', method, elasticStruct, options
@@ -80,7 +83,6 @@ export class ElasticService {
 
         const search = new RequestBodySearch();
 
-        search.source(['id']); // only retrieve IDs
         search.size(ctx.pager.limit);
         search.from(ctx.pager.offset);
 
