@@ -141,8 +141,25 @@ my $BASE_PROPERTIES = {
         # Avoid full-text indexing on identifier fields.
         type => 'keyword',
         normalizer => 'custom_lowercase',
-    }
+    },
+
+    # Create some shortcut indexes for streamlining query_string searches.
+    ti => {type => 'text'},
+    au => {type => 'text'},
+    se => {type => 'text'},
+    su => {type => 'text'},
+    kw => {type => 'text'},
+    id => {type => 'keyword'}
 };
+
+my %SHORT_GROUP_MAP = (
+    title => 'ti',
+    author => 'au',
+    subject => 'su',
+    series => 'se',
+    keyword => 'kw',
+    identifier => 'id'
+);
 
 sub index_name {
     return $INDEX_NAME;
@@ -196,7 +213,7 @@ sub create_index {
 
             # Use the same fields and analysis as the 'grouped' field.
             $def = clone($mappings->{$search_group});
-            $def->{copy_to} = $search_group if $search_group;
+            $def->{copy_to} = [$search_group, $SHORT_GROUP_MAP{$search_group}];
 
             # Apply ranking boost to each analysis variation.
             my $flds = $def->{fields};
