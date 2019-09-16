@@ -67,8 +67,9 @@ while (1) {
     print "\nEnter query string: ";
 
     $query_string = <STDIN>;
-    chomp $query_string if $query_string;
+    last unless defined $query_string; # ctrl-d
 
+    chomp $query_string;
     next unless $query_string;
 
     my $query = {
@@ -82,7 +83,7 @@ while (1) {
                 default_operator => 'AND',
                 # Combine scores for matched indexes
                 type => 'most_fields',
-                # Search all keyword text indexes by default.
+                # Search the base keyword text index by default.
                 default_field => 'keyword.text'
             } 
         }
@@ -92,6 +93,11 @@ while (1) {
     my $results = $es->search($query);
     my $duration = substr(time() - $start, 0, 6);
 
+    if (!$results) {
+        print "Search failed.  See error logs\n";
+        next;
+    }
+
     print "Search returned ".$results->{hits}->{total}.
         " hits with a reported duration of ".$results->{took}."ms.\n";
     print "Full round-trip time was $duration seconds.\n\n";
@@ -99,8 +105,10 @@ while (1) {
     for my $hit (@{$results->{hits}->{hits}}) {
         printf("Record: %-8d | Score: %-11f | Title: %s\n", 
             $hit->{_id}, $hit->{_score}, 
-            $hit->{_source}->{'title|maintitle'}
+            ($hit->{_source}->{'title|maintitle'} || '')
         );
     }
 }
+
+print "\n";
 
