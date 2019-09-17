@@ -142,6 +142,13 @@ export class ElasticService {
             }
         });
 
+        if (ts.copyLocations[0] !== '') {
+            const locQuery =
+                new TermsQuery('holdings.location', ts.copyLocations);
+
+            rootNode.filter(new NestedQuery(locQuery, 'holdings'));
+        }
+
         if (ts.date1 && ts.dateOp) {
 
             if (ts.dateOp === 'is') {
