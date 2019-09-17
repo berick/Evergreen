@@ -1,0 +1,100 @@
+= Elasticsearch and Evergreen =
+
+== Installation ==
+
+1. Check out this Evergreen branch.
+2. Apply SQL Open-ILS/src/sql/Pg/upgrade/XXXX.schema.elastic-search.sql
+3. cd Open-ILS/src/eg2/ && npm install # new dependency
+4. Install branch
+
+== Configuration ==
+
+See database tables in the 'elastic' schema.  No admin UI exists.  If a 
+single elasticsearch node is running on the same server as EG, no 
+configuration changes are needed.
+
+== Indexing Bib Records ==
+
+See /home/berick/code/Evergreen/Open-ILS/src/support-scripts/elastic-index.pl
+
+Examples:
+
+[source,sh]
+------------------------------------------------------------------------------
+./elastic-index.pl --create-index --populate
+./elastic-index.pl --delete-index --create-index --populate
+./elastic-index.pl --populate --modified-since 2019-09-17T14:45:00
+------------------------------------------------------------------------------
+
+== Bib Search Index ==
+
+A single 'bib-search' index is defined by default.  The structure of the index
+is derived from the local Evergreen index definitions.  No additional index
+definitions or modifications are required to get started.
+
+=== General Stucture ===
+
+The bib-search index contains 3 general categories of data for each 
+non-deleted bib record: 
+
+1. Bib record search/filter data pulled from metabib fields and record 
+   attribute definitions
+2. MARC record data
+3. Holdings summaries for filtering by library, availability, etc.
+
+=== Search Fields ===
+
+Search fields are grouped by search class (title, author, etc.).  Searches
+can be performed against a specific field or across the class.
+
+Search field values are extracted from metabib.*_field_entry tables
+and reindexed in Elasticsearch using a combination of text and keyword
+analyzers: default text, language-specific text, asciifolding text
+(e.g. Grandpré => Grandpre) and lowercase keyword (for exact matches).
+
+==== Caveats ====
+
+* Author fields are not presently indexed with language-specific analyzers, 
+  since the values are generally proper names.
+* Keyword fields are not processed via lowercase keyword index, since exact
+  matches on keyword indexes makes little sense.
+* ISBN and ISSN values are specially handled for data cleanup and supporting
+  isbn 10 / 13 searches.
+
+=== Facet Fields ===
+
+Field marked as facets get an extra '.facet' property which is a raw, 
+unprocessed copy of the data used for aggregation.
+
+=== Filter Fields ===
+
+These concist of record attribute values and are indexed as simple
+'keyword' entries, lowercased for ease of searching / filtering.
+
+== API ==
+
+New APIs were added:
+
+open-ils.search.elastic.bib_search[.staff]
+
+These allow the caller to compose Elasticsearch query structures which are
+passed, with API-local additions, to the ES engine.  The response structure 
+mimics the open-ils.search.biblio.multiclass.query class of APIs.
+
+Additional options may be passed to the elastic API to include holdings-level
+location and availability filtering.  (Note the client could add such filters, 
+but baking it into the API saves the client a lot of work for a common work flow).
+
+== User Interface ==
+
+The branch includes an Elastic service baked into the Angular staff catalog. 
+It uses the elastic-builder module for creating the search structures.  
+
+== Test Scripts ==
+
+* Open-ILS/src/support-scripts/test-scripts/elastic-search.pl
+** Allows the user to execute query_string-based searches.
+
+* Open-ILS/src/support-scripts/test-scripts/elastic-search-samples.pl
+** Runs a few canned searches as examples.
+
