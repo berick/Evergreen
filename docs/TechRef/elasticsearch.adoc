@@ -1,11 +1,22 @@
 = Elasticsearch and Evergreen =
 
+== Goals ==
+
+Fast bib record searching without requiring significant changes to
+the Evergreen code and without requiring a brand new indexing configuration.
+
+Initially support integration with the Angular staff catalog, covering 
+most search features commonly used by staff.
+
+Allow for expanding use to other interfaces (e.g. TPAC) and extending
+functionatlity.
+
 == Installation ==
 
 1. Check out this Evergreen branch.
 2. Apply SQL Open-ILS/src/sql/Pg/upgrade/XXXX.schema.elastic-search.sql
 3. cd Open-ILS/src/eg2/ && npm install # new dependency
-4. Install branch
+4. Build and Install branch
 
 == Configuration ==
 
@@ -35,7 +46,7 @@ definitions or modifications are required to get started.
 === General Stucture ===
 
 The bib-search index contains 3 general categories of data for each 
-non-deleted bib record: 
+bib record: 
 
 1. Bib record search/filter data pulled from metabib fields and record 
    attribute definitions
