@@ -39,7 +39,8 @@ export class ElasticService {
 
         if ( ctx.termSearch.isSearchable() &&
             !ctx.termSearch.groupByMetarecord &&
-            !ctx.termSearch.fromMetarecord) { 
+            !ctx.termSearch.fromMetarecord &&
+            !ctx.termSearch.hasBrowseEntry) { 
             return true; 
         }
 
