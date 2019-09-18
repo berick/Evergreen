@@ -82,6 +82,19 @@ unprocessed copy of the data used for aggregation.
 These concist of record attribute values and are indexed as simple
 'keyword' entries, lowercased for ease of searching / filtering.
 
+=== MARC Data ===
+
+The full MARC record is included in the bib search index as a series
+of nested objects.  This makes it possible to search MARC data in 
+addition to (or instead of) search/filter fields, including filtering
+on holdings.
+
+=== Holdings ===
+
+A set of holdings summaries are included with each bib record as nested 
+objects.  The summaries track circ lib, shelf location, etc. so the caller
+can determine org visibility and availability.
+
 == API ==
 
 New APIs were added:
@@ -111,4 +124,12 @@ It uses the elastic-builder module for creating the search structures.
 
 * Open-ILS/src/support-scripts/test-scripts/elastic-search-samples.pl
 ** Runs a few canned searches as examples.
+
+== Features Pending ==
+
+Some existing Evergreen features are not supported by the ES API, though in
+most if not all cases they can be added.
+
+* Metarecord searches
+* Popularity ranking
 
