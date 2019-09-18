@@ -13,10 +13,12 @@ functionatlity.
 
 == Installation ==
 
-1. Check out this Evergreen branch.
-2. Apply SQL Open-ILS/src/sql/Pg/upgrade/XXXX.schema.elastic-search.sql
-3. cd Open-ILS/src/eg2/ && npm install # new dependency
-4. Build and Install branch
+1. Install and run a 6.8.* version of ES:
+   https://www.elastic.co/downloads/past-releases/elasticsearch-6-8-3
+2. Check out this Evergreen branch.
+3. Apply SQL Open-ILS/src/sql/Pg/upgrade/XXXX.schema.elastic-search.sql
+4. cd Open-ILS/src/eg2/ && npm install # new dependency
+5. Build and Install branch
 
 == Configuration ==
 
