@@ -352,22 +352,20 @@ export class CatalogService {
         return facetData;
     }
 
-    fetchCcvms(): Promise<any> {
+    fetchCcvms(): Promise<void> {
 
-        // XXX Putting the elastic initialization call here since
-        // the call is assumed to be run at page load time.
-        // TODO: migrate our fetch calls to generic init call.
+        if (Object.keys(this.ccvmMap).length) {
+            return Promise.resolve();
+        }
 
-        return this.elastic.init().then(ok => {
-
-            if (Object.keys(this.ccvmMap).length) {
-                return Promise.resolve();
-            }
-
-            return this.pcrud.search('ccvm',
+        return new Promise((resolve, reject) => {
+            this.pcrud.search('ccvm',
                 {ctype : CATALOG_CCVM_FILTERS}, {},
                 {atomic: true, anonymous: true}
-            ).toPromise().then(list => this.compileCcvms(list));
+            ).subscribe(list => {
+                this.compileCcvms(list);
+                resolve();
+            });
         });
     }
 

@@ -12,25 +12,12 @@ import {RequestBodySearch, MatchQuery, MultiMatchQuery, TermsQuery, Query, Sort,
 @Injectable()
 export class ElasticService {
 
-    bibFields: IdlObject[] = [];
-
     constructor(
         private idl: IdlService,
         private net: NetService,
         private org: OrgService,
         private pcrud: PcrudService
     ) {}
-
-    init(): Promise<any> {
-
-        if (this.bibFields.length > 0) {
-            return Promise.resolve();
-        }
-
-        return this.pcrud.search('ebf', {search_field: 't'})
-            .pipe(tap(field => this.bibFields.push(field)))
-            .toPromise();
-    }
 
     // Returns true if Elastic can provide search results.
     canSearch(ctx: CatalogSearchContext): boolean {
@@ -40,8 +27,8 @@ export class ElasticService {
         if ( ctx.termSearch.isSearchable() &&
             !ctx.termSearch.groupByMetarecord &&
             !ctx.termSearch.fromMetarecord &&
-            !ctx.termSearch.hasBrowseEntry) { 
-            return true; 
+            !ctx.termSearch.hasBrowseEntry) {
+            return true;
         }
 
         if (ctx.identSearch.isSearchable()
@@ -113,7 +100,7 @@ export class ElasticService {
             search.sort(new Sort(parts[0], parts[1] ? 'desc' : 'asc'));
 
         } else {
-            
+
             // Sort by match score by default.
             search.sort(new Sort('_score', 'desc'));
         }
@@ -279,36 +266,19 @@ export class ElasticService {
                 query.type('most_fields');
                 boolNode.mustNot(query);
                 return;
+
+            // "exact" and "starts" searches use term searches instead
+            // of full-text searches.
+            case 'exact':
+                query = new TermQuery(fieldClass, value);
+                boolNode.must(query);
+                return;
+
+            case 'starts':
+                query = new PrefixQuery(fieldClass, value);
+                boolNode.must(query);
+                return;
         }
-
-        // Under the covers, searches on a field class are OR searches
-        // across all fields within the class.  Unlike MultiMatch
-        // searches (above) where this can be accomplished with field
-        // name wildcards, term/prefix searches require explicit field
-        // names.
-        const shoulds: Query[] = [];
-
-        this.getSearchFieldsForClass(fieldClass).forEach(field => {
-            const fieldName = `${fieldClass}|${field.name()}`;
-            if (matchOp === 'exact') {
-                query = new TermQuery(fieldName, value);
-            } else if (matchOp === 'starts') {
-                query = new PrefixQuery(fieldName, value);
-            }
-
-            shoulds.push(query);
-        });
-
-        // Wrap the 'shoulds' in a 'must' so that at least one of
-        // the shoulds must match for the group to match.
-        boolNode.must(new BoolQuery().should(shoulds));
-    }
-
-    getSearchFieldsForClass(fieldClass: string): any[] {
-        return this.bibFields.filter(f => (
-            f.search_field() === 't' &&
-            f.search_group() === fieldClass
-        ));
     }
 }
 
