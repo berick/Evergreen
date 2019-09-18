@@ -96,6 +96,9 @@ Additional options may be passed to the elastic API to include holdings-level
 location and availability filtering.  (Note the client could add such filters, 
 but baking it into the API saves the client a lot of work for a common work flow).
 
+Facets are generated from ES and included in the API response.  No external 
+faceting or facet caching is required.
+
 == User Interface ==
 
 The branch includes an Elastic service baked into the Angular staff catalog. 
