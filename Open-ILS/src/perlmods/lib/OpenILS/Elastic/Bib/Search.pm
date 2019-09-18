@@ -95,8 +95,12 @@ my $BASE_PROPERTIES = {
     # Values from grouped fields are copied into the group field.
     # Here we make some assumptions about the general purpose of
     # each group.
+    # Note the ignore_above only affects the 'keyword' version of the
+    # field, the assumption being text that large would solely be
+    # searched via 'text' indexes.
     title => {
         type => 'keyword',
+        ignore_above => 256,
         normalizer => 'custom_lowercase',
         fields => {
             text => {type => 'text'},
@@ -105,6 +109,7 @@ my $BASE_PROPERTIES = {
     },
     author => {
         type => 'keyword',
+        ignore_above => 256,
         normalizer => 'custom_lowercase',
         fields => {
             text => {type => 'text'},
@@ -113,6 +118,7 @@ my $BASE_PROPERTIES = {
     },
     subject => {
         type => 'keyword',
+        ignore_above => 256,
         normalizer => 'custom_lowercase',
         fields => {
             text => {type => 'text'},
@@ -121,6 +127,7 @@ my $BASE_PROPERTIES = {
     },
     series => {
         type => 'keyword',
+        ignore_above => 256,
         normalizer => 'custom_lowercase',
         fields => {
             text => {type => 'text'},
@@ -132,6 +139,7 @@ my $BASE_PROPERTIES = {
         # keyword field, but we index it just the same (sans lowercase) 
         # for structural consistency with other group fields.
         type => 'keyword',
+        ignore_above => 256,
         fields => {
             text => {type => 'text'},
             text_folded => {type => 'text', analyzer => 'folding'}
@@ -140,6 +148,7 @@ my $BASE_PROPERTIES = {
     identifier => {
         # Avoid full-text indexing on identifier fields.
         type => 'keyword',
+        ignore_above => 256,
         normalizer => 'custom_lowercase',
     },
 
@@ -149,7 +158,10 @@ my $BASE_PROPERTIES = {
     se => {type => 'text'},
     su => {type => 'text'},
     kw => {type => 'text'},
-    id => {type => 'keyword'}
+    id => {
+        type => 'keyword',
+        ignore_above => 256
+    }
 };
 
 my %SHORT_GROUP_MAP = (
@@ -228,6 +240,7 @@ sub create_index {
 
             $def = {
                 type => 'keyword',
+                ignore_above => 256,
                 normalizer => 'custom_lowercase'
             };
         }
@@ -235,7 +248,10 @@ sub create_index {
         if ($field->facet_field eq 't' && $def->{fields}) {
             # Facet fields are used for aggregation which requires
             # an additional unaltered keyword field.
-            $def->{fields}->{facet} = {type => 'keyword'};
+            $def->{fields}->{facet} = {
+                type => 'keyword',
+                ignore_above => 256
+            };
         }
 
         $logger->debug("ES adding field $field_name: ". 
@@ -276,7 +292,7 @@ sub create_index {
             $self->es->indices->put_mapping({
                 index => $INDEX_NAME,
                 type  => 'record',
-                body  => {properties => {$field => $mappings->{$field}}}
+                body  => {dynamic => 'false', properties => {$field => $mappings->{$field}}}
             });
         };
 
