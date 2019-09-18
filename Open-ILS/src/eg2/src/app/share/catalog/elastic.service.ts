@@ -239,7 +239,15 @@ export class ElasticService {
         if (value === '' || value === null) { return; }
 
         const matchOp = ts.matchOp[idx];
-        const fieldClass = ts.fieldClass[idx];
+        let fieldClass = ts.fieldClass[idx];
+
+        if (fieldClass === 'jtitle') {
+            // Presented as a search class, but it's really a special
+            // title search.
+            fieldClass = 'title';
+            ts.ccvmFilters.bib_level.push('s');
+        }
+
         const textIndex = `${fieldClass}.text*`;
         let query;
 
