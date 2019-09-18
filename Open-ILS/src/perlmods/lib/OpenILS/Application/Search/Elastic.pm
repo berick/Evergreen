@@ -36,10 +36,15 @@ my $bib_fields;
 my $hidden_copy_statuses;
 my $hidden_copy_locations;
 my $avail_copy_statuses;
-our $enabled = {};
 
-sub child_init {
+# NOTE calling cstore functions in child_init is dicey because child_init
+# may be run before cstore is ready for requests.  Use a local init() instead.
+my $init_done = 0;
+sub init {
     my $class = shift;
+
+    return if $init_done;
+    $init_done = 1;
 
     my $e = new_editor();
 
@@ -157,6 +162,8 @@ __PACKAGE__->register_method(
 sub bib_search {
     my ($self, $client, $query, $options) = @_;
     $options ||= {};
+
+    init();
 
     my $staff = ($self->api_name =~ /staff/);
 
