@@ -26,7 +26,7 @@ configuration changes are needed.
 
 == Indexing Bib Records ==
 
-See /home/berick/code/Evergreen/Open-ILS/src/support-scripts/elastic-index.pl
+See Open-ILS/src/support-scripts/elastic-index.pl
 
 Examples:
 
