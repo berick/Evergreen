@@ -211,7 +211,10 @@ sub create_index {
         } foreach qw/title subject series keyword/;
     }
 
-    my $fields = new_editor()->retrieve_all_elastic_bib_field();
+    # elastic.bib_field has no primary key field, so retrieve_all won't work.
+    # Note the name value may be repeated across search group depending
+    # on local configuration.
+    my $fields = new_editor()->search_elastic_bib_field({name => {'!=' => undef}});
 
     for my $field (@$fields) {
 
