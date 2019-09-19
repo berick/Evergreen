@@ -48,7 +48,8 @@ sub init {
 
     my $e = new_editor();
 
-    $bib_fields = $e->retrieve_all_elastic_bib_field;
+    # no pkey
+    $bib_fields = $e->search_elastic_bib_field({name => {'!=' => undef}});
 
     my $stats = $e->json_query({
         select => {ccs => ['id', 'opac_visible', 'is_available']},
