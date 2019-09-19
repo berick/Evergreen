@@ -30,9 +30,6 @@ use base qw/OpenILS::Elastic::Bib/;
 
 my $INDEX_NAME = 'bib-search';
 
-# number of bibs to index per batch.
-my $BIB_BATCH_SIZE = 500;
-
 my $BASE_INDEX_SETTINGS = {
     analysis => {
         analyzer => {

@@ -25,8 +25,8 @@ use OpenILS::Utils::DateTime qw/interval_to_seconds/;
 use OpenILS::Elastic;
 use base qw/OpenILS::Elastic/;
 
-# number of bibs to index per batch.
-my $BIB_BATCH_SIZE = 500;
+# default number of bibs to index per batch.
+my $DEFAULT_BIB_BATCH_SIZE = 500;
 
 sub index {
     my $self = shift;
@@ -90,6 +90,7 @@ sub get_bib_ids {
     my $start_id = $state->{start_record} || 0;
     my $stop_id = $state->{stop_record};
     my $modified_since = $state->{modified_since};
+    my $batch_size = $state->{batch_size} || $DEFAULT_BIB_BATCH_SIZE;
 
     my ($select, $from, $where);
     if ($modified_since) {
@@ -111,7 +112,7 @@ sub get_bib_ids {
     # define the batches.
     my $order = "ORDER BY id";
 
-    my $sql = "$select $from $where $order LIMIT $BIB_BATCH_SIZE";
+    my $sql = "$select $from $where $order LIMIT $batch_size";
 
     my $ids = $self->get_db_rows($sql);
     return [ map {$_->{id}} @$ids ];
