@@ -6,8 +6,8 @@ import {NetService} from '@eg/core/net.service';
 import {PcrudService} from '@eg/core/pcrud.service';
 import {CatalogSearchContext} from './search-context';
 import {RequestBodySearch, MatchQuery, MultiMatchQuery, TermsQuery, Query, Sort,
-    PrefixQuery, NestedQuery, BoolQuery, TermQuery, WildcardQuery, RangeQuery
-    } from 'elastic-builder';
+    PrefixQuery, NestedQuery, BoolQuery, TermQuery, WildcardQuery, RangeQuery,
+    QueryStringQuery} from 'elastic-builder';
 
 @Injectable()
 export class ElasticService {
@@ -246,6 +246,21 @@ export class ElasticService {
             // title search.
             fieldClass = 'title';
             ts.ccvmFilters.bib_level.push('s');
+
+        } else if (fieldClass === 'keyword' &&
+            matchOp === 'contains' && value.match(/:/)) {
+
+            // A search where 'keyword' 'contains' a value with a ':'
+            // character is assumed to be a complex / query string search.
+            // NOTE: could handle this differently, e.g. provide an escape
+            // character (e.g. !title:potter), a dedicated matchOp, etc.
+            boolNode.must(
+                new QueryStringQuery(value)
+                    .defaultOperator('AND')
+                    .defaultField('keyword.text')
+            );
+
+            return;
         }
 
         const textIndex = `${fieldClass}.text*`;
