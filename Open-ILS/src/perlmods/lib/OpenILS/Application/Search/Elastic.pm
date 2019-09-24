@@ -36,6 +36,7 @@ my $bib_fields;
 my $hidden_copy_statuses;
 my $hidden_copy_locations;
 my $avail_copy_statuses;
+my $transcendant_sources;
 
 # NOTE calling cstore functions in child_init is dicey because child_init
 # may be run before cstore is ready for requests.  Use a local init() instead.
@@ -74,6 +75,10 @@ sub init {
     });
 
     $hidden_copy_locations = [map {$_->{id}} @$locs];
+
+    $transcendant_sources = [
+        map {$_->id} @{$e->search_config_bib_source({transcendant => 't'})}
+    ];
 
     return 1;
 }
@@ -364,6 +369,20 @@ sub add_elastic_holdings_filter {
 
     $logger->info("ES holdings filter is " . 
         OpenSRF::Utils::JSON->perl2JSON($filter));
+
+    # If we reach this point, we are performing some level of holdings
+    # filtering.  Transcendant bib records are considered visible and
+    # available, so allow them to bubble up through the holdings filter.
+    if (@$transcendant_sources) {
+        $filter = {
+            bool => {must => { # 'must' enforce at least one 'should'
+                bool => {should => [
+                    {terms => {bib_source => $transcendant_sources}},
+                    $filter
+                ]}
+            }}
+        };
+    }
 
     # array of filters in progress
     push(@{$elastic_query->{query}->{bool}->{filter}}, $filter);

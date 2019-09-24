@@ -49,9 +49,9 @@ my $BASE_INDEX_SETTINGS = {
 
 # Well-known bib-search index properties
 my $BASE_PROPERTIES = {
-    source      => {type => 'integer', index => 'false'},
-    create_date => {type => 'date', index => 'false'},
-    edit_date   => {type => 'date', index => 'false'},
+    bib_source  => {type => 'integer'},
+    create_date => {type => 'date'},
+    edit_date   => {type => 'date'},
 
     # Holdings summaries.  For bib-search, we don't need
     # copy-specific details, only aggregate visibility information.
