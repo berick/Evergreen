@@ -198,6 +198,10 @@ sub bib_search {
         # ES field collapse queries return counts for matched documents
         # instead of matched groups.  To determine the metarecord hit
         # count (up to 1k), fetch up to 1k responses and count them.
+        # NOTE we could make metabib searches less hinky by creating
+        # metabib-specific ES indexes, i.e. copy data from constituent
+        # records into grouped metabib indexes -- may require a separate
+        # ES index.
         $elastic_query->{from} = 0;
         $elastic_query->{size} = 1000;
     }
