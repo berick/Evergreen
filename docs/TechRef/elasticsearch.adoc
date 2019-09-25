@@ -132,6 +132,5 @@ It uses the elastic-builder module for creating the search structures.
 Some existing Evergreen features are not supported by the ES API, though in
 most if not all cases they can be added.
 
-* Metarecord searches
 * Popularity ranking
 
