@@ -52,6 +52,7 @@ my $BASE_PROPERTIES = {
     bib_source  => {type => 'integer'},
     create_date => {type => 'date'},
     edit_date   => {type => 'date'},
+    metarecord  => {type => 'integer'},
 
     # Holdings summaries.  For bib-search, we don't need
     # copy-specific details, only aggregate visibility information.
@@ -322,9 +323,11 @@ SELECT
     bre.edit_date, 
     bre.source AS bib_source,
     bre.deleted,
+    mmrsm.metarecord,
     (elastic.bib_record_properties(bre.id)).*
 FROM biblio.record_entry bre
-WHERE id IN ($ids_str)
+LEFT JOIN metabib.metarecord_source_map mmrsm ON (mmrsm.source = bre.id)
+WHERE bre.id IN ($ids_str)
 SQL
 
     return $self->get_db_rows($sql);
@@ -381,6 +384,7 @@ sub populate_bib_index_batch {
                 # some values are repeated per field. 
                 # extract them from the first entry.
                 $body->{bib_source} = $field->{bib_source};
+                $body->{metarecord} = $field->{metarecord};
 
                 # ES ikes the "T" separator for ISO dates
                 ($body->{create_date} = $field->{create_date}) =~ s/ /T/g;

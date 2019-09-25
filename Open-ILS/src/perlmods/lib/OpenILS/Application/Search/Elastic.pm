@@ -154,15 +154,23 @@ __PACKAGE__->register_method(
 __PACKAGE__->register_method(
     method   => 'bib_search',
     api_name => 'open-ils.search.elastic.bib_search.staff',
-    signature => {
-        desc => q/
-            Staff version of open-ils.search.elastic.bib_search
-
-        /
-    }
+    signature => {desc => q/Staff version of open-ils.search.elastic.bib_search /}
 );
 
-# Translate a bib search API call into something consumable by Elasticsearch
+__PACKAGE__->register_method(
+    method   => 'bib_search',
+    api_name => 'open-ils.search.elastic.bib_search.metabib',
+    signature => {desc => q/Staff version of open-ils.search.elastic.bib_search /}
+);
+
+__PACKAGE__->register_method(
+    method   => 'bib_search',
+    api_name => 'open-ils.search.elastic.bib_search.metabib.staff',
+    signature => {desc => q/Staff version of open-ils.search.elastic.bib_search /}
+);
+
+
+# Augment and relay an Elastic query to the Elasticsearch backend.
 # Translate search results into a structure consistent with a bib search
 # API response.
 sub bib_search {
@@ -172,14 +180,27 @@ sub bib_search {
     init();
 
     my $staff = ($self->api_name =~ /staff/);
+    my $meta = ($self->api_name =~ /metabib/);
 
     return {count => 0, ids => []} unless $query && $query->{query};
 
     # Only ask ES to return the 'id' field from the source bibs in
     # the response object, since that's all we need.
-    $query->{_source} = ['id'];
+    $query->{_source} = [$meta ? 'metarecord' : 'id'];
 
     my $elastic_query = compile_elastic_query($query, $options, $staff);
+
+    my $from = $elastic_query->{from} || 0;
+    my $size = $elastic_query->{size} || 20;
+
+    if ($meta) {
+        $elastic_query->{collapse} = {field => 'metarecord'};
+        # ES field collapse queries return counts for matched documents
+        # instead of matched groups.  To determine the metarecord hit
+        # count (up to 1k), fetch up to 1k responses and count them.
+        $elastic_query->{from} = 0;
+        $elastic_query->{size} = 1000;
+    }
 
     my $es = OpenILS::Elastic::BibSearch->new('main');
 
@@ -198,12 +219,26 @@ sub bib_search {
     # This is not guaranteed to be 1-to-1 given key shuffling, but meh.
     my $cache_key = md5_hex(OpenSRF::Utils::JSON->perl2JSON($elastic_query));
 
+    my $hits = $results->{hits}->{hits};
+    if ($meta) {
+        # count the number of groups represented in the result set.
+        $results->{hits}->{total} = scalar(@$hits);
+
+        # Only return the requested window of hits to the caller.
+        $hits = [ grep {defined $_} @$hits[$from .. ($from + $size)] ];
+    }
+
+    my $ids = [
+        map {[
+            $meta ? $_->{_source}->{'metarecord'} : $_->{_id}, 
+            undef, 
+            $_->{_score}
+        ]} @$hits
+    ];
+
     return {
+        ids => $ids,
         count => $results->{hits}->{total},
-        ids => [
-            map { [$_->{_id}, undef, $_->{_score}] } 
-                grep {defined $_} @{$results->{hits}->{hits}}
-        ],
         facets => format_facets($results->{aggregations}),
         cache_key => $cache_key,
         facet_key => $cache_key.'_facets'

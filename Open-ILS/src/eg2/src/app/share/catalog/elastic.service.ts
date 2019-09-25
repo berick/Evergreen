@@ -25,7 +25,6 @@ export class ElasticService {
         if (ctx.marcSearch.isSearchable()) { return true; }
 
         if ( ctx.termSearch.isSearchable() &&
-            !ctx.termSearch.groupByMetarecord &&
             !ctx.termSearch.fromMetarecord &&
             !ctx.termSearch.hasBrowseEntry) {
             return true;
@@ -45,9 +44,11 @@ export class ElasticService {
 
         const requestBody = this.compileRequestBody(ctx);
 
-        const method = ctx.isStaff ?
-            'open-ils.search.elastic.bib_search.staff' :
-            'open-ils.search.elastic.bib_search';
+        let method = ctx.termSearch.isMetarecordSearch() ?
+            'open-ils.search.elastic.bib_search.metabib' :
+            'open-ils.search.elastic.bib_search'
+
+        if (ctx.isStaff) { method += '.staff'; }
 
         // Extract just the bits that get sent to ES.
         const elasticStruct: Object = requestBody.toJSON();
