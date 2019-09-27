@@ -180,17 +180,17 @@ sub language_analyzers {
     return ("english");
 }
 
-sub create_index_mappings {
-    my ($self, $custom_mappings) = @_;
+sub create_index_properties {
+    my ($self, $custom_properties) = @_;
 
-    if ($custom_mappings) {
-        $logger->info("ES generating index mappings from custom file $custom_mappings");
+    if ($custom_properties) {
+        $logger->info("ES generating index mappings from custom file $custom_properties");
 
         my $json;
         {
             local $/=undef;
 
-            if (!open(MAPPING_FILE, $custom_mappings)) {
+            if (!open(MAPPING_FILE, $custom_properties)) {
                 $logger->error("ES cannot open mappings file: $!");
                 return undef;
             }
@@ -200,14 +200,14 @@ sub create_index_mappings {
         }
 
         my $struct = OpenSRF::Utils::JSON->JSON2perl($json);
-        return $struct->{'bib-search'}->{'mappings'};
+        return $struct->{'bib-search'}->{mappings}->{record}->{properties};
     }
 
-    my $mappings = $BASE_PROPERTIES;
+    my $properties = $BASE_PROPERTIES;
 
     # Add the language analyzers to the MARC mappings
     for my $lang_analyzer ($self->language_analyzers) {
-        $mappings->{marc}->{properties}->{value}->{fields}->{"text_$lang_analyzer"} = {
+        $properties->{marc}->{properties}->{value}->{fields}->{"text_$lang_analyzer"} = {
             type => 'text',
             analyzer => $lang_analyzer
         };
@@ -215,7 +215,7 @@ sub create_index_mappings {
         # Apply language analysis to grouped fields, however skip
         # the 'author' and 'identifier' groups since it makes less sense to 
         # language-analyze proper names and identifiers.
-        $mappings->{$_}->{fields}->{"text_$lang_analyzer"} = {
+        $properties->{$_}->{fields}->{"text_$lang_analyzer"} = {
             type => 'text',
             analyzer => $lang_analyzer
         } foreach qw/title subject series keyword/;
@@ -237,7 +237,7 @@ sub create_index_mappings {
         if ($search_group) {
 
             # Use the same fields and analysis as the 'grouped' field.
-            $def = clone($mappings->{$search_group});
+            $def = clone($properties->{$search_group});
             $def->{copy_to} = [$search_group, $SHORT_GROUP_MAP{$search_group}];
 
             # Apply ranking boost to each analysis variation.
@@ -270,14 +270,14 @@ sub create_index_mappings {
         $logger->debug("ES adding field $field_name: ". 
             OpenSRF::Utils::JSON->perl2JSON($def));
 
-        $mappings->{$field_name} = $def;
+        $properties->{$field_name} = $def;
     }
 
-    return $mappings;
+    return $properties;
 }
 
 sub create_index {
-    my ($self, $custom_mappings) = @_;
+    my ($self, $custom_properties) = @_;
 
     if ($self->es->indices->exists(index => $INDEX_NAME)) {
         $logger->warn("ES index '$INDEX_NAME' already exists");
@@ -287,7 +287,7 @@ sub create_index {
     $logger->info(
         "ES creating index '$INDEX_NAME' on cluster '".$self->cluster."'");
 
-    my $mappings = $self->create_index_mappings($custom_mappings);
+    my $properties = $self->create_index_properties($custom_properties);
 
     my $settings = $BASE_INDEX_SETTINGS;
     $settings->{number_of_replicas} = scalar(@{$self->nodes});
@@ -313,19 +313,19 @@ sub create_index {
     # Create each mapping one at a time instead of en masse so we 
     # can more easily report when mapping creation fails.
 
-    for my $field (keys %$mappings) {
+    for my $field (keys %$properties) {
         $logger->info("ES Creating index mapping for field $field");
 
         eval { 
             $self->es->indices->put_mapping({
                 index => $INDEX_NAME,
                 type  => 'record',
-                body  => {dynamic => 'false', properties => {$field => $mappings->{$field}}}
+                body  => {dynamic => 'false', properties => {$field => $properties->{$field}}}
             });
         };
 
         if ($@) {
-            my $mapjson = OpenSRF::Utils::JSON->perl2JSON($mappings->{$field});
+            my $mapjson = OpenSRF::Utils::JSON->perl2JSON($properties->{$field});
 
             $logger->error("ES failed to create index mapping: " .
                 "index=$INDEX_NAME field=$field error=$@ mapping=$mapjson");
@@ -397,8 +397,8 @@ sub populate_bib_index_batch {
     # Ask ES what the index properties are so we can avoid passing data
     # that will not be indexed, since ES will store the data on the source
     # object even if it's not indexed.  This reduces bulk.
-    my $properties = # nestier than expected, not sure why.
-        $def->{$self->index_name}->{mappings}->{record}->{properties}->{record}->{properties};
+    my $properties =
+        $def->{$self->index_name}->{mappings}->{record}->{properties};
 
     for my $bib_id (@$bib_ids) {
 
