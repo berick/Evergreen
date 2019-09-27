@@ -180,16 +180,28 @@ sub language_analyzers {
     return ("english");
 }
 
-sub create_index {
-    my ($self) = @_;
+sub create_index_mappings {
+    my ($self, $custom_mappings) = @_;
 
-    if ($self->es->indices->exists(index => $INDEX_NAME)) {
-        $logger->warn("ES index '$INDEX_NAME' already exists");
-        return;
+    if ($custom_mappings) {
+        $logger->info("ES generating index mappings from custom file $custom_mappings");
+
+        my $json;
+        {
+            local $/=undef;
+
+            if (!open(MAPPING_FILE, $custom_mappings)) {
+                $logger->error("ES cannot open mappings file: $!");
+                return undef;
+            }
+
+            $json = <MAPPING_FILE>;
+            close MAPPING_FILE;
+        }
+
+        my $struct = OpenSRF::Utils::JSON->JSON2perl($json);
+        return $struct->{'bib-search'}->{'mappings'};
     }
-
-    $logger->info(
-        "ES creating index '$INDEX_NAME' on cluster '".$self->cluster."'");
 
     my $mappings = $BASE_PROPERTIES;
 
@@ -261,6 +273,22 @@ sub create_index {
         $mappings->{$field_name} = $def;
     }
 
+    return $mappings;
+}
+
+sub create_index {
+    my ($self, $custom_mappings) = @_;
+
+    if ($self->es->indices->exists(index => $INDEX_NAME)) {
+        $logger->warn("ES index '$INDEX_NAME' already exists");
+        return;
+    }
+
+    $logger->info(
+        "ES creating index '$INDEX_NAME' on cluster '".$self->cluster."'");
+
+    my $mappings = $self->create_index_mappings($custom_mappings);
+
     my $settings = $BASE_INDEX_SETTINGS;
     $settings->{number_of_replicas} = scalar(@{$self->nodes});
     $settings->{number_of_shards} = $self->index->num_shards;
@@ -269,7 +297,6 @@ sub create_index {
         index => $INDEX_NAME,
         body => {settings => $settings}
     };
-
 
     $logger->info("ES creating index '$INDEX_NAME'");
 

@@ -20,6 +20,7 @@ my $stop_record;
 my $modified_since;
 my $max_duration;
 my $batch_size = 500;
+my $custom_mappings;
 
 # Database settings read from ENV by default.
 my $db_host = $ENV{PGHOST} || 'localhost';
@@ -42,6 +43,7 @@ GetOptions(
     'modified-since=s'  => \$modified_since,
     'max-duration=s'    => \$max_duration,
     'batch-size=s'      => \$batch_size,
+    'custom-mappings=s' => \$custom_mappings,
     'db-name=s'         => \$db_name,
     'db-host=s'         => \$db_host,
     'db-port=s'         => \$db_port,
@@ -112,6 +114,23 @@ sub help {
                 are provided (e.g. --index-start-record) then all 
                 applicable values will be indexed.
 
+            --custom-mappings
+                Path to a JSON file continaining custom index mapping
+                definitions.  The mapppings must match the stock mapping
+                structure, fields may only be removed.  Added fields will
+                be ignored at data population time (barring code changes).
+
+                For example:
+
+                curl http://ELASTIC_HOST/bib-search > mappings.json
+                # edit mappings.json and remove stuff you don't want.
+                $0 --create-index --custom-mappings mappings.json
+
+                Note that removing field mappings does not remove the
+                data from the source document, it only means the data
+                will not be analyzed/procesed/indexed and it will not be
+                searchable.
+
 HELP
     exit(0);
 }
@@ -141,7 +160,7 @@ if ($delete_index) {
 }
 
 if ($create_index) {
-    $es->create_index or die "Index create failed.\n";
+    $es->create_index($custom_mappings) or die "Index create failed.\n";
 }
 
 if ($populate) {
