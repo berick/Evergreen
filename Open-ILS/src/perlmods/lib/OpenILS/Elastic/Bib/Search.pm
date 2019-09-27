@@ -392,6 +392,13 @@ sub populate_bib_index_batch {
 
     my $holdings = $self->load_holdings($bib_ids);
     my $marc = $self->load_marc($bib_ids);
+    my $def = $self->get_index_def;
+
+    # Ask ES what the index properties are so we can avoid passing data
+    # that will not be indexed, since ES will store the data on the source
+    # object even if it's not indexed.  This reduces bulk.
+    my $properties = # nestier than expected, not sure why.
+        $def->{$self->index_name}->{mappings}->{record}->{properties}->{record}->{properties};
 
     for my $bib_id (@$bib_ids) {
 
@@ -429,7 +436,7 @@ sub populate_bib_index_batch {
             } elsif ($fname eq 'identifier|issn') {
                 index_issns($body, $value);
             } else {
-                append_field_value($body, $fname, $value);
+                append_field_value($body, $fname, $value, $properties);
             }
         }
 
@@ -495,7 +502,11 @@ sub index_issns {
 }
 
 sub append_field_value {
-    my ($body, $fname, $value) = @_;
+    my ($body, $fname, $value, $properties) = @_;
+
+    # Confirm the data is wanted in the index before passing to ES to
+    # reduce the overall data footprint.
+    return unless $properties->{$fname};
 
     if ($body->{$fname}) {
         if (ref $body->{$fname}) {

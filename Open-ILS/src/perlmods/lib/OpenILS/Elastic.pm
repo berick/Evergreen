@@ -263,6 +263,10 @@ sub truncate_value {
     return $value;
 }
 
+sub get_index_def {
+    my ($self) = @_;
+    return $self->es->indices->get(index => $self->index_name);
+}
 
 
 
