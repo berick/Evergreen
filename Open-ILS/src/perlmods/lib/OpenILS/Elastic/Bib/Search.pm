@@ -344,7 +344,7 @@ sub get_bib_data {
     my $ids_str = join(',', @$record_ids);
 
     my $sql = <<SQL;
-SELECT 
+SELECT DISTINCT ON (bre.id, search_group, name, value)
     bre.id, 
     bre.create_date, 
     bre.edit_date, 
