@@ -110,7 +110,7 @@ sub load_config {
     my $e = new_editor();
     my $cluster = $self->cluster;
 
-    $self->{nodes} = $e->search_elastic_node({cluster => $cluster});
+    $self->{nodes} = $e->search_elastic_node({cluster => $cluster, active => 't'});
 
     unless (@{$self->nodes}) {
         $logger->error("ES no nodes defined for cluster $cluster");
