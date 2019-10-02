@@ -5,7 +5,7 @@ use Getopt::Long;
 use OpenSRF::Utils::JSON;
 use OpenILS::Utils::Fieldmapper;
 use OpenILS::Utils::CStoreEditor;
-use OpenILS::Elastic::Bib::Search;
+use OpenILS::Elastic::BibSearch;
 
 my $help;
 my $osrf_config = '/openils/conf/opensrf_core.xml';
@@ -146,7 +146,7 @@ OpenILS::Utils::CStoreEditor::init();
 my $es;
 
 if ($index_name eq 'bib-search') {
-    $es = OpenILS::Elastic::Bib::Search->new($cluster);
+    $es = OpenILS::Elastic::BibSearch->new($cluster);
 }
 
 if (!$es) {
