@@ -122,15 +122,9 @@ sub help {
 
                 For example:
 
-                curl http://ELASTIC_HOST/bib-search > mappings.json
+                curl http://ELASTIC_HOST/bib-search?pretty > mappings.json
                 # edit mappings.json and remove stuff you don't want.
                 $0 --create-index --custom-mappings mappings.json
-
-                Note that removing field mappings does not remove the
-                data from the source document, it only means the data
-                will not be analyzed/procesed/indexed and it will not be
-                searchable.
-
 HELP
     exit(0);
 }

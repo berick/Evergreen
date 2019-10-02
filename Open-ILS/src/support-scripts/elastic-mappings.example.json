@@ -1,0 +1,818 @@
+{
+  "//": "File initially generated from a stock Evergreen Elastic index and trimmed to reduce duplication and remove fields that are not typically searched via the catalog. See --custom-mappings documentation in elastic-index.pl",
+  "bib-search": {
+    "aliases": {},
+    "mappings": {
+      "record": {
+        "dynamic": "false",
+        "properties": {
+          "au": {
+            "type": "text"
+          },
+          "audience": {
+            "type": "keyword",
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "author": {
+            "type": "keyword",
+            "fields": {
+              "text": {
+                "type": "text"
+              },
+              "text_folded": {
+                "type": "text",
+                "analyzer": "folding"
+              }
+            },
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "authorsort": {
+            "type": "keyword",
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "author|conference": {
+            "type": "keyword",
+            "fields": {
+              "facet": {
+                "type": "keyword",
+                "ignore_above": 256
+              },
+              "text": {
+                "type": "text"
+              },
+              "text_folded": {
+                "type": "text",
+                "analyzer": "folding"
+              }
+            },
+            "copy_to": [
+              "author",
+              "au"
+            ],
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "author|corporate": {
+            "type": "keyword",
+            "fields": {
+              "facet": {
+                "type": "keyword",
+                "ignore_above": 256
+              },
+              "text": {
+                "type": "text"
+              },
+              "text_folded": {
+                "type": "text",
+                "analyzer": "folding"
+              }
+            },
+            "copy_to": [
+              "author",
+              "au"
+            ],
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "author|creator": {
+            "type": "keyword",
+            "fields": {
+              "text": {
+                "type": "text"
+              },
+              "text_folded": {
+                "type": "text",
+                "analyzer": "folding"
+              }
+            },
+            "copy_to": [
+              "author",
+              "au"
+            ],
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "author|first_author": {
+            "type": "keyword",
+            "fields": {
+              "text": {
+                "type": "text"
+              },
+              "text_folded": {
+                "type": "text",
+                "analyzer": "folding"
+              }
+            },
+            "copy_to": [
+              "author",
+              "au"
+            ],
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "author|other": {
+            "type": "keyword",
+            "fields": {
+              "facet": {
+                "type": "keyword",
+                "ignore_above": 256
+              },
+              "text": {
+                "type": "text"
+              },
+              "text_folded": {
+                "type": "text",
+                "analyzer": "folding"
+              }
+            },
+            "copy_to": [
+              "author",
+              "au"
+            ],
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "author|personal": {
+            "type": "keyword",
+            "fields": {
+              "facet": {
+                "type": "keyword",
+                "ignore_above": 256
+              },
+              "text": {
+                "type": "text"
+              },
+              "text_folded": {
+                "type": "text",
+                "analyzer": "folding"
+              }
+            },
+            "copy_to": [
+              "author",
+              "au"
+            ],
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "bib_level": {
+            "type": "keyword",
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "bib_source": {
+            "type": "integer"
+          },
+          "cat_form": {
+            "type": "keyword",
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "create_date": {
+            "type": "date"
+          },
+          "date1": {
+            "type": "keyword",
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "date2": {
+            "type": "keyword",
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "edit_date": {
+            "type": "date"
+          },
+          "holdings": {
+            "type": "nested",
+            "properties": {
+              "circ_lib": {
+                "type": "integer"
+              },
+              "circulate": {
+                "type": "boolean"
+              },
+              "location": {
+                "type": "integer"
+              },
+              "opac_visible": {
+                "type": "boolean"
+              },
+              "status": {
+                "type": "integer"
+              }
+            }
+          },
+          "icon_format": {
+            "type": "keyword",
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "id": {
+            "type": "keyword",
+            "ignore_above": 256
+          },
+          "identifier": {
+            "type": "keyword",
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "identifier|accession": {
+            "type": "keyword",
+            "copy_to": [
+              "identifier",
+              "id"
+            ],
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "identifier|authority_id": {
+            "type": "keyword",
+            "copy_to": [
+              "identifier",
+              "id"
+            ],
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "identifier|bibcn": {
+            "type": "keyword",
+            "copy_to": [
+              "identifier",
+              "id"
+            ],
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "identifier|bibid": {
+            "type": "keyword",
+            "copy_to": [
+              "identifier",
+              "id"
+            ],
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "identifier|ean": {
+            "type": "keyword",
+            "copy_to": [
+              "identifier",
+              "id"
+            ],
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "identifier|edition": {
+            "type": "keyword",
+            "copy_to": [
+              "identifier",
+              "id"
+            ],
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "identifier|genre": {
+            "type": "keyword",
+            "copy_to": [
+              "identifier",
+              "id"
+            ],
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "identifier|isbn": {
+            "type": "keyword",
+            "copy_to": [
+              "identifier",
+              "id"
+            ],
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "identifier|ismn": {
+            "type": "keyword",
+            "copy_to": [
+              "identifier",
+              "id"
+            ],
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "identifier|isrc": {
+            "type": "keyword",
+            "copy_to": [
+              "identifier",
+              "id"
+            ],
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "identifier|issn": {
+            "type": "keyword",
+            "copy_to": [
+              "identifier",
+              "id"
+            ],
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "identifier|lccn": {
+            "type": "keyword",
+            "copy_to": [
+              "identifier",
+              "id"
+            ],
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "identifier|publisher": {
+            "type": "keyword",
+            "copy_to": [
+              "identifier",
+              "id"
+            ],
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "identifier|scn": {
+            "type": "keyword",
+            "copy_to": [
+              "identifier",
+              "id"
+            ],
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "identifier|sici": {
+            "type": "keyword",
+            "copy_to": [
+              "identifier",
+              "id"
+            ],
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "identifier|tcn": {
+            "type": "keyword",
+            "copy_to": [
+              "identifier",
+              "id"
+            ],
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "identifier|upc": {
+            "type": "keyword",
+            "copy_to": [
+              "identifier",
+              "id"
+            ],
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "item_form": {
+            "type": "keyword",
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "item_lang": {
+            "type": "keyword",
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "item_type": {
+            "type": "keyword",
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "keyword": {
+            "type": "keyword",
+            "fields": {
+              "text": {
+                "type": "text"
+              },
+              "text_english": {
+                "type": "text",
+                "analyzer": "english"
+              },
+              "text_folded": {
+                "type": "text",
+                "analyzer": "folding"
+              }
+            },
+            "ignore_above": 256
+          },
+          "keyword|keyword": {
+            "type": "keyword",
+            "fields": {
+              "text": {
+                "type": "text"
+              },
+              "text_english": {
+                "type": "text",
+                "analyzer": "english"
+              },
+              "text_folded": {
+                "type": "text",
+                "analyzer": "folding"
+              }
+            },
+            "copy_to": [
+              "keyword",
+              "kw"
+            ],
+            "ignore_above": 256
+          },
+          "kw": {
+            "type": "text"
+          },
+          "lit_form": {
+            "type": "keyword",
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "marc": {
+            "type": "nested",
+            "properties": {
+              "subfield": {
+                "type": "keyword",
+                "normalizer": "custom_lowercase"
+              },
+              "tag": {
+                "type": "keyword",
+                "normalizer": "custom_lowercase"
+              },
+              "value": {
+                "type": "text",
+                "fields": {
+                  "text_english": {
+                    "type": "text",
+                    "analyzer": "english"
+                  },
+                  "text_folded": {
+                    "type": "text",
+                    "analyzer": "folding"
+                  }
+                }
+              }
+            }
+          },
+          "metarecord": {
+            "type": "integer"
+          },
+          "se": {
+            "type": "text"
+          },
+          "search_format": {
+            "type": "keyword",
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "series": {
+            "type": "keyword",
+            "fields": {
+              "text": {
+                "type": "text"
+              },
+              "text_english": {
+                "type": "text",
+                "analyzer": "english"
+              },
+              "text_folded": {
+                "type": "text",
+                "analyzer": "folding"
+              }
+            },
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "series|seriestitle": {
+            "type": "keyword",
+            "fields": {
+              "facet": {
+                "type": "keyword",
+                "ignore_above": 256
+              },
+              "text": {
+                "type": "text"
+              },
+              "text_english": {
+                "type": "text",
+                "analyzer": "english"
+              },
+              "text_folded": {
+                "type": "text",
+                "analyzer": "folding"
+              }
+            },
+            "copy_to": [
+              "series",
+              "se"
+            ],
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "sr_format": {
+            "type": "keyword",
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "su": {
+            "type": "text"
+          },
+          "subject": {
+            "type": "keyword",
+            "fields": {
+              "text": {
+                "type": "text"
+              },
+              "text_english": {
+                "type": "text",
+                "analyzer": "english"
+              },
+              "text_folded": {
+                "type": "text",
+                "analyzer": "folding"
+              }
+            },
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "subject|geographic": {
+            "type": "keyword",
+            "fields": {
+              "facet": {
+                "type": "keyword",
+                "ignore_above": 256
+              },
+              "text": {
+                "type": "text"
+              },
+              "text_english": {
+                "type": "text",
+                "analyzer": "english"
+              },
+              "text_folded": {
+                "type": "text",
+                "analyzer": "folding"
+              }
+            },
+            "copy_to": [
+              "subject",
+              "su"
+            ],
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "subject|name": {
+            "type": "keyword",
+            "fields": {
+              "facet": {
+                "type": "keyword",
+                "ignore_above": 256
+              },
+              "text": {
+                "type": "text"
+              },
+              "text_english": {
+                "type": "text",
+                "analyzer": "english"
+              },
+              "text_folded": {
+                "type": "text",
+                "analyzer": "folding"
+              }
+            },
+            "copy_to": [
+              "subject",
+              "su"
+            ],
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "subject|temporal": {
+            "type": "keyword",
+            "fields": {
+              "facet": {
+                "type": "keyword",
+                "ignore_above": 256
+              },
+              "text": {
+                "type": "text"
+              },
+              "text_english": {
+                "type": "text",
+                "analyzer": "english"
+              },
+              "text_folded": {
+                "type": "text",
+                "analyzer": "folding"
+              }
+            },
+            "copy_to": [
+              "subject",
+              "su"
+            ],
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "subject|topic": {
+            "type": "keyword",
+            "fields": {
+              "facet": {
+                "type": "keyword",
+                "ignore_above": 256
+              },
+              "text": {
+                "type": "text"
+              },
+              "text_english": {
+                "type": "text",
+                "analyzer": "english"
+              },
+              "text_folded": {
+                "type": "text",
+                "analyzer": "folding"
+              }
+            },
+            "copy_to": [
+              "subject",
+              "su"
+            ],
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "ti": {
+            "type": "text"
+          },
+          "title": {
+            "type": "keyword",
+            "fields": {
+              "text": {
+                "type": "text"
+              },
+              "text_english": {
+                "type": "text",
+                "analyzer": "english"
+              },
+              "text_folded": {
+                "type": "text",
+                "analyzer": "folding"
+              }
+            },
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "titlesort": {
+            "type": "keyword",
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "title|abbreviated": {
+            "type": "keyword",
+            "fields": {
+              "text": {
+                "type": "text"
+              },
+              "text_english": {
+                "type": "text",
+                "analyzer": "english"
+              },
+              "text_folded": {
+                "type": "text",
+                "analyzer": "folding"
+              }
+            },
+            "copy_to": [
+              "title",
+              "ti"
+            ],
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "title|alternative": {
+            "type": "keyword",
+            "fields": {
+              "text": {
+                "type": "text"
+              },
+              "text_english": {
+                "type": "text",
+                "analyzer": "english"
+              },
+              "text_folded": {
+                "type": "text",
+                "analyzer": "folding"
+              }
+            },
+            "copy_to": [
+              "title",
+              "ti"
+            ],
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "title|maintitle": {
+            "type": "keyword",
+            "fields": {
+              "text": {
+                "type": "text",
+                "boost": 10
+              },
+              "text_english": {
+                "type": "text",
+                "boost": 10,
+                "analyzer": "english"
+              },
+              "text_folded": {
+                "type": "text",
+                "boost": 10,
+                "analyzer": "folding"
+              }
+            },
+            "copy_to": [
+              "title",
+              "ti"
+            ],
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "title|proper": {
+            "type": "keyword",
+            "fields": {
+              "text": {
+                "type": "text"
+              },
+              "text_english": {
+                "type": "text",
+                "analyzer": "english"
+              },
+              "text_folded": {
+                "type": "text",
+                "analyzer": "folding"
+              }
+            },
+            "copy_to": [
+              "title",
+              "ti"
+            ],
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "title|translated": {
+            "type": "keyword",
+            "fields": {
+              "text": {
+                "type": "text"
+              },
+              "text_english": {
+                "type": "text",
+                "analyzer": "english"
+              },
+              "text_folded": {
+                "type": "text",
+                "analyzer": "folding"
+              }
+            },
+            "copy_to": [
+              "title",
+              "ti"
+            ],
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "title|uniform": {
+            "type": "keyword",
+            "fields": {
+              "text": {
+                "type": "text"
+              },
+              "text_english": {
+                "type": "text",
+                "analyzer": "english"
+              },
+              "text_folded": {
+                "type": "text",
+                "analyzer": "folding"
+              }
+            },
+            "copy_to": [
+              "title",
+              "ti"
+            ],
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          },
+          "vr_format": {
+            "type": "keyword",
+            "ignore_above": 256,
+            "normalizer": "custom_lowercase"
+          }
+        }
+      }
+    }
+  }
+}

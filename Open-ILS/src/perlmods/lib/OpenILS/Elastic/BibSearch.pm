@@ -17,6 +17,9 @@ use strict;
 use warnings;
 use Encode;
 use DateTime;
+use Clone 'clone';
+use Business::ISBN;
+use Business::ISSN;
 use Time::HiRes qw/time/;
 use OpenSRF::Utils::Logger qw/:logger/;
 use OpenSRF::Utils::JSON;
@@ -320,7 +323,7 @@ sub create_index {
             $self->es->indices->put_mapping({
                 index => $INDEX_NAME,
                 type  => 'record',
-                body  => {dynamic => 'false', properties => {$field => $properties->{$field}}}
+                body  => {dynamic => 'strict', properties => {$field => $properties->{$field}}}
             });
         };
 
@@ -559,12 +562,11 @@ SQL
             unless $holdings->{$copy->{record}};
 
         push(@{$holdings->{$copy->{record}}}, {
-            count => $copy->{count},
             status => $copy->{status},
             circ_lib => $copy->{circ_lib},
             location => $copy->{location},
             circulate => $copy->{circulate} ? 'true' : 'false',
-            opac_visbile => $copy->{opac_visible} ? 'true' : 'false'
+            opac_visible => $copy->{opac_visible} ? 'true' : 'false'
         });
     }
 
