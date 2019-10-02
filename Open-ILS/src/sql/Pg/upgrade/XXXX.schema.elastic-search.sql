@@ -98,7 +98,7 @@ BEGIN
             WHERE mraf.id = $$ || QUOTE_LITERAL(bre_id) || $$
             UNION
 
-            -- metabib field entries
+            -- metabib field search/facet entries
             SELECT 
                 cmf.field_class AS search_group, 
                 cmf.name, 
@@ -112,26 +112,18 @@ BEGIN
                     mfe.value
                 END AS value
             FROM (
-                SELECT * FROM metabib.title_field_entry mtfe
-                    WHERE mtfe.source = $$ || QUOTE_LITERAL(bre_id) || $$ 
-                UNION 
-                SELECT * FROM metabib.author_field_entry mafe
-                    WHERE mafe.source = $$ || QUOTE_LITERAL(bre_id) || $$ 
-                UNION 
-                SELECT * FROM metabib.subject_field_entry msfe
-                    WHERE msfe.source = $$ || QUOTE_LITERAL(bre_id) || $$
-                UNION 
-                SELECT * FROM metabib.series_field_entry msrfe
-                    WHERE msrfe.source = $$ || QUOTE_LITERAL(bre_id) || $$ 
-                UNION 
-                SELECT * FROM metabib.keyword_field_entry mkfe
-                    WHERE mkfe.source = $$ || QUOTE_LITERAL(bre_id) || $$
-                UNION 
-                SELECT * FROM metabib.identifier_field_entry mife
-                    WHERE mife.source = $$ || QUOTE_LITERAL(bre_id) || $$
-            ) mfe
-            JOIN config.metabib_field cmf ON (cmf.id = mfe.field)
-            WHERE (cmf.search_field OR cmf.facet_field)
+                -- Extract the values from the source MARC record instead
+                -- of pulling them from the metabib.*_field_entry tables.
+                -- This allows use of Elastic without requiring search/facet
+                -- fields be ingested in Evergreen (since that data will no
+                -- longer be used by EG).
+                SELECT * FROM biblio.extract_metabib_field_entry(
+                    $$ || QUOTE_LITERAL(bre_id) || $$, ' ', '{facet,search}',
+                    (SELECT ARRAY_AGG(id) FROM config.metabib_field 
+                        WHERE search_field OR facet_field)
+                )
+            ) compiled
+            JOIN config.metabib_field cmf ON (cmf.id = compiled.field)
         ) record
     $$;
 END $FUNK$ LANGUAGE PLPGSQL;
