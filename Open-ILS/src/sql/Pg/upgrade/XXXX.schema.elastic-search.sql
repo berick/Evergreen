@@ -102,14 +102,14 @@ BEGIN
             SELECT 
                 cmf.field_class AS search_group, 
                 cmf.name, 
-                mfe.source, 
+                compiled.source, 
                 -- Index individual values instead of string-joined values
                 -- so they may be treated individually.  This is useful,
                 -- for example, when aggregating on subjects.
                 CASE WHEN cmf.joiner IS NOT NULL THEN
-                    REGEXP_SPLIT_TO_TABLE(mfe.value, cmf.joiner)
+                    REGEXP_SPLIT_TO_TABLE(compiled.value, cmf.joiner)
                 ELSE
-                    mfe.value
+                    compiled.value
                 END AS value
             FROM (
                 -- Extract the values from the source MARC record instead
