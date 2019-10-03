@@ -255,12 +255,7 @@ sub search {
 # at 1/4 the limit to accomodate all UTF-8 chars.
 sub truncate_value {
     my ($self, $value) = @_;
-
-    if (length(Encode::encode('UTF-8', $value)) > 32760) {
-        $value = substr($value, 0, 8190);
-    }
-
-    return $value;
+    return substr($value, 0, 8190);
 }
 
 sub get_index_def {

@@ -375,13 +375,6 @@ sub populate_bib_index_batch {
 
     my $holdings = $self->load_holdings($bib_ids);
     my $marc = $self->load_marc($bib_ids);
-    my $def = $self->get_index_def;
-
-    # Ask ES what the index properties are so we can avoid passing data
-    # that will not be indexed, since ES will store the data on the source
-    # object even if it's not indexed.  This reduces bulk.
-    my $properties =
-        $def->{$self->index_name}->{mappings}->{record}->{properties};
 
     for my $bib_id (@$bib_ids) {
 
@@ -411,6 +404,9 @@ sub populate_bib_index_batch {
             my $fclass = $field->{search_group};
             my $fname = $field->{name};
             my $value = $field->{value};
+
+            next unless defined $value && $value ne '';
+
             $fname = "$fclass|$fname" if $fclass;
             $value = $self->truncate_value($value);
 
@@ -419,7 +415,7 @@ sub populate_bib_index_batch {
             } elsif ($fname eq 'identifier|issn') {
                 index_issns($body, $value);
             } else {
-                append_field_value($body, $fname, $value, $properties);
+                append_field_value($body, $fname, $value);
             }
         }
 
@@ -446,15 +442,17 @@ sub index_isbns {
     # Chop up the collected raw values into parts and let
     # Business::* tell us which parts looks like ISBNs.
     for my $token (split(/ /, $value)) {
-        my $isbn = Business::ISBN->new($token);
-        if ($isbn && $isbn->is_valid) {
-            if ($isbn->as_isbn10) {
-                $seen{$isbn->as_isbn10->isbn} = 1;
-                $seen{$isbn->as_isbn10->as_string} = 1;
-            }
-            if ($isbn->as_isbn13) {
-                $seen{$isbn->as_isbn13->isbn} = 1;
-                $seen{$isbn->as_isbn13->as_string} = 1;
+        if (length($token) > 8) {
+            my $isbn = Business::ISBN->new($token);
+            if ($isbn && $isbn->is_valid) {
+                if ($isbn->as_isbn10) {
+                    $seen{$isbn->as_isbn10->isbn} = 1;
+                    $seen{$isbn->as_isbn10->as_string} = 1;
+                }
+                if ($isbn->as_isbn13) {
+                    $seen{$isbn->as_isbn13->isbn} = 1;
+                    $seen{$isbn->as_isbn13->as_string} = 1;
+                }
             }
         }
     }
@@ -485,11 +483,7 @@ sub index_issns {
 }
 
 sub append_field_value {
-    my ($body, $fname, $value, $properties) = @_;
-
-    # Confirm the data is wanted in the index before passing to ES to
-    # reduce the overall data footprint.
-    return unless $properties->{$fname};
+    my ($body, $fname, $value) = @_;
 
     if ($body->{$fname}) {
         if (ref $body->{$fname}) {

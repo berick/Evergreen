@@ -5,7 +5,7 @@ use Getopt::Long;
 use Time::HiRes qw/time/;
 use OpenSRF::Utils::JSON;
 use OpenILS::Utils::Fieldmapper;
-use OpenILS::Elastic::Bib::Search;
+use OpenILS::Elastic::BibSearch;
 
 use utf8;
 binmode(STDIN, ':utf8');
@@ -117,7 +117,7 @@ Fieldmapper->import(
     IDL => OpenSRF::Utils::SettingsClient->new->config_value("IDL"));
 OpenILS::Utils::CStoreEditor::init();
 
-my $es = OpenILS::Elastic::Bib::Search->new($cluster);
+my $es = OpenILS::Elastic::BibSearch->new($cluster);
 $es->connect;
 
 print "Searching...\n";
