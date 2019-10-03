@@ -3,6 +3,23 @@ DROP SCHEMA IF EXISTS elastic CASCADE;
 
 BEGIN;
 
+ALTER TABLE config.record_attr_definition
+    ADD COLUMN elastic_field BOOLEAN NOT NULL DEFAULT FALSE;
+
+ALTER TABLE config.metabib_field
+    ADD COLUMN elastic_field BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- Provide a sweeping set of default elastic fields.
+-- Likely this set of fields can be trimmed significantly for most sites,
+-- since many of these fields will never be searched from the catalog.
+-- Reducing the number of elastic_field's will improve indexing time, 
+-- search time, and reduce Elastic disk space requirements.
+UPDATE config.record_attr_definition 
+    SET elastic_field = TRUE WHERE name NOT LIKE 'marc21_%';
+
+UPDATE config.metabib_field 
+    SET elastic_field = TRUE WHERE search_field OR facet_field;
+
 CREATE SCHEMA elastic;
 
 CREATE TABLE elastic.cluster (
@@ -45,7 +62,7 @@ CREATE OR REPLACE VIEW elastic.bib_field AS
             FALSE AS facet_field,
             1 AS weight
         FROM config.record_attr_definition crad
-        WHERE crad.name NOT LIKE '%_ind_%'
+        WHERE crad.elastic_field
         UNION
         SELECT 
             cmf.id AS metabib_field,
@@ -57,8 +74,8 @@ CREATE OR REPLACE VIEW elastic.bib_field AS
             (cmf.field_class <> 'identifier' AND cmf.search_field) AS search_field,
             cmf.facet_field,
             cmf.weight
-        FROM config.metabib_field cmf
-        WHERE cmf.search_field OR cmf.facet_field
+        FROM config.metabib_field cmf 
+        WHERE cmf.elastic_field
     ) fields;
 
 -- Note this could be done with a view, but pushing the bib ID
@@ -85,6 +102,7 @@ BEGIN
             FROM metabib.record_sorter mrs
             JOIN config.record_attr_definition crad ON (crad.name = mrs.attr)
             WHERE mrs.source = $$ || QUOTE_LITERAL(bre_id) || $$
+                AND crad.elastic_field
             UNION
 
             -- record attributes
@@ -96,6 +114,7 @@ BEGIN
             FROM metabib.record_attr_flat mraf
             JOIN config.record_attr_definition crad ON (crad.name = mraf.attr)
             WHERE mraf.id = $$ || QUOTE_LITERAL(bre_id) || $$
+                AND crad.elastic_field
             UNION
 
             -- metabib field search/facet entries
@@ -119,8 +138,8 @@ BEGIN
                 -- longer be used by EG).
                 SELECT * FROM biblio.extract_metabib_field_entry(
                     $$ || QUOTE_LITERAL(bre_id) || $$, ' ', '{facet,search}',
-                    (SELECT ARRAY_AGG(id) FROM config.metabib_field 
-                        WHERE search_field OR facet_field)
+                    (SELECT ARRAY_AGG(id) 
+                        FROM config.metabib_field WHERE elastic_field)
                 )
             ) compiled
             JOIN config.metabib_field cmf ON (cmf.id = compiled.field)
@@ -155,14 +174,14 @@ CREATE OR REPLACE VIEW elastic.bib_last_mod_date AS
 
 /* SEED DATA ------------------------------------------------------------ */
 
-INSERT INTO elastic.cluster (code, label) VALUES ('main', 'Main Cluster');
+INSERT INTO elastic.cluster (code, label) 
+    VALUES ('main', 'Main Cluster');
 
-INSERT INTO elastic.node 
-    (label, host, proto, port, active, cluster)
-VALUES ('Localhost', 'localhost', 'http', 9200, TRUE, 'main');
+INSERT INTO elastic.node (label, host, proto, port, active, cluster)
+    VALUES ('Localhost', 'localhost', 'http', 9200, TRUE, 'main');
 
 INSERT INTO elastic.index (code, active, cluster)
-VALUES ('bib-search', TRUE, 'main');
+    VALUES ('bib-search', TRUE, 'main');
 
 COMMIT;
 
@@ -170,5 +189,37 @@ COMMIT;
 
 DROP SCHEMA IF EXISTS elastic CASCADE;
 
+ALTER TABLE config.record_attr_definition DROP COLUMN elastic_field;
+
+ALTER TABLE config.metabib_field DROP COLUMN elastic_field;
+
 */
+
+/*
+-- Sample narrower set of elastic fields to avoid duplication and 
+-- indexing data that will likely never be searched.
+
+UPDATE config.metabib_field SET elastic_field = FALSE
+WHERE 
+    (field_class = 'keyword' AND name <> 'keyword') OR
+    (field_class = 'subject' AND name = 'complete') OR
+    (field_class = 'author'  AND name = 'first_author')
+;
+
+UPDATE config.record_attr_definition SET elastic_field = FALSE
+WHERE name NOT IN (
+    'authorsort',
+    'date1',
+    'date2',
+    'bib_level',
+    'icon_format',
+    'item_form',
+    'item_lang',
+    'item_type',
+    'lit_form',
+    'search_format',
+    'titlesort',
+    'sr_format',
+    'vr_format'
+);
 
