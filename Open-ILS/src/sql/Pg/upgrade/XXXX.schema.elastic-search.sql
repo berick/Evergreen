@@ -20,6 +20,12 @@ UPDATE config.record_attr_definition
 UPDATE config.metabib_field 
     SET elastic_field = TRUE WHERE search_field OR facet_field;
 
+INSERT INTO config.global_flag (name, enabled, label) 
+VALUES (
+    'elastic.bib_search.dynamic_properties', FALSE,
+    'Elasticsearch Dynamic Bib Record Properties'
+);
+
 CREATE SCHEMA elastic;
 
 CREATE TABLE elastic.cluster (
@@ -78,8 +84,101 @@ CREATE OR REPLACE VIEW elastic.bib_field AS
         WHERE cmf.elastic_field
     ) fields;
 
--- Note this could be done with a view, but pushing the bib ID
--- filter down to the bottom of the query makes it a lot faster.
+
+CREATE OR REPLACE FUNCTION elastic.bib_record_attrs(bre_id BIGINT)
+RETURNS TABLE (
+    search_group TEXT,
+    name TEXT,
+    source BIGINT,
+    value TEXT
+)
+AS $FUNK$
+    SELECT DISTINCT record.* FROM (
+        SELECT 
+            NULL::TEXT AS search_group, 
+            crad.name, 
+            mrs.source, 
+            mrs.value
+        FROM metabib.record_sorter mrs
+        JOIN config.record_attr_definition crad ON (crad.name = mrs.attr)
+        WHERE mrs.source = $1 AND crad.elastic_field
+        UNION
+
+        -- record attributes
+        SELECT 
+            NULL::TEXT AS search_group, 
+            crad.name, 
+            mraf.id AS source, 
+            mraf.value
+        FROM metabib.record_attr_flat mraf
+        JOIN config.record_attr_definition crad ON (crad.name = mraf.attr)
+        WHERE mraf.id = $1 AND crad.elastic_field
+    ) record
+$FUNK$ LANGUAGE SQL STABLE;
+
+CREATE OR REPLACE FUNCTION elastic.bib_record_static_props(bre_id BIGINT)
+RETURNS TABLE (
+    search_group TEXT,
+    name TEXT,
+    source BIGINT,
+    value TEXT
+)
+AS $FUNK$
+    SELECT DISTINCT record.* FROM (
+        SELECT
+            cmf.field_class AS search_group, 
+            cmf.name, 
+            props.source, 
+            CASE WHEN cmf.joiner IS NOT NULL THEN
+                REGEXP_SPLIT_TO_TABLE(props.value, cmf.joiner)
+            ELSE
+                props.value
+            END AS value
+        FROM (
+            SELECT * FROM metabib.title_field_entry mtfe WHERE mtfe.source = $1
+            UNION 
+            SELECT * FROM metabib.author_field_entry mafe WHERE mafe.source = $1
+            UNION 
+            SELECT * FROM metabib.subject_field_entry msfe WHERE msfe.source = $1
+            UNION 
+            SELECT * FROM metabib.series_field_entry msrfe WHERE msrfe.source = $1
+            UNION 
+            SELECT * FROM metabib.keyword_field_entry mkfe WHERE mkfe.source = $1
+            UNION 
+            SELECT * FROM metabib.identifier_field_entry mife WHERE mife.source = $1
+        ) props
+        JOIN config.metabib_field cmf ON (cmf.id = props.field)
+        WHERE cmf.elastic_field
+    ) record
+$FUNK$ LANGUAGE SQL STABLE;
+
+CREATE OR REPLACE FUNCTION elastic.bib_record_dynamic_props(bre_id BIGINT)
+RETURNS TABLE (
+    search_group TEXT,
+    name TEXT,
+    source BIGINT,
+    value TEXT
+)
+AS $FUNK$
+    SELECT DISTINCT record.* FROM (
+        SELECT
+            cmf.field_class AS search_group, 
+            cmf.name, 
+            props.source, 
+            CASE WHEN cmf.joiner IS NOT NULL THEN
+                REGEXP_SPLIT_TO_TABLE(props.value, cmf.joiner)
+            ELSE
+                props.value
+            END AS value
+        FROM biblio.extract_metabib_field_entry(
+            $1, ' ', '{facet,search}',
+            (SELECT ARRAY_AGG(id) FROM config.metabib_field WHERE elastic_field)
+        ) props
+        JOIN config.metabib_field cmf ON (cmf.id = props.field)
+    ) record
+$FUNK$ LANGUAGE SQL STABLE;
+
+
 CREATE OR REPLACE FUNCTION elastic.bib_record_properties(bre_id BIGINT) 
     RETURNS TABLE (
         search_group TEXT,
@@ -89,64 +188,27 @@ CREATE OR REPLACE FUNCTION elastic.bib_record_properties(bre_id BIGINT)
     )
     AS $FUNK$
 DECLARE
+    props_func TEXT;
 BEGIN
+
+    PERFORM 1 FROM config.internal_flag cif WHERE 
+        cif.name = 'elastic.bib_search.dynamic_properties' AND cif.enabled;
+
+    IF FOUND THEN
+        props_func := 'elastic.bib_record_dynamic_props';
+    ELSE
+        props_func := 'elastic.bib_record_static_props';
+    END IF;
+
     RETURN QUERY EXECUTE $$
         SELECT DISTINCT record.* FROM (
-
-            -- record sorter values
-            SELECT 
-                NULL::TEXT AS search_group, 
-                crad.name, 
-                mrs.source, 
-                mrs.value
-            FROM metabib.record_sorter mrs
-            JOIN config.record_attr_definition crad ON (crad.name = mrs.attr)
-            WHERE mrs.source = $$ || QUOTE_LITERAL(bre_id) || $$
-                AND crad.elastic_field
+            SELECT * FROM elastic.bib_record_attrs($$ || QUOTE_LITERAL(bre_id) || $$)
             UNION
-
-            -- record attributes
-            SELECT 
-                NULL::TEXT AS search_group, 
-                crad.name, 
-                mraf.id AS source, 
-                mraf.value
-            FROM metabib.record_attr_flat mraf
-            JOIN config.record_attr_definition crad ON (crad.name = mraf.attr)
-            WHERE mraf.id = $$ || QUOTE_LITERAL(bre_id) || $$
-                AND crad.elastic_field
-            UNION
-
-            -- metabib field search/facet entries
-            SELECT 
-                cmf.field_class AS search_group, 
-                cmf.name, 
-                compiled.source, 
-                -- Index individual values instead of string-joined values
-                -- so they may be treated individually.  This is useful,
-                -- for example, when aggregating on subjects.
-                CASE WHEN cmf.joiner IS NOT NULL THEN
-                    REGEXP_SPLIT_TO_TABLE(compiled.value, cmf.joiner)
-                ELSE
-                    compiled.value
-                END AS value
-            FROM (
-                -- Extract the values from the source MARC record instead
-                -- of pulling them from the metabib.*_field_entry tables.
-                -- This allows use of Elastic without requiring search/facet
-                -- fields be ingested in Evergreen (since that data will no
-                -- longer be used by EG).
-                SELECT * FROM biblio.extract_metabib_field_entry(
-                    $$ || QUOTE_LITERAL(bre_id) || $$, ' ', '{facet,search}',
-                    (SELECT ARRAY_AGG(id) 
-                        FROM config.metabib_field WHERE elastic_field)
-                )
-            ) compiled
-            JOIN config.metabib_field cmf ON (cmf.id = compiled.field)
+            SELECT * FROM $$ || props_func || '(' || QUOTE_LITERAL(bre_id) || $$)
         ) record
     $$;
 END $FUNK$ LANGUAGE PLPGSQL;
-
+        
 /* give me bibs I should upate */
 
 CREATE OR REPLACE VIEW elastic.bib_last_mod_date AS
@@ -193,11 +255,15 @@ ALTER TABLE config.record_attr_definition DROP COLUMN elastic_field;
 
 ALTER TABLE config.metabib_field DROP COLUMN elastic_field;
 
+DELETE FROM config.global_flag 
+    WHERE name = 'elastic.bib_search.dynamic_properties';
+
 */
 
 /*
+
 -- Sample narrower set of elastic fields to avoid duplication and 
--- indexing data that will likely never be searched.
+-- indexing data that will presumably never be searched in the catalog.
 
 UPDATE config.metabib_field SET elastic_field = FALSE
 WHERE 
