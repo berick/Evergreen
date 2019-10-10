@@ -25,7 +25,6 @@ export class ElasticService {
         if (ctx.marcSearch.isSearchable()) { return true; }
 
         if ( ctx.termSearch.isSearchable() &&
-            !ctx.termSearch.fromMetarecord &&
             !ctx.termSearch.hasBrowseEntry) {
             return true;
         }
@@ -162,6 +161,10 @@ export class ElasticService {
 
                 rootNode.filter(range);
             }
+        }
+
+        if (ts.fromMetarecord) {
+            rootNode.filter(new TermQuery('metarecord', ts.fromMetarecord));
         }
     }
 
