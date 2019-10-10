@@ -283,6 +283,7 @@ WHERE name NOT IN (
     'item_lang',
     'item_type',
     'lit_form',
+    'pubdate',
     'search_format',
     'titlesort',
     'sr_format',
