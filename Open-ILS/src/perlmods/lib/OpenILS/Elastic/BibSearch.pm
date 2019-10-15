@@ -39,12 +39,34 @@ my $BASE_INDEX_SETTINGS = {
             folding => {
                 filter => ['lowercase', 'asciifolding'],
                 tokenizer => 'standard'
+            },
+            stripdots => {
+                # "R.E.M." => "REM"
+                char_filter => ['stripdots'],
+                filter => ['lowercase'],
+                tokenizer => 'standard'
+            },
+            spacedots => {
+                # "R.E.M." => "R E M"
+                char_filter => ['spacedots'],
+                filter => ['lowercase'],
+                tokenizer => 'standard'
             }
         },
         normalizer =>  {
             custom_lowercase => {
                 type => 'custom',
                 filter => ['lowercase']
+            }
+        },
+        char_filter => {
+            stripdots => {
+                type => 'mapping',
+                mappings => ['. =>']
+            },
+            spacedots => {
+                type => 'mapping',
+                mappings => ['. => " "']
             }
         }
     }
@@ -105,7 +127,9 @@ my $BASE_PROPERTIES = {
         normalizer => 'custom_lowercase',
         fields => {
             text => {type => 'text'},
-            text_folded => {type => 'text', analyzer => 'folding'}
+            text_folded => {type => 'text', analyzer => 'folding'},
+            text_spacedots => {type => 'text', analyzer => 'spacedots'},
+            text_stripdots => {type => 'text', analyzer => 'stripdots'}
         }
     },
     author => {
@@ -114,7 +138,9 @@ my $BASE_PROPERTIES = {
         normalizer => 'custom_lowercase',
         fields => {
             text => {type => 'text'},
-            text_folded => {type => 'text', analyzer => 'folding'}
+            text_folded => {type => 'text', analyzer => 'folding'},
+            text_spacedots => {type => 'text', analyzer => 'spacedots'},
+            text_stripdots => {type => 'text', analyzer => 'stripdots'}
         }
     },
     subject => {
@@ -123,7 +149,9 @@ my $BASE_PROPERTIES = {
         normalizer => 'custom_lowercase',
         fields => {
             text => {type => 'text'},
-            text_folded => {type => 'text', analyzer => 'folding'}
+            text_folded => {type => 'text', analyzer => 'folding'},
+            text_spacedots => {type => 'text', analyzer => 'spacedots'},
+            text_stripdots => {type => 'text', analyzer => 'stripdots'}
         }
     },
     series => {
@@ -132,7 +160,9 @@ my $BASE_PROPERTIES = {
         normalizer => 'custom_lowercase',
         fields => {
             text => {type => 'text'},
-            text_folded => {type => 'text', analyzer => 'folding'}
+            text_folded => {type => 'text', analyzer => 'folding'},
+            text_spacedots => {type => 'text', analyzer => 'spacedots'},
+            text_stripdots => {type => 'text', analyzer => 'stripdots'}
         }
     },
     keyword => {
@@ -143,7 +173,9 @@ my $BASE_PROPERTIES = {
         ignore_above => 256,
         fields => {
             text => {type => 'text'},
-            text_folded => {type => 'text', analyzer => 'folding'}
+            text_folded => {type => 'text', analyzer => 'folding'},
+            text_spacedots => {type => 'text', analyzer => 'spacedots'},
+            text_stripdots => {type => 'text', analyzer => 'stripdots'}
         }
     },
     identifier => {
