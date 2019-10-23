@@ -352,6 +352,11 @@ export class CatalogService {
         return facetData;
     }
 
+    checkSearchEngine(): Promise<any> {
+        return this.pcrud.retrieve('cgf', 'elastic.bib_search.enabled')
+        .toPromise().then(flag => this.elastic.enabled = flag.enabled() === 't');
+    }
+
     fetchCcvms(): Promise<void> {
 
         if (Object.keys(this.ccvmMap).length) {

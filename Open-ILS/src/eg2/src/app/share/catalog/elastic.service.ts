@@ -12,6 +12,8 @@ import {RequestBodySearch, MatchQuery, MultiMatchQuery, TermsQuery, Query, Sort,
 @Injectable()
 export class ElasticService {
 
+    enabled: boolean;
+
     constructor(
         private idl: IdlService,
         private net: NetService,
@@ -21,6 +23,7 @@ export class ElasticService {
 
     // Returns true if Elastic can provide search results.
     canSearch(ctx: CatalogSearchContext): boolean {
+        if (!this.enabled) { return false; }
 
         if (ctx.marcSearch.isSearchable()) { return true; }
 

@@ -22,6 +22,9 @@ UPDATE config.metabib_field
 
 INSERT INTO config.global_flag (name, enabled, label) 
 VALUES (
+    'elastic.bib_search.enabled', FALSE,
+    'Elasticsearch Enable Bib Searching'
+), (
     'elastic.bib_search.dynamic_properties', FALSE,
     'Elasticsearch Dynamic Bib Record Properties'
 );
@@ -255,8 +258,7 @@ ALTER TABLE config.record_attr_definition DROP COLUMN elastic_field;
 
 ALTER TABLE config.metabib_field DROP COLUMN elastic_field;
 
-DELETE FROM config.global_flag 
-    WHERE name = 'elastic.bib_search.dynamic_properties';
+DELETE FROM config.global_flag WHERE name ~ 'elastic.*';
 
 */
 
