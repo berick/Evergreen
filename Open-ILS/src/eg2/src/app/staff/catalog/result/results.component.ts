@@ -126,11 +126,13 @@ export class ResultsComponent implements OnInit, OnDestroy {
             // Flesh the creator / editor fields with the user object.
             this.bib.fleshBibUsers(records.map(r => r.record));
 
+            const isMeta = this.searchContext.termSearch.isMetarecordSearch();
             this.bib.getHoldCounts(this.searchContext.currentResultIds())
                 .subscribe(result => {
+                    const idField = isMeta ? 'metabibId' : 'id';
                     const targetId = Object.keys(result)[0];
                     const record =
-                        records.filter(r => r.id === Number(targetId))[0];
+                        records.filter(r => r[idField] === Number(targetId))[0];
                     record.holdCount = result[targetId];
                 });
         });

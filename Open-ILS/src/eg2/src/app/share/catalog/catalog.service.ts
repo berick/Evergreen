@@ -1,6 +1,6 @@
 import {Injectable, EventEmitter} from '@angular/core';
 import {Observable} from 'rxjs';
-import {map, tap, finalize} from 'rxjs/operators';
+import {map, tap, finalize, merge} from 'rxjs/operators';
 import {OrgService} from '@eg/core/org.service';
 import {UnapiService} from '@eg/share/catalog/unapi.service';
 import {IdlService, IdlObject} from '@eg/core/idl.service';
@@ -11,6 +11,11 @@ import {BibRecordService, BibRecordSummary} from './bib-record.service';
 import {BasketService} from './basket.service';
 import {CATALOG_CCVM_FILTERS} from './search-context';
 import {ElasticService} from './elastic.service';
+
+// Start with this number of records in the first batch so results
+// can start displaying sooner.  A batch of 5 gets a decent chunk of
+// data on the page while waiting for the other results to appear.
+const INITIAL_REC_BATCH_SIZE = 5;
 
 @Injectable()
 export class CatalogService {
@@ -201,14 +206,25 @@ export class CatalogService {
 
         const isMeta = ctx.termSearch.isMetarecordSearch();
 
-        let observable: Observable<BibRecordSummary>;
+        // When fetching batches of search results, fetch the first
+        // few records first so results lists can start rendering
+        // before the full data set has arrived and been processed.
+        let ids1 = ctx.currentResultIds();
+        let ids2 = [];
+        if (ids1.length > INITIAL_REC_BATCH_SIZE) {
+            ids1 = ctx.currentResultIds().slice(0, INITIAL_REC_BATCH_SIZE);
+            ids2 = ctx.currentResultIds().slice(INITIAL_REC_BATCH_SIZE);
+        }
 
-        if (isMeta) {
-            observable = this.bibService.getMetabibSummary(
-                ctx.currentResultIds(), ctx.searchOrg.id(), depth);
-        } else {
-            observable = this.bibService.getBibSummary(
-                ctx.currentResultIds(), ctx.searchOrg.id(), depth);
+        let observable: Observable<BibRecordSummary>;
+        const bibFunc = isMeta ? 'getMetabibSummary' : 'getBibSummary';
+
+        observable = this.bibService[bibFunc](ids1, ctx.searchOrg.id(), depth);
+
+        if (ids2.length > 0) {
+            observable = observable.pipe(merge(
+                this.bibService.getBibSummary(ids2, ctx.searchOrg.id(), depth)
+            ));
         }
 
         return observable.pipe(map(summary => {
