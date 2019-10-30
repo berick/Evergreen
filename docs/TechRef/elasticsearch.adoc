@@ -26,6 +26,14 @@ See database tables in the 'elastic' schema.  No admin UI exists.  If a
 single elasticsearch node is running on the same server as EG, no 
 configuration changes are needed.
 
+To enable Elasticsearch for bib searching, modify the Evergreen global 
+flag in the database.
+
+[source,sql]
+------------------------------------------------------------------------------
+UPDATE config.global_flag SET enabled = true WHERE name = 'elastic.bib_search.enabled';
+------------------------------------------------------------------------------
+
 == Indexing Bib Records ==
 
 See Open-ILS/src/support-scripts/elastic-index.pl
