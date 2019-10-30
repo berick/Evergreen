@@ -141,6 +141,8 @@ __PACKAGE__->register_method(
 
                         available - Ensure that at least one item is 
                             considered available within the search scope.
+
+                        disable_facets - If true, disable ES aggregations
                 /
             }
         ],
@@ -268,7 +270,7 @@ sub compile_elastic_query {
     add_elastic_holdings_filter($elastic, $staff, 
         $options->{search_org}, $options->{search_depth}, $options->{available});
 
-    add_elastic_facet_aggregations($elastic);
+    add_elastic_facet_aggregations($elastic) unless $options->{disable_facets};
 
     $elastic->{sort} = ['_score'] unless @{$elastic->{sort} || []};
 
