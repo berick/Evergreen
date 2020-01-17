@@ -56,7 +56,7 @@ See https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl-qu
 Some examples:
 
 harry potter
-title|maintitle.text\\*:piano
+title|proper.text\\*:piano
 author.text\\*:GrandPré
 au:((johann brahms) OR (wolfgang mozart))
 su:history
@@ -73,7 +73,7 @@ while (1) {
     next unless $query_string;
 
     my $query = {
-        _source => ['id', 'title|maintitle'] , # return only a few fields
+        _source => ['id', 'title|proper', 'author|first_author'] , # return only a few fields
         from => 0,
         size => 10,
         sort => [{'_score' => 'desc'}],
@@ -86,6 +86,17 @@ while (1) {
                 # Search the base keyword text index by default.
                 default_field => 'keyword.text'
             } 
+        },
+        # Request highligh data for title/author text fields.
+        # See below for logging highlight response data.
+        highlight => {
+            # Pre/Post tags modified to match stock Evergreen.
+            pre_tags => '<b class="oils_SH">',
+            post_tags => '</b>',
+            fields => {
+                'title*.text' => {},
+                'author*.text' => {}
+            }
         }
     };
 
@@ -105,8 +116,14 @@ while (1) {
     for my $hit (@{$results->{hits}->{hits}}) {
         printf("Record: %-8d | Score: %-11f | Title: %s\n", 
             $hit->{_id}, $hit->{_score}, 
-            ($hit->{_source}->{'title|maintitle'} || '')
+            ($hit->{_source}->{'title|proper'} || '')
         );
+
+# Uncomment to log highlighted field data.
+#        for my $hl (keys %{$hit->{highlight}}) {
+#            my @values = @{$hit->{highlight}->{$hl}};
+#            print "\tHighlight: $hl => @values\n";
+#        }
     }
 }
 
