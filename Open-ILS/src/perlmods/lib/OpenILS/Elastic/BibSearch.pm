@@ -30,8 +30,7 @@ use base qw/OpenILS::Elastic/;
 
 # default number of bibs to index per batch.
 my $DEFAULT_BIB_BATCH_SIZE = 500;
-
-my $INDEX_NAME = 'bib-search';
+my $INDEX_CLASS = 'bib-search';
 
 my $BASE_INDEX_SETTINGS = {
     analysis => {
@@ -206,8 +205,8 @@ my %SHORT_GROUP_MAP = (
     identifier => 'id'
 );
 
-sub index_name {
-    return $INDEX_NAME;
+sub index_class {
+    return $INDEX_CLASS;
 }
 
 # TODO: add index-specific language analyzers to DB config
@@ -293,34 +292,38 @@ sub create_index_properties {
 
 sub create_index {
     my ($self) = @_;
+    my $index_name = $self->index_name;
 
-    if ($self->es->indices->exists(index => $INDEX_NAME)) {
-        $logger->warn("ES index '$INDEX_NAME' already exists");
+    if ($self->es->indices->exists(index => $index_name)) {
+        $logger->warn("ES index '$index_name' already exists in ES");
         return;
     }
 
+    # Add a record of our new index to EG's DB if necessary.
+    my $eg_conf = $self->find_or_create_index_config;
+
     $logger->info(
-        "ES creating index '$INDEX_NAME' on cluster '".$self->cluster."'");
+        "ES creating index '$index_name' on cluster '".$self->cluster."'");
 
     my $properties = $self->create_index_properties;
 
     my $settings = $BASE_INDEX_SETTINGS;
     $settings->{number_of_replicas} = scalar(@{$self->nodes});
-    $settings->{number_of_shards} = $self->index->num_shards;
+    $settings->{number_of_shards} = $eg_conf->num_shards;
 
     my $conf = {
-        index => $INDEX_NAME,
+        index => $index_name,
         body => {settings => $settings}
     };
 
-    $logger->info("ES creating index '$INDEX_NAME'");
+    $logger->info("ES creating index '$index_name'");
 
     # Create the base index with settings
     eval { $self->es->indices->create($conf) };
 
     if ($@) {
         $logger->error("ES failed to create index cluster=".  
-            $self->cluster. "index=$INDEX_NAME error=$@");
+            $self->cluster. "index=$index_name error=$@");
         warn "$@\n\n";
         return 0;
     }
@@ -333,7 +336,7 @@ sub create_index {
 
         eval { 
             $self->es->indices->put_mapping({
-                index => $INDEX_NAME,
+                index => $index_name,
                 type  => 'record',
                 body  => {dynamic => 'strict', properties => {$field => $properties->{$field}}}
             });
@@ -343,7 +346,7 @@ sub create_index {
             my $mapjson = OpenSRF::Utils::JSON->perl2JSON($properties->{$field});
 
             $logger->error("ES failed to create index mapping: " .
-                "index=$INDEX_NAME field=$field error=$@ mapping=$mapjson");
+                "index=$index_name field=$field error=$@ mapping=$mapjson");
 
             warn "$@\n\n";
             return 0;
@@ -641,19 +644,6 @@ SQL
 
     return $marc;
 }
-
-
-
-sub index {
-    my $self = shift;
-    return $self->{index} if $self->{index};
-    ($self->{index}) = grep {$_->code eq $self->index_name} @{$self->indices};
-
-    $logger->error("No ndex configured named ".$self->index_name) unless $self->{index};
-
-    return $self->{index};
-}
-
 
 # Add data to the bib-search index
 sub populate_index {

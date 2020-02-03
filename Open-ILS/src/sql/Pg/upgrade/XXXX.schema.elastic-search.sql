@@ -51,12 +51,14 @@ CREATE TABLE elastic.node (
 
 CREATE TABLE elastic.index (
     id            SERIAL  PRIMARY KEY,
-    code          TEXT    NOT NULL, -- e.g. 'bib-search'
+    name          TEXT    NOT NULL,
+    index_class   TEXT    NOT NULL,
     cluster       TEXT    NOT NULL 
                   REFERENCES elastic.cluster (code) ON DELETE CASCADE,
     active        BOOLEAN NOT NULL DEFAULT FALSE,
     num_shards    INTEGER NOT NULL DEFAULT 1,
-    CONSTRAINT    index_type_once_per_cluster UNIQUE (code, cluster)
+    CONSTRAINT    active_index_once_per_cluster UNIQUE (active, index_class, cluster),
+    CONSTRAINT    valid_index_class CHECK (index_class IN ('bib-search'))
 );
 
 CREATE OR REPLACE VIEW elastic.bib_field AS
@@ -244,9 +246,6 @@ INSERT INTO elastic.cluster (code, label)
 
 INSERT INTO elastic.node (label, host, proto, port, active, cluster)
     VALUES ('Localhost', 'localhost', 'http', 9200, TRUE, 'main');
-
-INSERT INTO elastic.index (code, active, cluster)
-    VALUES ('bib-search', TRUE, 'main');
 
 COMMIT;
 

@@ -9,10 +9,11 @@ use OpenILS::Elastic::BibSearch;
 
 my $help;
 my $osrf_config = '/openils/conf/opensrf_core.xml';
-my $cluster = 'main';
+my $cluster;
 my $create_index;
 my $delete_index;
-my $index_name = 'bib-search'; # only supported index at time of writing
+my $index_class = 'bib-search';
+my $index_name;
 my $populate;
 my $index_record;
 my $start_record;
@@ -35,7 +36,8 @@ GetOptions(
     'cluster=s'         => \$cluster,
     'create-index'      => \$create_index,
     'delete-index'      => \$delete_index,
-    'index=s'           => \$index_name,
+    'index-name=s'      => \$index_name,
+    'index-class=s'     => \$index_class,
     'index-record=s'    => \$index_record,
     'start-record=s'    => \$start_record,
     'stop-record=s'     => \$stop_record,
@@ -55,7 +57,8 @@ sub help {
     print <<HELP;
         Synopsis:
             
-            $0 --delete-index --create-index --index bib-search --populate
+            $0 --delete-index --create-index --index-class bib-search \
+                --index-name bib-search-take-2 --populate
 
         Options:
 
@@ -75,8 +78,11 @@ sub help {
             --cluster <name>
                 Specify a cluster name.  Defaults to 'main'.
 
-            --index <name>
-                Specify an index name.  Defaults to 'bib-search'.
+            --index-class <class>
+                Specifies which data set the current index manages (e.g. bib-search)
+
+            --index-name <name>
+                Specify an index name.  Defaults to --index-class.
 
             --delete-index
                 Delete the specified index and all of its data. 
@@ -126,12 +132,16 @@ OpenILS::Utils::CStoreEditor::init();
 
 my $es;
 
-if ($index_name eq 'bib-search') {
-    $es = OpenILS::Elastic::BibSearch->new($cluster);
+if ($index_class eq 'bib-search') {
+    $es = OpenILS::Elastic::BibSearch->new(
+        cluster => $cluster, 
+        index_name => $index_name,
+        write_mode => 1
+    );
 }
 
 if (!$es) {
-    die "Unknown index type: $index_name\n";
+    die "Unknown index class: $index_class\n";
 }
 
 $es->connect;

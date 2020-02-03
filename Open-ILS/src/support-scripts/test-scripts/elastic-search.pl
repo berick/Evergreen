@@ -46,7 +46,7 @@ Fieldmapper->import(
     IDL => OpenSRF::Utils::SettingsClient->new->config_value("IDL"));
 OpenILS::Utils::CStoreEditor::init();
 
-my $es = OpenILS::Elastic::BibSearch->new($cluster);
+my $es = OpenILS::Elastic::BibSearch->new;
 $es->connect;
 
 print <<MESSAGE;

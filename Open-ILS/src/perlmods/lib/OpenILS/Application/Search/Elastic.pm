@@ -208,7 +208,7 @@ sub bib_search {
         $elastic_query->{size} = 1000;
     }
 
-    my $es = OpenILS::Elastic::BibSearch->new('main');
+    my $es = OpenILS::Elastic::BibSearch->new;
 
     $es->connect;
     my $results = $es->search($elastic_query);

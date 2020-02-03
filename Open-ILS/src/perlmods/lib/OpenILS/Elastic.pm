@@ -17,21 +17,23 @@ use strict;
 use warnings;
 use DBI;
 use Time::HiRes qw/time/;
-use OpenSRF::Utils::Logger qw/:logger/;
-use OpenILS::Utils::CStoreEditor qw/:funcs/;
 use Search::Elasticsearch;
 use OpenSRF::Utils::JSON;
+use OpenSRF::Utils::Logger qw/:logger/;
+use OpenILS::Utils::CStoreEditor qw/:funcs/;
+use OpenILS::Utils::Fieldmapper;
 use Data::Dumper;
 $Data::Dumper::Indent = 0;
 
 sub new {
-    my ($class, $cluster) = @_;
+    my ($class, %args) = @_;
 
     my $self = {
-        cluster     => $cluster,
-        indices     => [],
-        marc_fields => []
+        %args,
+        indices => []
     };
+
+    $self->{cluster} = 'main' unless $args{cluster};
 
     return bless($self, $class);
 }
@@ -57,7 +59,19 @@ sub es {
 }
 
 sub index_name {
-    die "Index name must be provided by sub-class\n";
+    my ($self) = @_;
+    return $self->{index_name};
+}
+
+sub index_class {
+    die "index_class() should be implemented by sub-classes\n";
+}
+
+# When write_mode is enable, it means we're editing indexes instead
+# of just searching them.
+sub write_mode {
+    my $self = shift;
+    return $self->{write_mode};
 }
 
 sub language_analyzers {
@@ -106,27 +120,67 @@ sub get_db_rows {
 
 # load the config via cstore.
 sub load_config {
-    my $self = shift;
+    my $self = @_;
+
     my $e = new_editor();
     my $cluster = $self->cluster;
 
-    $self->{nodes} = $e->search_elastic_node({cluster => $cluster, active => 't'});
+    my %active = $self->write_mode ? () : (active => 't');
+
+    $self->{nodes} = $e->search_elastic_node({cluster => $cluster, %active});
 
     unless (@{$self->nodes}) {
         $logger->error("ES no nodes defined for cluster $cluster");
         return;
     }
 
-    $self->{indices} = $e->search_elastic_index({cluster => $cluster});
+    $self->{indices} = $e->search_elastic_index({cluster => $cluster, %active});
 
-    unless (@{$self->indices}) {
-        $logger->error("ES no indices defined for cluster $cluster");
+    unless ($self->write_mode || @{$self->indices}) {
+        $logger->warn("ES no active indices defined for cluster $cluster");
         return;
     }
 }
 
+sub find_or_create_index_config {
+    my $self = shift;
+
+    my ($conf) = grep {
+        $_->name eq $self->index_name &&
+        $_->type eq $self->index_class
+    } @{$self->indices};
+
+    return $conf if $conf;
+
+    $logger->info("ES creating new index configuration for ".
+        sprintf("cluster=%s type=%s name=%s",
+            $self->cluster, $self->index_class, $self->index_name));
+
+    my $e = new_editor(xact => 1);
+    $conf = Fieldmapper::elastic::index->new;
+
+    $conf->cluster($self->cluster);
+    $conf->index_class($self->index_class);
+    $conf->index_name($self->index_name);
+    
+    # Created by default with active=false and num_shards=1
+
+    unless ($e->create_elastic_index($conf)) {
+        $logger->error("ES failed creating index " .
+            $self->index_name . ": " . $e->die_event);
+        return undef;
+    }
+
+    $e->commit;
+
+    push(@{$self->indices}, $conf);
+
+    return $conf;
+}
+
 sub connect {
     my ($self) = @_;
+
     $self->load_config;
 
     my @nodes;
