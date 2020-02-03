@@ -14,6 +14,7 @@ my $create_index;
 my $delete_index;
 my $index_class = 'bib-search';
 my $index_name;
+my $activate_index;
 my $populate;
 my $index_record;
 my $start_record;
@@ -39,6 +40,7 @@ GetOptions(
     'index-name=s'      => \$index_name,
     'index-class=s'     => \$index_class,
     'index-record=s'    => \$index_record,
+    'activate-index'    => \$activate_index,
     'start-record=s'    => \$start_record,
     'stop-record=s'     => \$stop_record,
     'modified-since=s'  => \$modified_since,
@@ -80,15 +82,21 @@ sub help {
 
             --index-class <class>
                 Specifies which data set the current index manages (e.g. bib-search)
+                Must match a well-known index class with backing code.
 
             --index-name <name>
-                Specify an index name.  Defaults to --index-class.
+                Specify an index name.  Can be any value ES index name.
+                Defaults to --index-class.
 
             --delete-index
                 Delete the specified index and all of its data. 
 
             --create-index
                 Create an index whose name equals --index-name.
+
+            --activate-index
+                Activate the selected index while deactivating all other
+                indexes of the same index_class and cluster.
 
             --batch-size <number>
                 Index at most this many records per batch.
@@ -152,6 +160,10 @@ if ($delete_index) {
 
 if ($create_index) {
     $es->create_index or die "Index create failed.\n";
+}
+
+if ($activate_index) {
+    $es->activate_index or die "Index activation failed.\n";
 }
 
 if ($populate) {

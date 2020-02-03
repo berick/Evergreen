@@ -13004,6 +13004,7 @@ SELECT  usr,
 		oils_persist:tablename="elastic.index"
 		reporter:label="Elastic Index">
 		<fields oils_persist:primary="id" oils_persist:sequence="elastic.index_id_seq">
+			<field name="id" reporter:selector="name" reporter:datatype="id"/>
 			<field reporter:label="Cluster" name="cluster" reporter:datatype="link"/>
 			<field reporter:label="Index Class" name="index_class" reporter:datatype="text"/>
 			<field reporter:label="Index Name" name="name" reporter:datatype="text"/>

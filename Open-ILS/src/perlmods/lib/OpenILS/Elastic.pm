@@ -120,7 +120,7 @@ sub get_db_rows {
 
 # load the config via cstore.
 sub load_config {
-    my $self = @_;
+    my ($self) = @_;
 
     my $e = new_editor();
     my $cluster = $self->cluster;
@@ -142,18 +142,25 @@ sub load_config {
     }
 }
 
-sub find_or_create_index_config {
+sub find_index_config {
     my $self = shift;
 
     my ($conf) = grep {
         $_->name eq $self->index_name &&
-        $_->type eq $self->index_class
+        $_->index_class eq $self->index_class
     } @{$self->indices};
 
+    return $conf;
+}
+
+sub find_or_create_index_config {
+    my $self = shift;
+
+    my $conf = $self->find_index_config;
     return $conf if $conf;
 
     $logger->info("ES creating new index configuration for ".
-        sprintf("cluster=%s type=%s name=%s",
+        sprintf("cluster=%s index_class=%s name=%s",
             $self->cluster, $self->index_class, $self->index_name));
 
     my $e = new_editor(xact => 1);
@@ -161,13 +168,12 @@ sub find_or_create_index_config {
 
     $conf->cluster($self->cluster);
     $conf->index_class($self->index_class);
-    $conf->index_name($self->index_name);
+    $conf->name($self->index_name);
     
     # Created by default with active=false and num_shards=1
 
     unless ($e->create_elastic_index($conf)) {
-        $logger->error("ES failed creating index " .
-            $self->index_name . ": " . $e->die_event);
+        $logger->error("ES failed creating index ".$self->index_name);
         return undef;
     }
 
@@ -201,6 +207,59 @@ sub connect {
         $logger->error("ES failed to connect to @nodes: $@");
         return;
     }
+}
+
+# Activates the currently loaded index while deactivating any active
+# index with the same cluster and index_class.
+sub activate_index {
+    my ($self) = @_;
+
+    my $index = $self->index_name;
+
+    if (!$self->es->indices->exists(index => $index)) {
+        $logger->warn("ES cannot activate index '$index' which does not exist");
+        return;
+    }
+
+    my ($active) = grep {
+        $_->index_class eq $self->index_class &&
+        $_->cluster eq $self->cluster &&
+        $_->active eq 't' &&
+        $_->name ne $index
+    } @{$self->indices};
+
+    my $e = new_editor(xact => 1);
+
+    if ($active) {
+        $logger->info(
+            "ES deactivating index ".$active->name." before activating $index");
+
+        $active->active('f');
+        unless ($e->update_elastic_index($active)) {
+            $logger->error("ES failed deactivating index ".$active->name);
+            $e->rollback;
+            return 0;
+        }
+    }
+
+    my $conf = $self->find_index_config;
+
+    if (!$conf) {
+        $logger->error("ES no such index to activate: $index");
+        $e->rollback;
+        return 0;
+    }
+
+    $conf->active('t');
+    unless ($e->update_elastic_index($conf)) {
+        $logger->error("ES failed deactivating index: $index");
+        $e->rollback;
+        return 0;
+    }
+
+    $e->commit;
+
+    return 1;
 }
 
 sub delete_index {
