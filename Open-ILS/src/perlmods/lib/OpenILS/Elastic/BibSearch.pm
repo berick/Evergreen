@@ -18,14 +18,13 @@ use warnings;
 use Encode;
 use DateTime;
 use Clone 'clone';
-use Business::ISBN;
-use Business::ISSN;
 use Time::HiRes qw/time/;
 use OpenSRF::Utils::Logger qw/:logger/;
 use OpenSRF::Utils::JSON;
 use OpenILS::Utils::CStoreEditor qw/:funcs/;
 use OpenILS::Utils::DateTime qw/interval_to_seconds/;
 use OpenILS::Elastic;
+use OpenILS::Utils::Normalize;
 use base qw/OpenILS::Elastic/;
 
 # default number of bibs to index per batch.
@@ -473,22 +472,16 @@ sub index_isbns {
     return unless $value;
     
     my %seen; # deduplicate values
+    my @isbns = OpenILS::Utils::Normalize::clean_isbns($value);
 
-    # Chop up the collected raw values into parts and let
-    # Business::* tell us which parts looks like ISBNs.
-    for my $token (split(/ /, $value)) {
-        if (length($token) > 8) {
-            my $isbn = Business::ISBN->new($token);
-            if ($isbn && $isbn->is_valid) {
-                if ($isbn->as_isbn10) {
-                    $seen{$isbn->as_isbn10->isbn} = 1;
-                    $seen{$isbn->as_isbn10->as_string} = 1;
-                }
-                if ($isbn->as_isbn13) {
-                    $seen{$isbn->as_isbn13->isbn} = 1;
-                    $seen{$isbn->as_isbn13->as_string} = 1;
-                }
-            }
+    for my $isbn (@isbns) {
+        if ($isbn->as_isbn10) {
+            $seen{$isbn->as_isbn10->isbn} = 1; # compact
+            $seen{$isbn->as_isbn10->as_string} = 1; # with hyphens
+        }
+        if ($isbn->as_isbn13) {
+            $seen{$isbn->as_isbn13->isbn} = 1;
+            $seen{$isbn->as_isbn13->as_string} = 1;
         }
     }
 
@@ -501,17 +494,13 @@ sub index_issns {
     return unless $value;
 
     my %seen; # deduplicate values
+    my @issns = OpenILS::Utils::Normalize::clean_issns($value);
     
-    # Chop up the collected raw values into parts and let
-    # Business::* tell us which parts looks valid.
-    for my $token (split(/ /, $value)) {
-        my $issn = Business::ISSN->new($token);
-        if ($issn && $issn->is_valid) {
-            # no option in business::issn to get the unformatted value.
-            (my $unformatted = $issn->as_string) =~ s/-//g;
-            $seen{$unformatted} = 1;
-            $seen{$issn->as_string} = 1;
-        }
+    for my $issn (@issns) {
+        # no option in business::issn to get the unformatted value.
+        (my $unformatted = $issn->as_string) =~ s/-//g;
+        $seen{$unformatted} = 1;
+        $seen{$issn->as_string} = 1;
     }
 
     append_field_value($body, 'identifier|issn', $_) foreach keys %seen;
