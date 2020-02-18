@@ -20,18 +20,32 @@ sub new {
     my ($class, %args) = @_;
     return bless(\%args, $class);
 }
-
+sub name {
+    my $self = shift;
+    return $self->{name};
+}
+sub search_group {
+    my $self = shift;
+    return $self->{search_group};
+}
 sub search_field {
-    return $self->{search_field} ? 't' : 'f';
+    my $self = shift;
+    return $self->{purpose} eq 'search' ? 't' : 'f';
 }
 sub facet_field {
-    return $self->{facet_field} ? 't' : 'f';
+    my $self = shift;
+    return $self->{purpose} eq 'facet' ? 't' : 'f';
 }
 sub sorter {
-    return $self->{sorter} ? 't' : 'f';
+    my $self = shift;
+    return $self->{purpose} eq 'sorter' ? 't' : 'f';
 }
-
+sub filter {
+    my $self = shift;
+    return $self->{purpose} eq 'filter' ? 't' : 'f';
+}
 sub weight {
+    my $self = shift;
     return $self->{weight} || 1;
 }
 
@@ -74,14 +88,23 @@ sub xsl_sheet {
 
 my @seen_fields;
 sub add_dynamic_field {
-    my ($self, $fields, $purpose, $class, $name) = @_;
-    my $tag = $purpose . ($class || '') . $name;
+    my ($self, $fields, $purpose, $search_group, $name, $weight) = @_;
+    return unless $name;
+    $search_group ||= '';
+    $weight ||= 1;
+
+    my $tag = $purpose . ($search_group || '') . $name;
     return if grep {$_ eq $tag} @seen_fields;
+    push(@seen_fields, $tag);
+
+    $logger->info("ES adding dynamic field purpose=$purpose ".
+        "search_group=$search_group name=$name weight=$weight");
 
     my $field = OpenILS::Elastic::BibSearch::BibField->new(
         purpose => $purpose, 
-        class => $class, 
-        name => $name
+        search_group => $search_group, 
+        name => $name,
+        weight => $weight
     );
 
     push(@$fields, $field);
@@ -98,28 +121,29 @@ sub get_dynamic_fields {
     for my $node ($doc->findnodes('//xsl:call-template[@name="add_search_entry"]')) {
         my $class = $node->findnodes('./xsl:with-param[@name="field_class"]/text()');
         my $name = $node->findnodes('./xsl:with-param[@name="index_name"]/text()');
-        $self->add_dynamic_field($fields, 'search', $class, $name);
+        my $weight = $node->findnodes('./xsl:with-param[@name="weight"]/text()');
+        $self->add_dynamic_field($fields, 'search', "$class", "$name", "$weight");
     }
 
     for my $node ($doc->findnodes('//xsl:call-template[@name="add_facet_entry"]')) {
         my $class = $node->findnodes('./xsl:with-param[@name="field_class"]/text()');
         my $name = $node->findnodes('./xsl:with-param[@name="index_name"]/text()');
-        $self->add_dynamic_field($fields, 'facet', $class, $name);
+        $self->add_dynamic_field($fields, 'facet', "$class", "$name");
     }
 
     for my $node ($doc->findnodes('//xsl:call-template[@name="add_filter_entry"]')) {
         my $name = $node->findnodes('./xsl:with-param[@name="name"]/text()');
-        $self->add_dynamic_field($fields, 'filter', undef, $name);
+        $self->add_dynamic_field($fields, 'filter', undef, "$name");
     }
 
     for my $node ($doc->findnodes('//xsl:call-template[@name="add_composite_filter_entry"]')) {
         my $name = $node->findnodes('./xsl:with-param[@name="name"]/text()');
-        $self->add_dynamic_field($fields, 'filter', undef, $name);
+        $self->add_dynamic_field($fields, 'filter', undef, "$name");
     }
 
     for my $node ($doc->findnodes('//xsl:call-template[@name="add_sorter_entry"]')) {
         my $name = $node->findnodes('./xsl:with-param[@name="name"]/text()');
-        $self->add_dynamic_field($fields, 'sorter', undef, $name);
+        $self->add_dynamic_field($fields, 'sorter', undef, "$name");
     }
 
     return $fields;
@@ -137,35 +161,27 @@ sub get_bib_data {
         my $output = $self->xsl_sheet->output_as_chars($result);
 
         my @rows = split(/\n/, $output);
-        my $first = 1;
         for my $row (@rows) {
             my @parts = split(/ /, $row);
-            my $purpose = $parts[0];
 
+            my $purpose = $parts[0];
             my $field = {purpose => $purpose};
 
-            if ($first) {
-                # Stamp the first field with the additional bib metadata.
-                $field->{$_} = $db_rec->{$_} for 
-                    qw/id bib_source metarecord create_date edit_date/;
-                $first = 0;
-            }
-
-            if ($purpose eq 'search') {
+            if ($purpose eq 'search' || $purpose eq 'facet') {
+                next unless @parts > 3;
                 $field->{search_group} = $parts[1];
                 $field->{name} = $parts[2];
-                $field->{weight} = $parts[3];
-                $field->{value} = join(' ', $parts[4..$#parts]);
+                $field->{value} = join(' ', @parts[3 .. $#parts]);
 
-            } elsif ($purpose eq 'facet') {
-                $field->{search_group} = $parts[1];
-                $field->{name} = $parts[2];
-                $field->{value} = join(' ', $parts[3..$#parts]);
-
-            } elsif ($purpose eq 'filter' || $purpose eq 'sorter') {
+            } else { # filter or sorter
+                next unless @parts > 2;
                 $field->{name} = $parts[1];
-                $field->{value} = join(' ', $parts[2..$#parts]);
+                $field->{value} = join(' ', @parts[2 .. $#parts]);
             }
+
+            # Stamp each field with the additional bib metadata.
+            $field->{$_} = $db_rec->{$_} for 
+                qw/id bib_source metarecord create_date edit_date deleted/;
 
             push(@$bib_data, $field);
         }

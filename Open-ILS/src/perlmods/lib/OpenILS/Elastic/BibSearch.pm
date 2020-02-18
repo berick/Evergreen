@@ -252,11 +252,16 @@ sub create_index_properties {
 
     my $fields = $self->get_dynamic_fields;
 
+    $logger->info('ES ' . OpenSRF::Utils::JSON->perl2JSON($fields));
+
     for my $field (@$fields) {
+        
 
         my $field_name = $field->name;
         my $search_group = $field->search_group;
         $field_name = "$search_group|$field_name" if $search_group;
+
+        $logger->info("ES ONE FIELD name=$field_name: " . OpenSRF::Utils::JSON->perl2JSON($field));
 
         my $def;
 
@@ -363,7 +368,8 @@ sub create_index {
             $self->es->indices->put_mapping({
                 index => $index_name,
                 type  => 'record',
-                body  => {dynamic => 'strict', properties => {$field => $properties->{$field}}}
+                #body  => {dynamic => 'strict', properties => {$field => $properties->{$field}}}
+                body  => {properties => {$field => $properties->{$field}}}
             });
         };
 
