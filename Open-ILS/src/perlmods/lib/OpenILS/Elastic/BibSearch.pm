@@ -31,6 +31,12 @@ use base qw/OpenILS::Elastic/;
 my $DEFAULT_BIB_BATCH_SIZE = 500;
 my $INDEX_CLASS = 'bib-search';
 
+# https://www.elastic.co/guide/en/elasticsearch/reference/current/ignore-above.html
+# Useful for ignoring excessively long filters, sorters, and facets.
+# Only applied to the keyword variation of each index.  Does not affect
+# the 'text' varieties.
+my $IGNORE_ABOVE = 256;
+
 my $BASE_INDEX_SETTINGS = {
     analysis => {
         analyzer => {
@@ -121,7 +127,7 @@ my $BASE_PROPERTIES = {
     # searched via 'text' indexes.
     title => {
         type => 'keyword',
-        ignore_above => 256,
+        ignore_above => $IGNORE_ABOVE,
         normalizer => 'custom_lowercase',
         fields => {
             text => {type => 'text'},
@@ -132,7 +138,7 @@ my $BASE_PROPERTIES = {
     },
     author => {
         type => 'keyword',
-        ignore_above => 256,
+        ignore_above => $IGNORE_ABOVE,
         normalizer => 'custom_lowercase',
         fields => {
             text => {type => 'text'},
@@ -143,7 +149,7 @@ my $BASE_PROPERTIES = {
     },
     subject => {
         type => 'keyword',
-        ignore_above => 256,
+        ignore_above => $IGNORE_ABOVE,
         normalizer => 'custom_lowercase',
         fields => {
             text => {type => 'text'},
@@ -154,7 +160,7 @@ my $BASE_PROPERTIES = {
     },
     series => {
         type => 'keyword',
-        ignore_above => 256,
+        ignore_above => $IGNORE_ABOVE,
         normalizer => 'custom_lowercase',
         fields => {
             text => {type => 'text'},
@@ -168,7 +174,7 @@ my $BASE_PROPERTIES = {
         # keyword field, but we index it just the same (sans lowercase) 
         # for structural consistency with other group fields.
         type => 'keyword',
-        ignore_above => 256,
+        ignore_above => $IGNORE_ABOVE,
         fields => {
             text => {type => 'text'},
             text_folded => {type => 'text', analyzer => 'folding'},
@@ -179,7 +185,7 @@ my $BASE_PROPERTIES = {
     identifier => {
         # Avoid full-text indexing on identifier fields.
         type => 'keyword',
-        ignore_above => 256,
+        ignore_above => $IGNORE_ABOVE,
         normalizer => 'custom_lowercase',
     },
 
@@ -191,7 +197,7 @@ my $BASE_PROPERTIES = {
     kw => {type => 'text'},
     id => {
         type => 'keyword',
-        ignore_above => 256
+        ignore_above => $IGNORE_ABOVE
     }
 };
 
@@ -269,31 +275,41 @@ sub create_index_properties {
             }
 
         } else {
-
-            # Non-grouped fields are used for filtering and sorting, so
-            # they don't need as much processing.
+            # Filters and sorters
 
             $def = {
                 type => 'keyword',
-                ignore_above => 256,
+                ignore_above => $IGNORE_ABOVE,
                 normalizer => 'custom_lowercase'
             };
         }
 
-        if ($field->facet_field eq 't') {
-            $def->{fields} = {} unless $def->{fields}; # facet only?
-            # Facet fields are used for aggregation which requires
-            # an additional unaltered keyword field.
-            $def->{fields}->{facet} = {
-                type => 'keyword',
-                ignore_above => 256
-            };
+        if ($def) {
+            $logger->debug("ES adding field $field_name: ". 
+                OpenSRF::Utils::JSON->perl2JSON($def));
+    
+            $properties->{$field_name} = $def;
         }
 
-        $logger->debug("ES adding field $field_name: ". 
-            OpenSRF::Utils::JSON->perl2JSON($def));
+        # Search and facet fields can have the same name/group pair,
+        # but are stored as separate fields in ES since the content
+        # may vary between the two.
+        if ($field->facet_field eq 't') {
 
-        $properties->{$field_name} = $def;
+            # Facet fields are stored as separate fields, because their
+            # content may differ from the matching search field.
+            $field_name = "$field_name|facet";
+
+            $def = {
+                type => 'keyword',
+                ignore_above => $IGNORE_ABOVE
+            };
+
+            $logger->debug("ES adding field $field_name: ". 
+                OpenSRF::Utils::JSON->perl2JSON($def));
+
+            $properties->{$field_name} = $def;
+        }
     }
 
     return $properties;
@@ -365,6 +381,9 @@ sub create_index {
     return 1;
 }
 
+# TODO: elastic.bib_record_properties needs to also pull values
+# from metabib.facet_entry
+# TODO: stamp each field with a 'purpose' (search, facet, filter, sorter)
 sub get_bib_data {
     my ($self, $record_ids) = @_;
 
@@ -452,6 +471,7 @@ sub populate_bib_index_batch {
             next unless defined $value && $value ne '';
 
             $fname = "$fclass|$fname" if $fclass;
+            $fname = "$fname|facet" if $field->{purpose} eq 'facet';
             $value = $self->truncate_value($value);
 
             if ($fname eq 'identifier|isbn') {

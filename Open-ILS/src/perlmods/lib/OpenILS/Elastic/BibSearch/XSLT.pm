@@ -31,6 +31,10 @@ sub sorter {
     return $self->{sorter} ? 't' : 'f';
 }
 
+sub weight {
+    return $self->{weight} || 1;
+}
+
 package OpenILS::Elastic::BibSearch::XSLT;
 use strict;
 use warnings;
@@ -53,7 +57,7 @@ sub xsl_doc {
     my ($self) = @_;
 
     $self->{xsl_doc} = XML::LibXML->load_xml(location => $self->xsl_file);
-        unless ($self->{xsl_doc});
+        unless $self->{xsl_doc};
 
     return $self->{xsl_doc};
 }
@@ -82,10 +86,6 @@ sub add_dynamic_field {
 
     push(@$fields, $field);
 }
-
-# TODO: what to do about fields that have the same class/name
-# and are both search and facet fields, but the facet values
-# are different than the searched value?
 
 sub get_dynamic_fields {
     my $self = shift;
@@ -136,18 +136,42 @@ sub get_bib_data {
         my $result = $self->xsl_sheet->transform($marc_doc);
         my $output = $stylesheet->output_as_chars($result);
 
-        my @fields = split(/\n/, $output);
-        for my $field (@fields) {
-            my @parts = split(/ /, $field);
-            my $field_type = $parts[0];
+        my @rows = split(/\n/, $output);
+        my $first = 1;
+        for my $row (@rows) {
+            my @parts = split(/ /, $row);
+            my $purpose = $parts[0];
 
-            if ($field_type eq 'search') {
-            } elsif ($field_type eq 'facet') {
-            } elsif ($field_type eq 'filter') {
-            } elsif ($field_type eq 'sorter') {
+            my $field = {purpose => $purpose};
+
+            if ($first) {
+                # Stamp the first field with the additional bib metadata.
+                $field->{$_} = $db_rec->{$_} for 
+                    qw/id bib_source metarecord create_date edit_date/;
+                $first = 0;
+            }
+
+            if ($purpose eq 'search') {
+                $field->{search_group} = @parts[1];
+                $field->{name} = @parts[2];
+                $field->{weight} = @parts[3];
+                $field->{value} = join(' ', @parts[4..$#parts]);
+
+            } elsif ($purpose eq 'facet') {
+                $field->{search_group} = @parts[1];
+                $field->{name} = @parts[2];
+                $field->{value} = join(' ', @parts[3..$#parts]);
+
+            } elsif ($purpose eq 'filter' || $purpose eq 'sorter') {
+                $field->{name} = @parts[1];
+                $field->{value} = join(' ', @parts[2..$#parts]);
             }
         }
+
+        push(@$bib_data, $field);
     }
+
+    return $bib_data;
 }
 
 sub get_bib_db_data {
