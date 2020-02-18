@@ -6,6 +6,7 @@ use OpenSRF::Utils::JSON;
 use OpenILS::Utils::Fieldmapper;
 use OpenILS::Utils::CStoreEditor;
 use OpenILS::Elastic::BibSearch;
+use OpenILS::Elastic::BibSearch::XSLT;
 
 my $help;
 my $osrf_config = '/openils/conf/opensrf_core.xml';
@@ -21,6 +22,7 @@ my $start_record;
 my $stop_record;
 my $modified_since;
 my $max_duration;
+my $use_xslt;
 my $batch_size = 500;
 
 # Database settings read from ENV by default.
@@ -46,6 +48,7 @@ GetOptions(
     'modified-since=s'  => \$modified_since,
     'max-duration=s'    => \$max_duration,
     'batch-size=s'      => \$batch_size,
+    'use-xslt=s'        => \$use_xslt,
     'db-name=s'         => \$db_name,
     'db-host=s'         => \$db_host,
     'db-port=s'         => \$db_port,
@@ -141,11 +144,22 @@ OpenILS::Utils::CStoreEditor::init();
 my $es;
 
 if ($index_class eq 'bib-search') {
-    $es = OpenILS::Elastic::BibSearch->new(
-        cluster => $cluster, 
-        index_name => $index_name,
-        write_mode => 1
-    );
+
+    if ($use_xslt) {
+        $es = OpenILS::Elastic::BibSearch::XSLT->new(
+            cluster => $cluster, 
+            index_name => $index_name,
+            write_mode => 1,
+            xsl_file => $use_xslt
+        );
+    } else {
+
+        $es = OpenILS::Elastic::BibSearch->new(
+            cluster => $cluster, 
+            index_name => $index_name,
+            write_mode => 1
+        );
+    }
 }
 
 if (!$es) {

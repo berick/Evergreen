@@ -56,7 +56,7 @@ sub xsl_file {
 sub xsl_doc {
     my ($self) = @_;
 
-    $self->{xsl_doc} = XML::LibXML->load_xml(location => $self->xsl_file);
+    $self->{xsl_doc} = XML::LibXML->load_xml(location => $self->xsl_file)
         unless $self->{xsl_doc};
 
     return $self->{xsl_doc};
@@ -134,7 +134,7 @@ sub get_bib_data {
     for my $db_rec (@$db_data) {
         my $marc_doc = XML::LibXML->load_xml(string => $db_rec->{marc});
         my $result = $self->xsl_sheet->transform($marc_doc);
-        my $output = $stylesheet->output_as_chars($result);
+        my $output = $self->xsl_sheet->output_as_chars($result);
 
         my @rows = split(/\n/, $output);
         my $first = 1;
@@ -152,23 +152,23 @@ sub get_bib_data {
             }
 
             if ($purpose eq 'search') {
-                $field->{search_group} = @parts[1];
-                $field->{name} = @parts[2];
-                $field->{weight} = @parts[3];
-                $field->{value} = join(' ', @parts[4..$#parts]);
+                $field->{search_group} = $parts[1];
+                $field->{name} = $parts[2];
+                $field->{weight} = $parts[3];
+                $field->{value} = join(' ', $parts[4..$#parts]);
 
             } elsif ($purpose eq 'facet') {
-                $field->{search_group} = @parts[1];
-                $field->{name} = @parts[2];
-                $field->{value} = join(' ', @parts[3..$#parts]);
+                $field->{search_group} = $parts[1];
+                $field->{name} = $parts[2];
+                $field->{value} = join(' ', $parts[3..$#parts]);
 
             } elsif ($purpose eq 'filter' || $purpose eq 'sorter') {
-                $field->{name} = @parts[1];
-                $field->{value} = join(' ', @parts[2..$#parts]);
+                $field->{name} = $parts[1];
+                $field->{value} = join(' ', $parts[2..$#parts]);
             }
-        }
 
-        push(@$bib_data, $field);
+            push(@$bib_data, $field);
+        }
     }
 
     return $bib_data;
