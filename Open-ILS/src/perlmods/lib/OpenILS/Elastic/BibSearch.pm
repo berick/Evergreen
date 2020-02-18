@@ -213,6 +213,16 @@ sub language_analyzers {
     return ("english");
 }
 
+sub get_dynamic_fields {
+    my $self = shift;
+
+    # elastic.bib_field has no primary key field, so retrieve_all won't work.
+    # Note the name value may be repeated across search group depending
+    # on local configuration.
+    return new_editor()->search_elastic_bib_field({name => {'!=' => undef}});
+}
+
+
 sub create_index_properties {
     my ($self) = @_;
 
@@ -234,10 +244,7 @@ sub create_index_properties {
         } foreach qw/title subject series keyword/;
     }
 
-    # elastic.bib_field has no primary key field, so retrieve_all won't work.
-    # Note the name value may be repeated across search group depending
-    # on local configuration.
-    my $fields = new_editor()->search_elastic_bib_field({name => {'!=' => undef}});
+    my $fields = $self->get_dynamic_fields;
 
     for my $field (@$fields) {
 
@@ -248,15 +255,17 @@ sub create_index_properties {
         my $def;
 
         if ($search_group) {
+            if ($field->search_field eq 't') {
 
-            # Use the same fields and analysis as the 'grouped' field.
-            $def = clone($properties->{$search_group});
-            $def->{copy_to} = [$search_group, $SHORT_GROUP_MAP{$search_group}];
+                # Use the same fields and analysis as the 'grouped' field.
+                $def = clone($properties->{$search_group});
+                $def->{copy_to} = [$search_group, $SHORT_GROUP_MAP{$search_group}];
 
-            # Apply ranking boost to each analysis variation.
-            my $flds = $def->{fields};
-            if ($flds && (my $boost = ($field->weight || 1)) > 1) {
-                $flds->{$_}->{boost} = $boost foreach keys %$flds;
+                # Apply ranking boost to each analysis variation.
+                my $flds = $def->{fields};
+                if ($flds && (my $boost = ($field->weight || 1)) > 1) {
+                    $flds->{$_}->{boost} = $boost foreach keys %$flds;
+                }
             }
 
         } else {
@@ -271,7 +280,8 @@ sub create_index_properties {
             };
         }
 
-        if ($field->facet_field eq 't' && $def->{fields}) {
+        if ($field->facet_field eq 't') {
+            $def->{fields} = {} unless $def->{fields}; # facet only?
             # Facet fields are used for aggregation which requires
             # an additional unaltered keyword field.
             $def->{fields}->{facet} = {

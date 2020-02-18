@@ -279,7 +279,6 @@ WHERE name NOT IN (
     'date1',
     'date2',
     'bib_level',
-    'icon_format',
     'item_form',
     'item_lang',
     'item_type',
