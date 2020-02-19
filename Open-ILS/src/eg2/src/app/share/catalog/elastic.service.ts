@@ -128,7 +128,7 @@ export class ElasticService {
         ts.facetFilters.forEach(f => {
             if (f.facetValue !== '') {
                 rootNode.filter(new TermQuery(
-                    `${f.facetClass}|${f.facetName}.facet`, f.facetValue));
+                    `${f.facetClass}|${f.facetName}|facet`, f.facetValue));
             }
         });
 

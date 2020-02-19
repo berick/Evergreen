@@ -368,8 +368,10 @@ sub create_index {
             $self->es->indices->put_mapping({
                 index => $index_name,
                 type  => 'record',
-                #body  => {dynamic => 'strict', properties => {$field => $properties->{$field}}}
-                body  => {properties => {$field => $properties->{$field}}}
+                body  => {
+                    dynamic => 'strict', 
+                    properties => {$field => $properties->{$field}}
+                }
             });
         };
 

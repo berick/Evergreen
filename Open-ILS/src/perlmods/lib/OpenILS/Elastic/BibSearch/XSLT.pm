@@ -116,34 +116,18 @@ sub get_dynamic_fields {
 
     @seen_fields = (); # reset with each run
 
-    my $doc = $self->xsl_doc;
+    my $null_doc = XML::LibXML->load_xml(string => '<root/>');
+    my $result = $self->xsl_sheet->transform($null_doc, index_defs_only => '1');
+    my $output = $self->xsl_sheet->output_as_chars($result);
 
-    for my $node ($doc->findnodes('//xsl:call-template[@name="add_search_entry"]')) {
-        my $class = $node->findnodes('./xsl:with-param[@name="field_class"]/text()');
-        my $name = $node->findnodes('./xsl:with-param[@name="index_name"]/text()');
-        my $weight = $node->findnodes('./xsl:with-param[@name="weight"]/text()');
-        $self->add_dynamic_field($fields, 'search', "$class", "$name", "$weight");
-    }
-
-    for my $node ($doc->findnodes('//xsl:call-template[@name="add_facet_entry"]')) {
-        my $class = $node->findnodes('./xsl:with-param[@name="field_class"]/text()');
-        my $name = $node->findnodes('./xsl:with-param[@name="index_name"]/text()');
-        $self->add_dynamic_field($fields, 'facet', "$class", "$name");
-    }
-
-    for my $node ($doc->findnodes('//xsl:call-template[@name="add_filter_entry"]')) {
-        my $name = $node->findnodes('./xsl:with-param[@name="name"]/text()');
-        $self->add_dynamic_field($fields, 'filter', undef, "$name");
-    }
-
-    for my $node ($doc->findnodes('//xsl:call-template[@name="add_composite_filter_entry"]')) {
-        my $name = $node->findnodes('./xsl:with-param[@name="name"]/text()');
-        $self->add_dynamic_field($fields, 'filter', undef, "$name");
-    }
-
-    for my $node ($doc->findnodes('//xsl:call-template[@name="add_sorter_entry"]')) {
-        my $name = $node->findnodes('./xsl:with-param[@name="name"]/text()');
-        $self->add_dynamic_field($fields, 'sorter', undef, "$name");
+    my @rows = split(/\n/, $output);
+    for my $row (@rows) {
+        my @parts = split(/ /, $row);
+        if ($parts[0] eq 'search' || $parts[0] eq 'facet') {
+            $self->add_dynamic_field($fields, @parts);
+        } else {
+            $self->add_dynamic_field($fields, $parts[0], undef, $parts[1]);
+        }
     }
 
     return $fields;
@@ -156,8 +140,15 @@ sub get_bib_data {
     my $db_data = $self->get_bib_db_data($record_ids);
 
     for my $db_rec (@$db_data) {
+
+        if ($db_rec->{deleted} == 1) {
+            # No need to extract index values.
+            push(@$bib_data, {deleted => 1});
+            next;
+        }
+
         my $marc_doc = XML::LibXML->load_xml(string => $db_rec->{marc});
-        my $result = $self->xsl_sheet->transform($marc_doc);
+        my $result = $self->xsl_sheet->transform($marc_doc, index_defs_only => 'false');
         my $output = $self->xsl_sheet->output_as_chars($result);
 
         my @rows = split(/\n/, $output);
