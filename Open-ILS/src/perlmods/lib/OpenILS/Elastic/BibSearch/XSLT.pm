@@ -88,12 +88,14 @@ sub xsl_sheet {
 
 my @seen_fields;
 sub add_dynamic_field {
-    my ($self, $fields, $purpose, $search_group, $name, $weight) = @_;
+    my ($self, $fields, $purpose, $search_group, $name, $weight, $normalizers) = @_;
     return unless $name;
-    $search_group ||= '';
-    $weight ||= 1;
 
-    my $tag = $purpose . ($search_group || '') . $name;
+    $weight = '' if !$weight || $weight eq '_';
+    $search_group = '' if !$search_group || $search_group eq '_';
+    $normalizers = '' if !$normalizers || $normalizers eq '_';
+
+    my $tag = $purpose . $search_group . $name;
     return if grep {$_ eq $tag} @seen_fields;
     push(@seen_fields, $tag);
 
@@ -104,7 +106,8 @@ sub add_dynamic_field {
         purpose => $purpose, 
         search_group => $search_group, 
         name => $name,
-        weight => $weight
+        weight => $weight,
+        normalizers => $normalizers
     );
 
     push(@$fields, $field);
@@ -117,17 +120,13 @@ sub get_dynamic_fields {
     @seen_fields = (); # reset with each run
 
     my $null_doc = XML::LibXML->load_xml(string => '<root/>');
-    my $result = $self->xsl_sheet->transform($null_doc, index_defs_only => '1');
+    my $result = $self->xsl_sheet->transform($null_doc, target => '"index-fields"');
     my $output = $self->xsl_sheet->output_as_chars($result);
 
     my @rows = split(/\n/, $output);
     for my $row (@rows) {
         my @parts = split(/ /, $row);
-        if ($parts[0] eq 'search' || $parts[0] eq 'facet') {
-            $self->add_dynamic_field($fields, @parts);
-        } else {
-            $self->add_dynamic_field($fields, $parts[0], undef, $parts[1]);
-        }
+        $self->add_dynamic_field($fields, @parts);
     }
 
     return $fields;
@@ -148,27 +147,23 @@ sub get_bib_data {
         }
 
         my $marc_doc = XML::LibXML->load_xml(string => $db_rec->{marc});
-        my $result = $self->xsl_sheet->transform($marc_doc, index_defs_only => 'false');
+        my $result = $self->xsl_sheet->transform($marc_doc, target => '"index-values"');
         my $output = $self->xsl_sheet->output_as_chars($result);
 
         my @rows = split(/\n/, $output);
         for my $row (@rows) {
-            my @parts = split(/ /, $row);
+            my ($purpose, $search_group, $name, @tokens) = split(/ /, $row);
 
-            my $purpose = $parts[0];
-            my $field = {purpose => $purpose};
+            $search_group = '' if ($search_group || '') eq '_';
 
-            if ($purpose eq 'search' || $purpose eq 'facet') {
-                next unless @parts > 3;
-                $field->{search_group} = $parts[1];
-                $field->{name} = $parts[2];
-                $field->{value} = join(' ', @parts[3 .. $#parts]);
+            my $value = join(' ', @tokens);
 
-            } else { # filter or sorter
-                next unless @parts > 2;
-                $field->{name} = $parts[1];
-                $field->{value} = join(' ', @parts[2 .. $#parts]);
-            }
+            my $field = {
+                purpose => $purpose,
+                search_group => $search_group,
+                name => $name,
+                value => $value
+            };
 
             # Stamp each field with the additional bib metadata.
             $field->{$_} = $db_rec->{$_} for 
