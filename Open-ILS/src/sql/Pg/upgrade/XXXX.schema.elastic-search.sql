@@ -67,7 +67,7 @@ CREATE OR REPLACE VIEW elastic.bib_field AS
             NULL::INT AS metabib_field,
             crad.name,
             crad.label,
-            NULL AS search_group,
+            NULL AS field_class,
             crad.sorter,
             FALSE AS search_field,
             FALSE AS facet_field,
@@ -79,7 +79,7 @@ CREATE OR REPLACE VIEW elastic.bib_field AS
             cmf.id AS metabib_field,
             cmf.name,
             cmf.label,
-            cmf.field_class AS search_group,
+            cmf.field_class,
             FALSE AS sorter,
             -- always treat identifier fields as non-search fields.
             (cmf.field_class <> 'identifier' AND cmf.search_field) AS search_field,
@@ -92,7 +92,7 @@ CREATE OR REPLACE VIEW elastic.bib_field AS
 
 CREATE OR REPLACE FUNCTION elastic.bib_record_attrs(bre_id BIGINT)
 RETURNS TABLE (
-    search_group TEXT,
+    field_class TEXT,
     name TEXT,
     source BIGINT,
     value TEXT
@@ -100,7 +100,7 @@ RETURNS TABLE (
 AS $FUNK$
     SELECT DISTINCT record.* FROM (
         SELECT 
-            NULL::TEXT AS search_group, 
+            NULL::TEXT AS field_class, 
             crad.name, 
             mrs.source, 
             mrs.value
@@ -111,7 +111,7 @@ AS $FUNK$
 
         -- record attributes
         SELECT 
-            NULL::TEXT AS search_group, 
+            NULL::TEXT AS field_class, 
             crad.name, 
             mraf.id AS source, 
             mraf.value
@@ -123,7 +123,7 @@ $FUNK$ LANGUAGE SQL STABLE;
 
 CREATE OR REPLACE FUNCTION elastic.bib_record_static_props(bre_id BIGINT)
 RETURNS TABLE (
-    search_group TEXT,
+    field_class TEXT,
     name TEXT,
     source BIGINT,
     value TEXT
@@ -131,7 +131,7 @@ RETURNS TABLE (
 AS $FUNK$
     SELECT DISTINCT record.* FROM (
         SELECT
-            cmf.field_class AS search_group, 
+            cmf.field_class,
             cmf.name, 
             props.source, 
             CASE WHEN cmf.joiner IS NOT NULL THEN
@@ -140,17 +140,26 @@ AS $FUNK$
                 props.value
             END AS value
         FROM (
-            SELECT * FROM metabib.title_field_entry mtfe WHERE mtfe.source = $1
+            SELECT field, source, value 
+                FROM metabib.title_field_entry mtfe WHERE mtfe.source = $1
             UNION 
-            SELECT * FROM metabib.author_field_entry mafe WHERE mafe.source = $1
+            SELECT field, source, value 
+                FROM metabib.author_field_entry mafe WHERE mafe.source = $1
             UNION 
-            SELECT * FROM metabib.subject_field_entry msfe WHERE msfe.source = $1
+            SELECT field, source, value 
+                FROM metabib.subject_field_entry msfe WHERE msfe.source = $1
             UNION 
-            SELECT * FROM metabib.series_field_entry msrfe WHERE msrfe.source = $1
+            SELECT field, source, value 
+                FROM metabib.series_field_entry msrfe WHERE msrfe.source = $1
             UNION 
-            SELECT * FROM metabib.keyword_field_entry mkfe WHERE mkfe.source = $1
+            SELECT field, source, value 
+                FROM metabib.keyword_field_entry mkfe WHERE mkfe.source = $1
             UNION 
-            SELECT * FROM metabib.identifier_field_entry mife WHERE mife.source = $1
+            SELECT field, source, value 
+                FROM metabib.identifier_field_entry mife WHERE mife.source = $1
+            UNION 
+            SELECT field, source, value 
+                FROM metabib.facet_entry mfe WHERE mfe.source = $1
         ) props
         JOIN config.metabib_field cmf ON (cmf.id = props.field)
         WHERE cmf.elastic_field
@@ -159,7 +168,7 @@ $FUNK$ LANGUAGE SQL STABLE;
 
 CREATE OR REPLACE FUNCTION elastic.bib_record_dynamic_props(bre_id BIGINT)
 RETURNS TABLE (
-    search_group TEXT,
+    field_class TEXT,
     name TEXT,
     source BIGINT,
     value TEXT
@@ -167,7 +176,7 @@ RETURNS TABLE (
 AS $FUNK$
     SELECT DISTINCT record.* FROM (
         SELECT
-            cmf.field_class AS search_group, 
+            cmf.field_class,
             cmf.name, 
             props.source, 
             CASE WHEN cmf.joiner IS NOT NULL THEN
@@ -186,7 +195,7 @@ $FUNK$ LANGUAGE SQL STABLE;
 
 CREATE OR REPLACE FUNCTION elastic.bib_record_properties(bre_id BIGINT) 
     RETURNS TABLE (
-        search_group TEXT,
+        field_class TEXT,
         name TEXT,
         source BIGINT,
         value TEXT
@@ -289,5 +298,10 @@ WHERE name NOT IN (
     'sr_format',
     'vr_format'
 );
+
+-- Bill's elastic VM for testing.
+UPDATE elastic.node 
+    SET host = 'elastic.gamma', port = 80, path = '/elastic/node1' 
+    WHERE id = 1;
 
 */

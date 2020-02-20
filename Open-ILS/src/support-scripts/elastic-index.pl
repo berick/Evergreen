@@ -22,7 +22,7 @@ my $start_record;
 my $stop_record;
 my $modified_since;
 my $max_duration;
-my $use_xslt;
+my $bib_transform;
 my $batch_size = 500;
 
 # Database settings read from ENV by default.
@@ -48,7 +48,7 @@ GetOptions(
     'modified-since=s'  => \$modified_since,
     'max-duration=s'    => \$max_duration,
     'batch-size=s'      => \$batch_size,
-    'use-xslt=s'        => \$use_xslt,
+    'bib-transform=s'   => \$bib_transform,
     'db-name=s'         => \$db_name,
     'db-host=s'         => \$db_host,
     'db-port=s'         => \$db_port,
@@ -145,12 +145,12 @@ my $es;
 
 if ($index_class eq 'bib-search') {
 
-    if ($use_xslt) {
+    if ($bib_transform) {
         $es = OpenILS::Elastic::BibSearch::XSLT->new(
             cluster => $cluster, 
             index_name => $index_name,
             write_mode => 1,
-            xsl_file => $use_xslt
+            xsl_file => $bib_transform
         );
     } else {
 

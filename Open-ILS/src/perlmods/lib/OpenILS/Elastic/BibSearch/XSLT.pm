@@ -24,9 +24,9 @@ sub name {
     my $self = shift;
     return $self->{name};
 }
-sub search_group {
+sub field_class {
     my $self = shift;
-    return $self->{search_group};
+    return $self->{field_class};
 }
 sub search_field {
     my $self = shift;
@@ -57,7 +57,6 @@ use XML::LibXSLT;
 use OpenSRF::Utils::Logger qw/:logger/;
 use OpenILS::Utils::CStoreEditor qw/:funcs/;
 use OpenILS::Elastic::BibSearch;
-use OpenILS::Utils::Normalize;
 use base qw/OpenILS::Elastic::BibSearch/;
 
 
@@ -88,26 +87,24 @@ sub xsl_sheet {
 
 my @seen_fields;
 sub add_dynamic_field {
-    my ($self, $fields, $purpose, $search_group, $name, $weight, $normalizers) = @_;
+    my ($self, $fields, $purpose, $field_class, $name, $weight) = @_;
     return unless $name;
 
     $weight = '' if !$weight || $weight eq '_';
-    $search_group = '' if !$search_group || $search_group eq '_';
-    $normalizers = '' if !$normalizers || $normalizers eq '_';
+    $field_class = '' if !$field_class || $field_class eq '_';
 
-    my $tag = $purpose . $search_group . $name;
+    my $tag = $purpose . $field_class . $name;
     return if grep {$_ eq $tag} @seen_fields;
     push(@seen_fields, $tag);
 
     $logger->info("ES adding dynamic field purpose=$purpose ".
-        "search_group=$search_group name=$name weight=$weight");
+        "field_class=$field_class name=$name weight=$weight");
 
     my $field = OpenILS::Elastic::BibSearch::BibField->new(
         purpose => $purpose, 
-        search_group => $search_group, 
+        field_class => $field_class, 
         name => $name,
-        weight => $weight,
-        normalizers => $normalizers
+        weight => $weight
     );
 
     push(@$fields, $field);
@@ -152,15 +149,15 @@ sub get_bib_data {
 
         my @rows = split(/\n/, $output);
         for my $row (@rows) {
-            my ($purpose, $search_group, $name, @tokens) = split(/ /, $row);
+            my ($purpose, $field_class, $name, @tokens) = split(/ /, $row);
 
-            $search_group = '' if ($search_group || '') eq '_';
+            $field_class = '' if ($field_class || '') eq '_';
 
             my $value = join(' ', @tokens);
 
             my $field = {
                 purpose => $purpose,
-                search_group => $search_group,
+                field_class => $field_class,
                 name => $name,
                 value => $value
             };

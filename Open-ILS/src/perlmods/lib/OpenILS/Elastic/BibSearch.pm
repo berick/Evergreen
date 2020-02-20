@@ -258,19 +258,19 @@ sub create_index_properties {
         
 
         my $field_name = $field->name;
-        my $search_group = $field->search_group;
-        $field_name = "$search_group|$field_name" if $search_group;
+        my $field_class = $field->field_class;
+        $field_name = "$field_class|$field_name" if $field_class;
 
         $logger->info("ES ONE FIELD name=$field_name: " . OpenSRF::Utils::JSON->perl2JSON($field));
 
         my $def;
 
-        if ($search_group) {
+        if ($field_class) {
             if ($field->search_field eq 't') {
 
                 # Use the same fields and analysis as the 'grouped' field.
-                $def = clone($properties->{$search_group});
-                $def->{copy_to} = [$search_group, $SHORT_GROUP_MAP{$search_group}];
+                $def = clone($properties->{$field_class});
+                $def->{copy_to} = [$field_class, $SHORT_GROUP_MAP{$field_class}];
 
                 # Apply ranking boost to each analysis variation.
                 my $flds = $def->{fields};
@@ -398,7 +398,7 @@ sub get_bib_data {
     my $ids_str = join(',', @$record_ids);
 
     my $sql = <<SQL;
-SELECT DISTINCT ON (bre.id, search_group, name, value)
+SELECT DISTINCT ON (bre.id, field_class, name, value)
     bre.id, 
     bre.create_date, 
     bre.edit_date, 
@@ -472,7 +472,7 @@ sub populate_bib_index_batch {
                 ($body->{edit_date} = $field->{edit_date}) =~ s/ /T/g;
             }
 
-            my $fclass = $field->{search_group};
+            my $fclass = $field->{field_class};
             my $fname = $field->{name};
             my $value = $field->{value};
 
