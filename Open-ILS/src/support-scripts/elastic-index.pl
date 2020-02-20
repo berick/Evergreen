@@ -6,7 +6,6 @@ use OpenSRF::Utils::JSON;
 use OpenILS::Utils::Fieldmapper;
 use OpenILS::Utils::CStoreEditor;
 use OpenILS::Elastic::BibSearch;
-use OpenILS::Elastic::BibSearch::XSLT;
 
 my $help;
 my $osrf_config = '/openils/conf/opensrf_core.xml';

@@ -4,7 +4,13 @@
   version="1.0">
   <xsl:output encoding="UTF-8" method="text"/>
 
-  <!-- 
+  <!--
+
+      XSLT for transforming bib records into indexable fields / data
+      suitable for consumption by the Elasticsearch BibSearch indexer.
+
+      TRANSFORM REQUIREMENTS ===
+
       Transform operates in one of two modes:
 
       1. target == 'index-fields'
@@ -38,6 +44,30 @@
 
       search subject topic South America
       facet author personal Janey Jam "Jojo" Jones
+
+      INDEX REQUIREMENTS ===
+
+      For searches, the index name can be anything, but all indexes must 
+      use one of the following search classes:
+
+      title
+      author
+      subject
+      series
+      keyword
+      identifier
+
+      Required Filters for Bib Transform Based on Staff Catalog Options
+      at Time of Writing:
+
+      item_type
+      item_form
+      item_lang
+      audience
+      vr_format
+      bib_level
+      lit_form
+      search_format
   -->
 
   <xsl:template match="@*|node()">
@@ -644,7 +674,7 @@
   </xsl:template>
 
   <xsl:template name="compile_sorters">
-    
+
     <!-- author sort is the first 1XX value -->
     <xsl:for-each select="marc:datafield[starts-with(@tag, '1')]">
       <xsl:sort select="@tag"/>
@@ -696,7 +726,7 @@
   </xsl:template>
 
   <xsl:template name="compile_filters">
-  
+
     <!-- start with filters that are not used within composite filters.
          These can be added to the document inline. -->
     <xsl:call-template name="add_filter_entry">
@@ -756,7 +786,7 @@
       </xsl:with-param>
     </xsl:call-template>
 
-    <!-- Filters that may be used within composite filters are 
+    <!-- Filters that may be used within composite filters are
          stored in a local variable so they can first be added
          to the document, then used to compile composite filters -->
 
@@ -819,7 +849,7 @@
       <xsl:with-param name="name">vr_format</xsl:with-param>
       <xsl:with-param name="value" select="$vr_format" />
     </xsl:call-template>
-    
+
     <xsl:variable name="sr_format">
       <xsl:if test="$category_of_material = 's'">
         <xsl:call-template name="controlfield_value">
@@ -834,7 +864,7 @@
       <xsl:with-param name="name">sr_format</xsl:with-param>
       <xsl:with-param name="value" select="$sr_format" />
     </xsl:call-template>
-    
+
     <!-- use the extracted raw filters to create composite filters -->
 
     <xsl:call-template name="add_composite_filter_entry">
@@ -1098,15 +1128,15 @@
     <xsl:param name="sr_format_codes"/>
 
     <xsl:variable name="item_type_matches" select="
-      not($item_type_codes) or (  
+      not($item_type_codes) or (
         $item_type != '' and
         contains($item_type_codes, $item_type)
-      )  
+      )
     "/>
 
     <xsl:variable name="item_form_matches" select="
       (
-        not($item_form_codes) or 
+        not($item_form_codes) or
         contains($item_form_codes, $item_form)
       ) and (
         not($item_form_not_codes) or
@@ -1123,7 +1153,7 @@
 
     <xsl:variable name="vr_format_matches" select="
       not($vr_format_codes) or (
-        $vr_format != '' and 
+        $vr_format != '' and
         contains($vr_format_codes, $vr_format)
       )
     "/>
@@ -1137,8 +1167,8 @@
 
     <xsl:if test="
         $target = 'index-fields' or (
-        $item_type_matches and 
-        $item_form_matches and 
+        $item_type_matches and
+        $item_form_matches and
         $bib_level_matches and
         $sr_format_matches and
         $vr_format_matches
@@ -1256,7 +1286,7 @@
     </xsl:if>
   </xsl:template>
 
-  <!-- Dumps practically the entire document into a single 
+  <!-- Dumps practically the entire document into a single
        keyword|keyword index.
   -->
   <xsl:template name="keyword_full_entry">

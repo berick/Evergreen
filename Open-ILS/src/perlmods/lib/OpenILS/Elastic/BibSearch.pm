@@ -166,6 +166,8 @@ my $BASE_PROPERTIES = {
     # Values from grouped fields are copied into the group field.
     # Here we make some assumptions about the general purpose of
     # each group.
+    # The 'keyword' variation of each is used for exact matches, 
+    # starts with, and similar searches.
     # Note the ignore_above only affects the 'keyword' version of the
     # field, the assumption being text that large would solely be
     # searched via 'text' indexes.
@@ -215,10 +217,10 @@ my $BASE_PROPERTIES = {
     },
     keyword => {
         # term (aka "keyword") searches are not used on the 
-        # keyword field, but we index it just the same (sans lowercase) 
-        # for structural consistency with other group fields.
+        # keyword field, but we structure the index just the same
+        # for consistency with other group fields.
         type => 'keyword',
-        ignore_above => $IGNORE_ABOVE,
+        ignore_above => 1, # essentially a no-op.
         fields => {
             text => {type => 'text'},
             text_folded => {type => 'text', analyzer => 'folding'},
@@ -226,21 +228,22 @@ my $BASE_PROPERTIES = {
             text_stripdots => {type => 'text', analyzer => 'stripdots'}
         }
     },
+    # Identifier fields only support 'keyword' indexes, no full-text.
     identifier => {
-        # Avoid full-text indexing on identifier fields.
         type => 'keyword',
         ignore_above => $IGNORE_ABOVE,
         normalizer => 'custom_lowercase',
-    },
+    }
 };
 
-my %SHORT_GROUP_MAP = (
-    title => 'ti',
-    author => 'au',
-    subject => 'su',
-    series => 'se',
-    keyword => 'kw',
-    identifier => 'id'
+# Create aliases so users can user for 'author' with 'au', etc.
+my %SEARCH_CLASS_ALIAS_MAP = (
+    ti => 'title.text',
+    au => 'author.text',
+    su => 'subject.text',
+    se => 'series.text',
+    kw => 'keyword.text',
+    id => 'identifier'
 );
 
 sub index_class {
@@ -308,6 +311,8 @@ sub get_dynamic_fields {
 
     @seen_fields = (); # reset with each run
 
+    # Apply the transform in "target=index-fields" mode to extract just
+    # the field definitions.
     my $null_doc = XML::LibXML->load_xml(string => '<root/>');
     my $result = $self->xsl_sheet->transform($null_doc, target => '"index-fields"');
     my $output = $self->xsl_sheet->output_as_chars($result);
@@ -336,7 +341,8 @@ sub get_bib_data {
         }
 
         my $marc_doc = XML::LibXML->load_xml(string => $db_rec->{marc});
-        my $result = $self->xsl_sheet->transform($marc_doc, target => '"index-values"');
+        my $result = 
+            $self->xsl_sheet->transform($marc_doc, target => '"index-values"');
         my $output = $self->xsl_sheet->output_as_chars($result);
 
         my @rows = split(/\n/, $output);
@@ -523,7 +529,7 @@ sub create_index {
 
     # Now that we've added the static (and dynamic) fields,
     # add the shortened field_class aliases.
-    while (my ($field, $alias) = each %SHORT_GROUP_MAP) {
+    while (my ($alias, $field) = each %SEARCH_CLASS_ALIAS_MAP) {
         return 0 unless $self->create_one_field_index(
             $alias, {type => 'alias', path => $field});
     }
