@@ -10,6 +10,7 @@ use OpenILS::Elastic::BibSearch::XSLT;
 
 my $help;
 my $osrf_config = '/openils/conf/opensrf_core.xml';
+my $bib_transform = '/openils/var/xsl/elastic-bib-transform.xsl';
 my $cluster;
 my $create_index;
 my $delete_index;
@@ -22,7 +23,6 @@ my $start_record;
 my $stop_record;
 my $modified_since;
 my $max_duration;
-my $bib_transform;
 my $batch_size = 500;
 
 # Database settings read from ENV by default.
@@ -144,22 +144,12 @@ OpenILS::Utils::CStoreEditor::init();
 my $es;
 
 if ($index_class eq 'bib-search') {
-
-    if ($bib_transform) {
-        $es = OpenILS::Elastic::BibSearch::XSLT->new(
-            cluster => $cluster, 
-            index_name => $index_name,
-            write_mode => 1,
-            xsl_file => $bib_transform
-        );
-    } else {
-
-        $es = OpenILS::Elastic::BibSearch->new(
-            cluster => $cluster, 
-            index_name => $index_name,
-            write_mode => 1
-        );
-    }
+    $es = OpenILS::Elastic::BibSearch->new(
+        cluster => $cluster, 
+        index_name => $index_name,
+        xsl_file => $bib_transform,
+        write_mode => 1
+    );
 }
 
 if (!$es) {

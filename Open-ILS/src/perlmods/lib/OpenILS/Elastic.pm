@@ -367,7 +367,8 @@ sub search {
 # Avoid trying to index such data by lazily chopping it off
 # at 1/4 the limit to accomodate all UTF-8 chars.
 sub truncate_value {
-    my ($self, $value) = @_;
+    my ($self, $value, $length) = @_;
+    $length = 8190 unless $length;
     return substr($value, 0, 8190);
 }
 

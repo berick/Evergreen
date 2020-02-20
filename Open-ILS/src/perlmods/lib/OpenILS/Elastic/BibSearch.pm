@@ -1,6 +1,5 @@
-package OpenILS::Elastic::BibSearch;
 # ---------------------------------------------------------------
-# Copyright (C) 2019 King County Library System
+# Copyright (C) 2019-2020 King County Library System
 # Author: Bill Erickson <berickxx@gmail.com>
 #
 # This program is free software; you can redistribute it and/or
@@ -13,9 +12,48 @@ package OpenILS::Elastic::BibSearch;
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR code.  See the
 # GNU General Public License for more details.
 # ---------------------------------------------------------------
+package OpenILS::Elastic::BibSearch::BibField;
+# Models a single indexable field.
 use strict;
 use warnings;
-use Encode;
+
+sub new {
+    my ($class, %args) = @_;
+    return bless(\%args, $class);
+}
+sub name {
+    my $self = shift;
+    return $self->{name};
+}
+sub field_class {
+    my $self = shift;
+    return $self->{field_class};
+}
+sub search_field {
+    my $self = shift;
+    return $self->{purpose} eq 'search';
+}
+sub facet_field {
+    my $self = shift;
+    return $self->{purpose} eq 'facet';
+}
+sub sorter {
+    my $self = shift;
+    return $self->{purpose} eq 'sorter';
+}
+sub filter {
+    my $self = shift;
+    return $self->{purpose} eq 'filter';
+}
+sub weight {
+    my $self = shift;
+    return $self->{weight} || 1;
+}
+
+# ---------------------------------------------------------------
+package OpenILS::Elastic::BibSearch;
+use strict;
+use warnings;
 use DateTime;
 use Clone 'clone';
 use Time::HiRes qw/time/;
@@ -32,10 +70,16 @@ my $DEFAULT_BIB_BATCH_SIZE = 500;
 my $INDEX_CLASS = 'bib-search';
 
 # https://www.elastic.co/guide/en/elasticsearch/reference/current/ignore-above.html
-# Useful for ignoring excessively long filters, sorters, and facets.
+# Useful for ignoring excessively long filters and facets.
 # Only applied to the keyword variation of each index.  Does not affect
-# the 'text' varieties.
+# the 'text' varieties. The selected limit is arbitrary.
 my $IGNORE_ABOVE = 256;
+
+# Individual characters of some values like sorters provide less and less
+# value as the length of the text gets longer and longer.  Unlike
+# $IGNORE_ABOVE, this only trims the string, it does not prevent it from
+# getting indexed in the first place.  The selected limit is arbitrary.
+my $TRIM_ABOVE = 512;
 
 my $BASE_INDEX_SETTINGS = {
     analysis => {
@@ -188,17 +232,6 @@ my $BASE_PROPERTIES = {
         ignore_above => $IGNORE_ABOVE,
         normalizer => 'custom_lowercase',
     },
-
-    # Create some shortcut indexes for streamlining query_string searches.
-    ti => {type => 'text'},
-    au => {type => 'text'},
-    se => {type => 'text'},
-    su => {type => 'text'},
-    kw => {type => 'text'},
-    id => {
-        type => 'keyword',
-        ignore_above => $IGNORE_ABOVE
-    }
 };
 
 my %SHORT_GROUP_MAP = (
@@ -214,20 +247,144 @@ sub index_class {
     return $INDEX_CLASS;
 }
 
-# TODO: add index-specific language analyzers to DB config
+# TODO: determine when/how to apply language analyzers.
+# e.g. create lang-specific index fields?
 sub language_analyzers {
     return ("english");
 }
 
-sub get_dynamic_fields {
-    my $self = shift;
-
-    # elastic.bib_field has no primary key field, so retrieve_all won't work.
-    # Note the name value may be repeated across search group depending
-    # on local configuration.
-    return new_editor()->search_elastic_bib_field({name => {'!=' => undef}});
+sub xsl_file {
+    my ($self, $filename) = @_;
+    $self->{xsl_file} = $filename if $filename;
+    return $self->{xsl_file};
 }
 
+sub xsl_doc {
+    my ($self) = @_;
+
+    $self->{xsl_doc} = XML::LibXML->load_xml(location => $self->xsl_file)
+        unless $self->{xsl_doc};
+
+    return $self->{xsl_doc};
+}
+
+sub xsl_sheet {
+    my $self = shift;
+
+    $self->{xsl_sheet} = XML::LibXSLT->new->parse_stylesheet($self->xsl_doc)
+        unless $self->{xsl_sheet};
+
+    return $self->{xsl_sheet};
+}
+
+my @seen_fields;
+sub add_dynamic_field {
+    my ($self, $fields, $purpose, $field_class, $name, $weight) = @_;
+    return unless $name;
+
+    $weight = '' if !$weight || $weight eq '_';
+    $field_class = '' if !$field_class || $field_class eq '_';
+
+    my $tag = $purpose . $field_class . $name;
+    return if grep {$_ eq $tag} @seen_fields;
+    push(@seen_fields, $tag);
+
+    $logger->info("ES adding dynamic field purpose=$purpose ".
+        "field_class=$field_class name=$name weight=$weight");
+
+    my $field = OpenILS::Elastic::BibSearch::BibField->new(
+        purpose => $purpose, 
+        field_class => $field_class, 
+        name => $name,
+        weight => $weight
+    );
+
+    push(@$fields, $field);
+}
+
+sub get_dynamic_fields {
+    my $self = shift;
+    my $fields = [];
+
+    @seen_fields = (); # reset with each run
+
+    my $null_doc = XML::LibXML->load_xml(string => '<root/>');
+    my $result = $self->xsl_sheet->transform($null_doc, target => '"index-fields"');
+    my $output = $self->xsl_sheet->output_as_chars($result);
+
+    my @rows = split(/\n/, $output);
+    for my $row (@rows) {
+        my @parts = split(/ /, $row);
+        $self->add_dynamic_field($fields, @parts);
+    }
+
+    return $fields;
+}
+
+sub get_bib_data {
+    my ($self, $record_ids) = @_;
+
+    my $bib_data = [];
+    my $db_data = $self->get_bib_db_data($record_ids);
+
+    for my $db_rec (@$db_data) {
+
+        if ($db_rec->{deleted} == 1) {
+            # No need to extract index values.
+            push(@$bib_data, {deleted => 1});
+            next;
+        }
+
+        my $marc_doc = XML::LibXML->load_xml(string => $db_rec->{marc});
+        my $result = $self->xsl_sheet->transform($marc_doc, target => '"index-values"');
+        my $output = $self->xsl_sheet->output_as_chars($result);
+
+        my @rows = split(/\n/, $output);
+        for my $row (@rows) {
+            my ($purpose, $field_class, $name, @tokens) = split(/ /, $row);
+
+            $field_class = '' if ($field_class || '') eq '_';
+
+            my $value = join(' ', @tokens);
+
+            my $field = {
+                purpose => $purpose,
+                field_class => $field_class,
+                name => $name,
+                value => $value
+            };
+
+            # Stamp each field with the additional bib metadata.
+            $field->{$_} = $db_rec->{$_} for 
+                qw/id bib_source metarecord create_date edit_date deleted/;
+
+            push(@$bib_data, $field);
+        }
+    }
+
+    return $bib_data;
+}
+
+sub get_bib_db_data {
+    my ($self, $record_ids) = @_;
+
+    my $ids_str = join(',', @$record_ids);
+
+    my $sql = <<SQL;
+SELECT DISTINCT ON (bre.id)
+    bre.id, 
+    bre.create_date, 
+    bre.edit_date, 
+    bre.source AS bib_source,
+    bre.deleted,
+    bre.marc
+FROM biblio.record_entry bre
+LEFT JOIN metabib.metarecord_source_map mmrsm ON (mmrsm.source = bre.id)
+WHERE bre.id IN ($ids_str)
+SQL
+
+    return $self->get_db_rows($sql);
+}
 
 sub create_index_properties {
     my ($self) = @_;
@@ -252,25 +409,21 @@ sub create_index_properties {
 
     my $fields = $self->get_dynamic_fields;
 
-    $logger->info('ES ' . OpenSRF::Utils::JSON->perl2JSON($fields));
-
     for my $field (@$fields) {
-        
 
         my $field_name = $field->name;
         my $field_class = $field->field_class;
         $field_name = "$field_class|$field_name" if $field_class;
 
-        $logger->info("ES ONE FIELD name=$field_name: " . OpenSRF::Utils::JSON->perl2JSON($field));
-
         my $def;
 
         if ($field_class) {
-            if ($field->search_field eq 't') {
+            if ($field->search_field) {
 
                 # Use the same fields and analysis as the 'grouped' field.
                 $def = clone($properties->{$field_class});
-                $def->{copy_to} = [$field_class, $SHORT_GROUP_MAP{$field_class}];
+                # Copy grouped fields into their group parent field.
+                $def->{copy_to} = $field_class;
 
                 # Apply ranking boost to each analysis variation.
                 my $flds = $def->{fields};
@@ -284,9 +437,12 @@ sub create_index_properties {
 
             $def = {
                 type => 'keyword',
-                ignore_above => $IGNORE_ABOVE,
                 normalizer => 'custom_lowercase'
             };
+
+            # Long sorter values are not necessarily unexpected,
+            # e.g. long titles.
+            $def->{ignore_above} = $IGNORE_ABOVE unless $field->sorter;
         }
 
         if ($def) {
@@ -299,7 +455,7 @@ sub create_index_properties {
         # Search and facet fields can have the same name/group pair,
         # but are stored as separate fields in ES since the content
         # may vary between the two.
-        if ($field->facet_field eq 't') {
+        if ($field->facet_field) {
 
             # Facet fields are stored as separate fields, because their
             # content may differ from the matching search field.
@@ -360,58 +516,48 @@ sub create_index {
 
     # Create each mapping one at a time instead of en masse so we 
     # can more easily report when mapping creation fails.
-
     for my $field (keys %$properties) {
-        $logger->info("ES Creating index mapping for field $field");
+        return 0 unless 
+            $self->create_one_field_index($field, $properties->{$field});
+    }
 
-        eval { 
-            $self->es->indices->put_mapping({
-                index => $index_name,
-                type  => 'record',
-                body  => {
-                    dynamic => 'strict', 
-                    properties => {$field => $properties->{$field}}
-                }
-            });
-        };
-
-        if ($@) {
-            my $mapjson = OpenSRF::Utils::JSON->perl2JSON($properties->{$field});
-
-            $logger->error("ES failed to create index mapping: " .
-                "index=$index_name field=$field error=$@ mapping=$mapjson");
-
-            warn "$@\n\n";
-            return 0;
-        }
+    # Now that we've added the static (and dynamic) fields,
+    # add the shortened field_class aliases.
+    while (my ($field, $alias) = each %SHORT_GROUP_MAP) {
+        return 0 unless $self->create_one_field_index(
+            $alias, {type => 'alias', path => $field});
     }
 
     return 1;
 }
 
-# TODO: elastic.bib_record_properties needs to also pull values
-# from metabib.facet_entry
-# TODO: stamp each field with a 'purpose' (search, facet, filter, sorter)
-sub get_bib_data {
-    my ($self, $record_ids) = @_;
+sub create_one_field_index {
+    my ($self, $field, $properties) = @_;
+    my $index_name = $self->index_name;
+    $logger->info("ES Creating index mapping for field $field");
 
-    my $ids_str = join(',', @$record_ids);
+    eval { 
+        $self->es->indices->put_mapping({
+            index => $index_name,
+            type  => 'record',
+            body  => {
+                dynamic => 'strict', 
+                properties => {$field => $properties}
+            }
+        });
+    };
 
-    my $sql = <<SQL;
-SELECT DISTINCT ON (bre.id, field_class, name, value)
-    bre.id, 
-    bre.create_date, 
-    bre.edit_date, 
-    bre.source AS bib_source,
-    bre.deleted,
-    mmrsm.metarecord,
-    (elastic.bib_record_properties(bre.id)).*
-FROM biblio.record_entry bre
-LEFT JOIN metabib.metarecord_source_map mmrsm ON (mmrsm.source = bre.id)
-WHERE bre.id IN ($ids_str)
-SQL
+    if ($@) {
+        my $mapjson = OpenSRF::Utils::JSON->perl2JSON($properties);
 
-    return $self->get_db_rows($sql);
+        $logger->error("ES failed to create index mapping: " .
+            "index=$index_name field=$field error=$@ mapping=$mapjson");
+
+        warn "$@\n\n";
+        return 0;
+    }
+
+    return 1;
 }
 
 sub populate_bib_index_batch {
@@ -480,7 +626,9 @@ sub populate_bib_index_batch {
 
             $fname = "$fclass|$fname" if $fclass;
             $fname = "$fname|facet" if $field->{purpose} eq 'facet';
-            $value = $self->truncate_value($value);
+
+            my $trim = $field->{purpose} eq 'sorter' ? $TRIM_ABOVE : undef;
+            $value = $self->truncate_value($value, $trim);
 
             if ($fname eq 'identifier|isbn') {
                 index_isbns($body, $value);
