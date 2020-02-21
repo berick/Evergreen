@@ -318,10 +318,8 @@ export class CatalogService {
             return Promise.resolve();
         }
 
-        if (ctx.result.facets) {
-            // No need to fetch pre-compiled facets
-            console.debug('Showing pre-compiled facets');
-            ctx.result.facetData = this.formatFacets(ctx.result.facets);
+        if (this.elastic.enabled && ctx.result.facets) {
+            ctx.result.facetData = this.elastic.formatFacets(ctx.result.facets);
             return Promise.resolve();
         }
 
@@ -370,7 +368,12 @@ export class CatalogService {
 
     checkSearchEngine(): Promise<any> {
         return this.pcrud.retrieve('cgf', 'elastic.bib_search.enabled')
-        .toPromise().then(flag => this.elastic.enabled = flag.enabled() === 't');
+        .toPromise().then(flag => {
+            if (flag && flag.enabled() == 't') {
+                this.elastic.enabled = true;
+                return this.elastic.init();
+            }
+        });
     }
 
     fetchCcvms(): Promise<void> {

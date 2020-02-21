@@ -3,7 +3,7 @@
 == Goals ==
 
 Fast bib record searching without requiring significant changes to
-the Evergreen code and without requiring a brand new indexing configuration.
+existing Evergreen search and display code.
 
 Initially support integration with the Angular staff catalog, covering 
 most search features commonly used by staff.
@@ -26,12 +26,12 @@ See database tables in the 'elastic' schema.  No admin UI exists.  If a
 single elasticsearch node is running on the same server as EG, no 
 configuration changes are needed.
 
-To enable Elasticsearch for bib searching, modify the Evergreen global 
-flag in the database.
+To enable Elasticsearch for bib indexing and searching, modify the related
+global flags:
 
 [source,sql]
 ------------------------------------------------------------------------------
-UPDATE config.global_flag SET enabled = true WHERE name = 'elastic.bib_search.enabled';
+UPDATE config.global_flag SET enabled = true WHERE name ~ '^elastic.*';
 ------------------------------------------------------------------------------
 
 == Indexing Bib Records ==
@@ -42,36 +42,23 @@ Examples:
 
 [source,sh]
 ------------------------------------------------------------------------------
-./elastic-index.pl --create-index --populate
-./elastic-index.pl --delete-index --create-index --populate
-./elastic-index.pl --populate --modified-since 2019-09-17T14:45:00
+./elastic-index.pl --index-name my-bib-index --create-index --populate
+./elastic-index.pl --index-name my-bib-index --delete-index --create-index --populate
+./elastic-index.pl --index-name my-bib-index --populate --modified-since 2019-09-17T14:45:00
 ------------------------------------------------------------------------------
 
 == Bib Search Index ==
 
-A single 'bib-search' index is defined by default.  The structure of the index
-is derived from the local Evergreen index definitions.  No additional index
-definitions or modifications are required to get started.
-
-=== General Stucture ===
-
-The bib-search index contains 3 general categories of data for each 
-bib record: 
-
-1. Bib record search/filter data pulled from metabib fields and record 
-   attribute definitions
-2. MARC record data
-3. Holdings summaries for filtering by library, availability, etc.
+A single 'bib-search' index class is defined by default.  The structure
+of indexes defined for this class is defined by entries in the
+elastic.bib_field table.  A default bib record transform file is located
+at Open-ILS/xsl/elastic-bib-transform.xsl for extracting data from the
+MARCXML data for each indexed record.
 
 === Search Fields ===
 
 Search fields are grouped by search class (title, author, etc.).  Searches
 can be performed against a specific field or across the class.
-
-Search field values are extracted from metabib.*_field_entry tables
-and reindexed in Elasticsearch using a combination of text and keyword
-analyzers: default text, language-specific text, asciifolding text
-(e.g. Grandpré => Grandpre) and lowercase keyword (for exact matches).
 
 ==== Caveats ====
 
@@ -84,13 +71,9 @@ analyzers: default text, language-specific text, asciifolding text
 
 === Facet Fields ===
 
-Field marked as facets get an extra '.facet' property which is a raw, 
-unprocessed copy of the data used for aggregation.
-
-=== Filter Fields ===
-
-These concist of record attribute values and are indexed as simple
-'keyword' entries, lowercased for ease of searching / filtering.
+Field marked as facets are tracked via a separate '$field_class|$name|facet'
+which contains only an unprocessed version of the facet-specific data
+output from the record transform.
 
 === MARC Data ===
 
@@ -138,7 +121,8 @@ It uses the elastic-builder module for creating the search structures.
 == Features Pending ==
 
 Some existing Evergreen features are not supported by the ES API, though in
-most if not all cases they can be added.
+most cases it should be possible to add them.
 
 * Popularity ranking
+* Search Highlighting
 

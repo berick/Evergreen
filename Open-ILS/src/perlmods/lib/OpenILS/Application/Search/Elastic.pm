@@ -276,7 +276,7 @@ sub compile_elastic_query {
 }
 
 # Format ES search aggregations to match the API response facet structure
-# {$cmf_id => {"Value" => $count}, $cmf_id2 => {"Value Two" => $count2}, ...}
+# {$field_id => {"Value" => $count}, $field_id2 => {"Value Two" => $count2}, ...}
 sub format_facets {
     my $aggregations = shift;
     my $facets = {}; 
@@ -289,7 +289,7 @@ sub format_facets {
             $_->name eq $name && $_->field_class eq $field_class
         } @$bib_fields;
 
-        my $hash = $facets->{$bib_field->metabib_field} = {};
+        my $hash = $facets->{$bib_field->id} = {};
 
         my $values = $aggregations->{$fname}->{buckets};
         for my $bucket (@$values) {

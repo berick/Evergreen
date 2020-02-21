@@ -618,7 +618,7 @@
       <xsl:sort select="@tag"/>
       <xsl:if test="position() = 1">
         <xsl:call-template name="add_sorter_entry">
-          <xsl:with-param name="name">author</xsl:with-param>
+          <xsl:with-param name="name">authorsort</xsl:with-param>
           <xsl:with-param name="value">
             <xsl:call-template name="subfieldSelect"></xsl:call-template>
           </xsl:with-param>
@@ -644,7 +644,7 @@
         </xsl:choose>
       </xsl:variable>
       <xsl:call-template name="add_sorter_entry">
-        <xsl:with-param name="name">title</xsl:with-param>
+        <xsl:with-param name="name">titlesort</xsl:with-param>
         <xsl:with-param name="value" select="substring($full_title, $offset + 1)" />
       </xsl:call-template>
     </xsl:for-each>

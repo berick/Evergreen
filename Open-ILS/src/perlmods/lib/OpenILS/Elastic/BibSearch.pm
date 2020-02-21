@@ -366,6 +366,7 @@ sub create_index_properties {
 
                 # Use the same fields and analysis as the 'grouped' field.
                 $def = clone($properties->{$field_class});
+
                 # Copy grouped fields into their group parent field.
                 $def->{copy_to} = $field_class;
 
@@ -479,6 +480,9 @@ sub create_one_field_index {
     my ($self, $field, $properties) = @_;
     my $index_name = $self->index_name;
     $logger->info("ES Creating index mapping for field $field");
+    if ($field eq 'author') {
+        $logger->info("ES Def Is: " . OpenSRF::Utils::JSON->perl2JSON($properties));
+    }
 
     eval { 
         $self->es->indices->put_mapping({
@@ -518,7 +522,7 @@ sub get_bib_field_for_data {
         ($_->search_field eq 't' && $field->{purpose} eq 'search') ||
         ($_->facet_field eq 't' && $field->{purpose} eq 'facet') ||
         ($_->filter eq 't' && $field->{purpose} eq 'filter') ||
-        ($_->sorterd eq 't' && $field->{purpose} eq 'sorter')
+        ($_->sorter eq 't' && $field->{purpose} eq 'sorter')
     } @matches;
 
     if (!$match) {
@@ -575,6 +579,10 @@ sub populate_bib_index_batch {
 
         my $first = 1;
         for my $field (@fields) {
+
+            # Ignore any data provided by the transform we have
+            # no configuration for.
+            next unless $self->get_bib_field_for_data($bib_fields, $field);
         
             if ($first) {
                 $first = 0;
@@ -593,8 +601,6 @@ sub populate_bib_index_batch {
             my $value = $field->{value};
 
             next unless defined $value && $value ne '';
-
-            next unless $self->get_bib_field_for_data($bib_fields, $field);
 
             $fname = "$fclass|$fname" if $fclass;
             $fname = "$fname|facet" if $field->{purpose} eq 'facet';

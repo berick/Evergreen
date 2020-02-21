@@ -45,6 +45,9 @@ CREATE TABLE elastic.index (
     CONSTRAINT    valid_index_class CHECK (index_class IN ('bib-search'))
 );
 
+CREATE UNIQUE INDEX active_index_once_per_cluster 
+    ON elastic.index (index_class, cluster) WHERE active is TRUE;
+
 -- XXX consider storing the xsl chunk directly on the field,
 -- then stitching the chunks together for indexing.  This would
 -- require a search chunk and a facet chunk.
@@ -191,11 +194,11 @@ VALUES
         FALSE, FALSE, TRUE, FALSE, 1),
     (NULL, 'vr_format', 'Video Recording Format', 
         FALSE, FALSE, TRUE, FALSE, 1),
-    (NULL, 'author', 'Author Sort', 
+    (NULL, 'authorsort', 'Author Sort', 
         FALSE, FALSE, FALSE, TRUE, 1),
     (NULL, 'pubdate', 'Pubdate Sort', 
         FALSE, FALSE, FALSE, TRUE, 1),
-    (NULL, 'title', 'Title Sort', 
+    (NULL, 'titlesort', 'Title Sort', 
         FALSE, FALSE, FALSE, TRUE, 1)
 ;
 
@@ -210,6 +213,10 @@ DELETE FROM config.global_flag WHERE name ~ 'elastic.*';
 */
 
 /*
+
+-- Testing
+
+UPDATE config.global_flag SET enabled = TRUE WHERE name ~ '^elastic.*';
 
 -- Bill's elastic VM for testing.
 UPDATE elastic.node

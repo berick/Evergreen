@@ -13,6 +13,7 @@ import {RequestBodySearch, MatchQuery, MultiMatchQuery, TermsQuery, Query, Sort,
 export class ElasticService {
 
     enabled: boolean;
+    ebfMap: {[id: number]: IdlObject} = {};
 
     constructor(
         private idl: IdlService,
@@ -20,6 +21,12 @@ export class ElasticService {
         private org: OrgService,
         private pcrud: PcrudService
     ) {}
+
+    init(): Promise<any> {
+        return this.pcrud.retrieveAll('ebf',
+            {select: {ebf: ["id", "name", "field_class", "label"]}}
+        ).pipe(tap(field => this.ebfMap[field.id()] = field)).toPromise();
+    }
 
     // Returns true if Elastic can provide search results.
     canSearch(ctx: CatalogSearchContext): boolean {
@@ -309,6 +316,36 @@ export class ElasticService {
                 boolNode.must(query);
                 return;
         }
+    }
+
+    // Elastic facets are grouped by elastic.bib_field entries.
+    formatFacets(facets: any) {
+        const facetData = {};
+        Object.keys(facets).forEach(ebfId => {
+            const facetHash = facets[ebfId];
+            const ebf = this.ebfMap[ebfId];
+
+            const ebfData = [];
+            Object.keys(facetHash).forEach(value => {
+                const count = facetHash[value];
+                ebfData.push({value : value, count : count});
+            });
+
+            if (!facetData[ebf.field_class()]) {
+                facetData[ebf.field_class()] = {};
+            }
+
+            facetData[ebf.field_class()][ebf.name()] = {
+                ebfLabel : ebf.label(),
+                valueList : ebfData.sort((a, b) => {
+                    if (a.count > b.count) { return -1; }
+                    if (a.count < b.count) { return 1; }
+                    return a.value < b.value ? -1 : 1;
+                })
+            };
+        });
+
+        return facetData;
     }
 }
 

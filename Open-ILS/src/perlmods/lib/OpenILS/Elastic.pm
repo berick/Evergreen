@@ -276,6 +276,26 @@ sub delete_index {
         $logger->warn("ES index '$index' ".
             "does not exist in cluster '".$self->cluster."'");
     }
+
+    my $e = new_editor(xact => 1);
+    my $conf = $self->find_index_config;
+
+    if (!$conf) {
+        $e->rollback;
+        return;
+    }
+
+    # Remove from EG database
+    $e->delete_elastic_index($conf) or return $e->die_event;
+    $e->commit;
+
+    # Remove from local cache
+    $self->indices([
+        grep { 
+            $_->name ne $self->index_name ||
+            $_->index_class ne $self->index_class
+        } @{$self->indices}
+    ]);
 }
 
 # Remove multiple documents from the index by ID.
