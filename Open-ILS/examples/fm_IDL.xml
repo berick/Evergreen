@@ -13023,7 +13023,7 @@ SELECT  usr,
 		<fields oils_persist:primary="id" oils_persist:sequence="elastic.bib_field_id_seq">
 			<field reporter:label="ID" name="id" reporter:datatype="id"/>
 			<field reporter:label="Name" name="name" reporter:datatype="text"/>
-			<field reporter:label="Label" name="label" reporter:datatype="text"/>
+			<field reporter:label="Label" name="label" oils_persist:i18n="true" reporter:datatype="text"/>
 			<field reporter:label="Field Class" name="field_class" reporter:datatype="text"/>
 			<field reporter:label="Is Search Field" name="search_field" reporter:datatype="bool"/>
 			<field reporter:label="Is Facet Field" name="facet_field" reporter:datatype="bool"/>

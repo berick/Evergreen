@@ -3,7 +3,7 @@ DROP SCHEMA IF EXISTS elastic CASCADE;
 
 BEGIN;
 
-INSERT INTO config.global_flag (name, enabled, label, value) 
+INSERT INTO config.global_flag (name, enabled, label, value)
 VALUES (
     'elastic.bib_search.enabled', FALSE,
     'Elasticsearch Enable Bib Searching', NULL
@@ -28,7 +28,7 @@ CREATE TABLE elastic.node (
     port    INTEGER NOT NULL,
     path    TEXT    NOT NULL DEFAULT '/',
     active  BOOLEAN NOT NULL DEFAULT FALSE,
-    cluster TEXT    NOT NULL 
+    cluster TEXT    NOT NULL
             REFERENCES elastic.cluster (code) ON DELETE CASCADE,
     CONSTRAINT node_once UNIQUE (host, port, path, cluster)
 );
@@ -37,7 +37,7 @@ CREATE TABLE elastic.index (
     id            SERIAL  PRIMARY KEY,
     name          TEXT    NOT NULL,
     index_class   TEXT    NOT NULL,
-    cluster       TEXT    NOT NULL 
+    cluster       TEXT    NOT NULL
                   REFERENCES elastic.cluster (code) ON DELETE CASCADE,
     active        BOOLEAN NOT NULL DEFAULT FALSE,
     num_shards    INTEGER NOT NULL DEFAULT 1,
@@ -46,13 +46,13 @@ CREATE TABLE elastic.index (
 );
 
 -- XXX consider storing the xsl chunk directly on the field,
--- then stitching the chunks together for indexing.  This would 
+-- then stitching the chunks together for indexing.  This would
 -- require a search chunk and a facet chunk.
 CREATE TABLE elastic.bib_field (
     id              SERIAL PRIMARY KEY,
     name            TEXT NOT NULL,
+    label           TEXT NOT NULL,
     field_class     TEXT REFERENCES config.metabib_class(name) ON DELETE CASCADE,
-    label           TEXT NOT NULL UNIQUE,
     search_field    BOOLEAN NOT NULL DEFAULT FALSE,
     facet_field     BOOLEAN NOT NULL DEFAULT FALSE,
     filter          BOOLEAN NOT NULL DEFAULT FALSE,
@@ -69,16 +69,16 @@ CREATE OR REPLACE VIEW elastic.bib_last_mod_date AS
      * Includes deleted data since it can impact indexing.
      */
     WITH mod_dates AS (
-        SELECT bre.id, 
-            bre.edit_date, 
-            MAX(COALESCE(acn.edit_date, '1901-01-01')) AS max_call_number_edit_date, 
+        SELECT bre.id,
+            bre.edit_date,
+            MAX(COALESCE(acn.edit_date, '1901-01-01')) AS max_call_number_edit_date,
             MAX(COALESCE(acp.edit_date, '1901-01-01')) AS max_copy_edit_date
         FROM biblio.record_entry bre
             LEFT JOIN asset.call_number acn ON (acn.record = bre.id)
             LEFT JOIN asset.copy acp ON (acp.call_number = acn.id)
         GROUP BY 1, 2
-    ) SELECT dates.id, 
-        GREATEST(dates.edit_date, 
+    ) SELECT dates.id,
+        GREATEST(dates.edit_date,
             GREATEST(dates.max_call_number_edit_date, dates.max_copy_edit_date)
         ) AS last_mod_date
     FROM mod_dates dates;
@@ -86,76 +86,119 @@ CREATE OR REPLACE VIEW elastic.bib_last_mod_date AS
 
 /* SEED DATA ------------------------------------------------------------ */
 
-INSERT INTO elastic.cluster (code, label) 
+INSERT INTO elastic.cluster (code, label)
     VALUES ('main', 'Main Cluster');
 
 INSERT INTO elastic.node (label, host, proto, port, active, cluster)
     VALUES ('Localhost', 'localhost', 'http', 9200, TRUE, 'main');
 
-INSERT INTO elastic.bib_field 
+INSERT INTO elastic.bib_field
     (field_class, name, label, search_field, facet_field, filter, sorter, weight)
-VALUES (
-    'author',   'conference', '', FALSE, TRUE, FALSE, FALSE, 1),
-    'author',   'corporate', '', FALSE, TRUE, FALSE, FALSE, 1),
-    'author',   'personal', '', FALSE, TRUE, FALSE, FALSE, 1),
-    'series',   'seriestitle', '', FALSE, TRUE, FALSE, FALSE, 1),
-    'subject',  'geographic', '', FALSE, TRUE, FALSE, FALSE, 1),
-    'subject',  'name', '', FALSE, TRUE, FALSE, FALSE, 1),
-    'subject',  'topic', '', FALSE, TRUE, FALSE, FALSE, 1),
-    'title',    'seriestitle', '', FALSE, TRUE, FALSE, FALSE, 1),
+VALUES 
+    ('author', 'conference', 'Conference Author', 
+        TRUE, TRUE, FALSE, FALSE, 1),
+    ('author', 'corporate', 'Corporate Author', 
+        TRUE, TRUE, FALSE, FALSE, 1),
+    ('author', 'personal', 'Personal Author', 
+        TRUE, TRUE, FALSE, FALSE, 1),
+    ('series', 'seriestitle', 'Series Title', 
+        TRUE, TRUE, FALSE, FALSE, 1),
+    ('subject', 'geographic', 'Geographic Subject', 
+        TRUE, TRUE, FALSE, FALSE, 1),
+    ('subject', 'name', 'Name Subject', 
+        TRUE, TRUE, FALSE, FALSE, 1),
+    ('subject', 'topic', 'Topic Subject', 
+        TRUE, TRUE, FALSE, FALSE, 1),
+    ('title', 'seriestitle', 'Series Title', 
+        TRUE, TRUE, FALSE, FALSE, 1),
+    ('author', 'added_personal', 'Additional Personal Author', 
+        TRUE, FALSE, FALSE, FALSE, 1),
+    ('author', 'conference_series', 'Personal Conference Author', 
+        TRUE, FALSE, FALSE, FALSE, 1),
+    ('author', 'corporate_series', 'Personal Corporate Author', 
+        TRUE, FALSE, FALSE, FALSE, 1),
+    ('author', 'meeting', 'Meeting Author', 
+        TRUE, FALSE, FALSE, FALSE, 1),
+    ('author', 'personal_series', 'Personal Series Author', 
+        TRUE, FALSE, FALSE, FALSE, 1),
+    ('author', 'responsibility', 'Author (Statement of Responsibility)', 
+        TRUE, FALSE, FALSE, FALSE, 1),
+    ('identifier', 'bibcn', 'Bib Call Number', 
+        TRUE, FALSE, FALSE, FALSE, 1),
+    ('identifier', 'isbn', 'ISBN', 
+        TRUE, FALSE, FALSE, FALSE, 1),
+    ('identifier', 'issn', 'ISSN', 
+        TRUE, FALSE, FALSE, FALSE, 1),
+    ('identifier', 'lccn', 'LCCN', 
+        TRUE, FALSE, FALSE, FALSE, 1),
+    ('identifier', 'sudoc', 'SuDoc Number', 
+        TRUE, FALSE, FALSE, FALSE, 1),
+    ('identifier', 'tech_number', 'Technical Report Number', 
+        TRUE, FALSE, FALSE, FALSE, 1),
+    ('identifier', 'upc', 'UPC', 
+        TRUE, FALSE, FALSE, FALSE, 1),
+    ('keyword', 'keyword', 'General Keyword', 
+        TRUE, FALSE, FALSE, FALSE, 1),
+    ('keyword', 'publisher', 'Publisher', 
+        TRUE, FALSE, FALSE, FALSE, 1),
+    ('subject', 'corpname', 'Corporate Name Subject', 
+        TRUE, FALSE, FALSE, FALSE, 1),
+    ('subject', 'genre', 'Genre', 
+        TRUE, FALSE, FALSE, FALSE, 1),
+    ('subject', 'meeting', 'Conference Subject', 
+        TRUE, FALSE, FALSE, FALSE, 1),
+    ('subject', 'uniftitle', 'Title Subject', 
+        TRUE, FALSE, FALSE, FALSE, 1),
+    ('title', 'abbreviated', 'Abbreviated Title', 
+        TRUE, FALSE, FALSE, FALSE, 1),
+    ('title', 'added', 'Additional Title', 
+        TRUE, FALSE, FALSE, FALSE, 1),
+    ('title', 'alternative', 'Alternate Title', 
+        TRUE, FALSE, FALSE, FALSE, 1),
+    ('title', 'former', 'Former Title', 
+        TRUE, FALSE, FALSE, FALSE, 1),
+    ('title', 'magazine', 'Magazine Title', 
+        TRUE, FALSE, FALSE, FALSE, 1),
+    ('title', 'maintitle', 'Main Title', 
+        TRUE, FALSE, FALSE, FALSE, 10),
+    ('title', 'previous', 'Previous Title', 
+        TRUE, FALSE, FALSE, FALSE, 1),
+    ('title', 'proper', 'Title Proper', 
+        TRUE, FALSE, FALSE, FALSE, 1),
+    ('title', 'succeeding', 'Succeeding Title', 
+        TRUE, FALSE, FALSE, FALSE, 1),
+    ('title', 'uniform', 'Uniform Title', 
+        TRUE, FALSE, FALSE, FALSE, 1),
+    (NULL, 'audience', 'Audience', 
+        FALSE, FALSE, TRUE, FALSE, 1),
+    (NULL, 'bib_level', 'Bib Level', 
+        FALSE, FALSE, TRUE, FALSE, 1),
+    (NULL, 'date1', 'Date1', 
+        FALSE, FALSE, TRUE, FALSE, 1),
+    (NULL, 'date2', 'Date2', 
+        FALSE, FALSE, TRUE, FALSE, 1),
+    (NULL, 'item_form', 'Item Form', 
+        FALSE, FALSE, TRUE, FALSE, 1),
+    (NULL, 'item_lang', 'Language', 
+        FALSE, FALSE, TRUE, FALSE, 1),
+    (NULL, 'item_type', 'Item Type', 
+        FALSE, FALSE, TRUE, FALSE, 1),
+    (NULL, 'lit_form', 'Lit Form', 
+        FALSE, FALSE, TRUE, FALSE, 1),
+    (NULL, 'search_format', 'Search Format', 
+        FALSE, FALSE, TRUE, FALSE, 1),
+    (NULL, 'sr_format', 'Sound Recording Format', 
+        FALSE, FALSE, TRUE, FALSE, 1),
+    (NULL, 'vr_format', 'Video Recording Format', 
+        FALSE, FALSE, TRUE, FALSE, 1),
+    (NULL, 'author', 'Author Sort', 
+        FALSE, FALSE, FALSE, TRUE, 1),
+    (NULL, 'pubdate', 'Pubdate Sort', 
+        FALSE, FALSE, FALSE, TRUE, 1),
+    (NULL, 'title', 'Title Sort', 
+        FALSE, FALSE, FALSE, TRUE, 1)
+;
 
-filter _ audience _
-filter _ bib_level _
-filter _ date1 _
-filter _ date2 _
-filter _ item_form _
-filter _ item_lang _
-filter _ item_type _
-filter _ lit_form _
-filter _ search_format _
-filter _ sr_format _
-filter _ vr_format _
-search author added_personal 
-search author conference 
-search author conference_series 
-search author corporate 
-search author corporate_series 
-search author meeting 
-search author personal 
-search author personal_series 
-search author responsibility 
-search identifier bibcn 
-search identifier isbn 
-search identifier issn 
-search identifier lccn 
-search identifier match_isbn 
-search identifier sudoc 
-search identifier tech_number 
-search identifier upc 
-search keyword keyword _
-search keyword publisher 
-search series seriestitle 
-search subject corpname 
-search subject genre 
-search subject geographic 
-search subject meeting 
-search subject name 
-search subject topic 
-search subject uniftitle 
-search title abbreviated 
-search title added 
-search title alternative 
-search title former 
-search title magazine 
-search title maintitle 10
-search title previous 
-search title proper 
-search title seriestitle 
-search title succeeding 
-search title uniform 
-sorter _ author _ 
-sorter _ pubdate _ 
-sorter _ title _ 
 COMMIT;
 
 /* UNDO
@@ -169,8 +212,8 @@ DELETE FROM config.global_flag WHERE name ~ 'elastic.*';
 /*
 
 -- Bill's elastic VM for testing.
-UPDATE elastic.node 
-    SET host = 'elastic.gamma', port = 80, path = '/elastic/node1' 
+UPDATE elastic.node
+    SET host = 'elastic.gamma', port = 80, path = '/elastic/node1'
     WHERE id = 1;
 
 */

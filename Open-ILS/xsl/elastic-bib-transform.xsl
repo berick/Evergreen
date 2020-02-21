@@ -467,18 +467,6 @@
       <xsl:with-param name="index_name">seriestitle</xsl:with-param>
       <xsl:with-param name="index_subfields">abcefgijklmnopqrstuvwxyz</xsl:with-param>
     </xsl:call-template>
-    <xsl:call-template name="add_search_entry">
-      <xsl:with-param name="tag">938</xsl:with-param>
-      <xsl:with-param name="field_class">identifier</xsl:with-param>
-      <xsl:with-param name="index_name">match_isbn</xsl:with-param>
-      <xsl:with-param name="index_subfields">a</xsl:with-param>
-    </xsl:call-template>
-    <xsl:call-template name="add_search_entry">
-      <xsl:with-param name="tag">938</xsl:with-param>
-      <xsl:with-param name="field_class">identifier</xsl:with-param>
-      <xsl:with-param name="index_name">match_isbn</xsl:with-param>
-      <xsl:with-param name="index_subfields">a</xsl:with-param>
-    </xsl:call-template>
     <xsl:call-template name="keyword_full_entry" />
   </xsl:template>
 

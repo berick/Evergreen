@@ -504,6 +504,31 @@ sub create_one_field_index {
     return 1;
 }
 
+
+sub get_bib_field_for_data {
+    my ($self, $bib_fields, $field) = @_;
+
+    my @matches = grep {$_->name eq $field->{name}} @$bib_fields;
+
+    @matches = grep {
+        (($_->field_class || '') eq ($field->{field_class} || ''))
+    } @matches;
+
+    my ($match) = grep {
+        ($_->search_field eq 't' && $field->{purpose} eq 'search') ||
+        ($_->facet_field eq 't' && $field->{purpose} eq 'facet') ||
+        ($_->filter eq 't' && $field->{purpose} eq 'filter') ||
+        ($_->sorterd eq 't' && $field->{purpose} eq 'sorter')
+    } @matches;
+
+    if (!$match) {
+        $logger->warn("ES No elastic.bib_field matches extracted data ".
+            OpenSRF::Utils::JSON->perl2JSON($field));
+    }
+
+    return $match;
+}
+
 sub populate_bib_index_batch {
     my ($self, $state) = @_;
 
@@ -536,6 +561,7 @@ sub populate_bib_index_batch {
 
     my $holdings = $self->load_holdings($bib_ids);
     my $marc = $self->load_marc($bib_ids);
+    my $bib_fields = new_editor()->retrieve_all_elastic_bib_field;
 
     for my $bib_id (@$bib_ids) {
 
@@ -567,6 +593,8 @@ sub populate_bib_index_batch {
             my $value = $field->{value};
 
             next unless defined $value && $value ne '';
+
+            next unless $self->get_bib_field_for_data($bib_fields, $field);
 
             $fname = "$fclass|$fname" if $fclass;
             $fname = "$fname|facet" if $field->{purpose} eq 'facet';
