@@ -9,7 +9,7 @@ use OpenILS::Elastic::BibSearch;
 
 my $help;
 my $osrf_config = '/openils/conf/opensrf_core.xml';
-my $bib_transform = '/openils/var/xsl/elastic-bib-transform.xsl';
+my $bib_transform;
 my $cluster;
 my $create_index;
 my $delete_index;
@@ -78,6 +78,10 @@ sub help {
                 where values should be extracted for elastic search indexing.
 
                 Values default to their PG* environment variable equivalent.
+
+            --bib-transform <path_to_file>
+                Override the configured global config value for
+                'elastic.bib_search.transform_file'
 
             --cluster <name>
                 Specify a cluster name.  Defaults to 'main'.

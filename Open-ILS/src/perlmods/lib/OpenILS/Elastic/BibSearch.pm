@@ -12,45 +12,6 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR code.  See the
 # GNU General Public License for more details.
 # ---------------------------------------------------------------
-package OpenILS::Elastic::BibSearch::BibField;
-# Models a single indexable field.
-use strict;
-use warnings;
-
-sub new {
-    my ($class, %args) = @_;
-    return bless(\%args, $class);
-}
-sub name {
-    my $self = shift;
-    return $self->{name};
-}
-sub field_class {
-    my $self = shift;
-    return $self->{field_class};
-}
-sub search_field {
-    my $self = shift;
-    return $self->{purpose} eq 'search';
-}
-sub facet_field {
-    my $self = shift;
-    return $self->{purpose} eq 'facet';
-}
-sub sorter {
-    my $self = shift;
-    return $self->{purpose} eq 'sorter';
-}
-sub filter {
-    my $self = shift;
-    return $self->{purpose} eq 'filter';
-}
-sub weight {
-    my $self = shift;
-    return $self->{weight} || 1;
-}
-
-# ---------------------------------------------------------------
 package OpenILS::Elastic::BibSearch;
 use strict;
 use warnings;
@@ -59,6 +20,7 @@ use Clone 'clone';
 use Time::HiRes qw/time/;
 use OpenSRF::Utils::Logger qw/:logger/;
 use OpenSRF::Utils::JSON;
+use OpenSRF::Utils::SettingsClient;
 use OpenILS::Utils::CStoreEditor qw/:funcs/;
 use OpenILS::Utils::DateTime qw/interval_to_seconds/;
 use OpenILS::Elastic;
@@ -257,8 +219,31 @@ sub language_analyzers {
 }
 
 sub xsl_file {
-    my ($self, $filename) = @_;
-    $self->{xsl_file} = $filename if $filename;
+    my ($self) = @_;
+
+    if (!$self->{xsl_file}) {
+
+        my $client = OpenSRF::Utils::SettingsClient->new;
+        my $dir = $client->config_value("dirs", "xsl");
+
+        my $filename = new_editor()->search_config_global_flag({
+            name => 'elastic.bib_search.transform_file', 
+            enabled => 't'
+        })->[0];
+
+        if ($filename) {
+            $self->{xsl_file} = "$dir/" . $filename->value;
+
+        } else {
+            die <<'            TEXT';
+            No XSL file provided for Elastic::BibSearch.  Confirm
+            config.global_flag "elastic.bib_search.transform_file"
+            is enabled, contains a valid value, and the file exists 
+            in the XSL directory.
+            TEXT
+        }
+    }
+
     return $self->{xsl_file};
 }
 
@@ -280,52 +265,6 @@ sub xsl_sheet {
     return $self->{xsl_sheet};
 }
 
-my @seen_fields;
-sub add_dynamic_field {
-    my ($self, $fields, $purpose, $field_class, $name, $weight) = @_;
-    return unless $name;
-
-    $weight = '' if !$weight || $weight eq '_';
-    $field_class = '' if !$field_class || $field_class eq '_';
-
-    my $tag = $purpose . $field_class . $name;
-    return if grep {$_ eq $tag} @seen_fields;
-    push(@seen_fields, $tag);
-
-    $logger->info("ES adding dynamic field purpose=$purpose ".
-        "field_class=$field_class name=$name weight=$weight");
-
-    my $field = OpenILS::Elastic::BibSearch::BibField->new(
-        purpose => $purpose, 
-        field_class => $field_class, 
-        name => $name,
-        weight => $weight
-    );
-
-    push(@$fields, $field);
-}
-
-sub get_dynamic_fields {
-    my $self = shift;
-    my $fields = [];
-
-    @seen_fields = (); # reset with each run
-
-    # Apply the transform in "target=index-fields" mode to extract just
-    # the field definitions.
-    my $null_doc = XML::LibXML->load_xml(string => '<root/>');
-    my $result = $self->xsl_sheet->transform($null_doc, target => '"index-fields"');
-    my $output = $self->xsl_sheet->output_as_chars($result);
-
-    my @rows = split(/\n/, $output);
-    for my $row (@rows) {
-        my @parts = split(/ /, $row);
-        $self->add_dynamic_field($fields, @parts);
-    }
-
-    return $fields;
-}
-
 sub get_bib_data {
     my ($self, $record_ids) = @_;
 
@@ -341,8 +280,7 @@ sub get_bib_data {
         }
 
         my $marc_doc = XML::LibXML->load_xml(string => $db_rec->{marc});
-        my $result = 
-            $self->xsl_sheet->transform($marc_doc, target => '"index-values"');
+        my $result = $self->xsl_sheet->transform($marc_doc, target => '"index-values"');
         my $output = $self->xsl_sheet->output_as_chars($result);
 
         my @rows = split(/\n/, $output);
@@ -413,7 +351,7 @@ sub create_index_properties {
         } foreach qw/title subject series keyword/;
     }
 
-    my $fields = $self->get_dynamic_fields;
+    my $fields = new_editor()->retrieve_all_elastic_bib_field;
 
     for my $field (@$fields) {
 
@@ -424,7 +362,7 @@ sub create_index_properties {
         my $def;
 
         if ($field_class) {
-            if ($field->search_field) {
+            if ($field->search_field eq 't') {
 
                 # Use the same fields and analysis as the 'grouped' field.
                 $def = clone($properties->{$field_class});
@@ -448,7 +386,7 @@ sub create_index_properties {
 
             # Long sorter values are not necessarily unexpected,
             # e.g. long titles.
-            $def->{ignore_above} = $IGNORE_ABOVE unless $field->sorter;
+            $def->{ignore_above} = $IGNORE_ABOVE unless $field->sorter eq 't';
         }
 
         if ($def) {
@@ -461,7 +399,7 @@ sub create_index_properties {
         # Search and facet fields can have the same name/group pair,
         # but are stored as separate fields in ES since the content
         # may vary between the two.
-        if ($field->facet_field) {
+        if ($field->facet_field eq 't') {
 
             # Facet fields are stored as separate fields, because their
             # content may differ from the matching search field.
@@ -527,7 +465,7 @@ sub create_index {
             $self->create_one_field_index($field, $properties->{$field});
     }
 
-    # Now that we've added the static (and dynamic) fields,
+    # Now that we've added the configured fields,
     # add the shortened field_class aliases.
     while (my ($alias, $field) = each %SEARCH_CLASS_ALIAS_MAP) {
         return 0 unless $self->create_one_field_index(

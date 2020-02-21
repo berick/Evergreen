@@ -13019,16 +13019,16 @@ SELECT  usr,
 		controller="open-ils.cstore open-ils.pcrud"
 		oils_obj:fieldmapper="elastic::bib_field"
 		oils_persist:tablename="elastic.bib_field"
-		reporter:label="Elastic Bib Index field"
-		oils_persist:readonly="true">
-		<fields> <!-- no guaranteed unique field => no oils_persist:primary -->
-			<field reporter:label="Metabib Field" name="metabib_field" reporter:datatype="link"/>
+		reporter:label="Elastic Bib Index field">
+		<fields oils_persist:primary="id" oils_persist:sequence="elastic.bib_field_id_seq">
+			<field reporter:label="ID" name="id" reporter:datatype="id"/>
 			<field reporter:label="Name" name="name" reporter:datatype="text"/>
 			<field reporter:label="Label" name="label" reporter:datatype="text"/>
-			<field reporter:label="Search Group" name="search_group" reporter:datatype="text"/>
-			<field reporter:label="Is Sort Field" name="sorter" reporter:datatype="bool"/>
+			<field reporter:label="Field Class" name="field_class" reporter:datatype="text"/>
 			<field reporter:label="Is Search Field" name="search_field" reporter:datatype="bool"/>
 			<field reporter:label="Is Facet Field" name="facet_field" reporter:datatype="bool"/>
+			<field reporter:label="Is Filter Field" name="filter" reporter:datatype="bool"/>
+			<field reporter:label="Is Sort Field" name="sorter" reporter:datatype="bool"/>
 			<field reporter:label="Field Weight (Boost)" name="weight" reporter:datatype="int"/>
 		</fields>
 		<links>

@@ -5,32 +5,6 @@
   <xsl:output encoding="UTF-8" method="text"/>
 
   <!--
-
-      XSLT for transforming bib records into indexable fields / data
-      suitable for consumption by the Elasticsearch BibSearch indexer.
-
-      TRANSFORM REQUIREMENTS ===
-
-      Transform operates in one of two modes:
-
-      1. target == 'index-fields'
-
-      Prints one index definition per line without any record-specific
-      data, In this mode, any valid XML string/file (e.g. '<root />')
-      may be used for the transform.
-
-      Output:
-
-      $index_purpose $index_class $index_name $index_weight
-
-     - Fields that have no value should use '_' as the value.
-
-      e.g.
-
-      search title proper 5
-
-      2. target == 'index-values'
-
       Prints one index value per line for data found by transforming
       a MARCXML record.
 
@@ -44,30 +18,6 @@
 
       search subject topic South America
       facet author personal Janey Jam "Jojo" Jones
-
-      INDEX REQUIREMENTS ===
-
-      For searches, the index name can be anything, but all indexes must 
-      use one of the following search classes:
-
-      title
-      author
-      subject
-      series
-      keyword
-      identifier
-
-      Required Filters for Bib Transform Based on Staff Catalog Options
-      at Time of Writing:
-
-      item_type
-      item_form
-      item_lang
-      audience
-      vr_format
-      bib_level
-      lit_form
-      search_format
   -->
 
   <xsl:template match="@*|node()">

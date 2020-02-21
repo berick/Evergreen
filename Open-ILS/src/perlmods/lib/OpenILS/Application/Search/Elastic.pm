@@ -19,7 +19,6 @@ use warnings;
 use OpenSRF::Utils::JSON;
 use OpenSRF::Utils::Logger qw/:logger/;
 use OpenILS::Utils::Fieldmapper;
-use OpenSRF::Utils::SettingsClient;
 use OpenILS::Utils::CStoreEditor q/:funcs/;
 use OpenILS::Elastic::BibSearch;
 use Digest::MD5 qw(md5_hex);
@@ -49,8 +48,7 @@ sub init {
 
     my $e = new_editor();
 
-    # no pkey
-    $bib_fields = $e->search_elastic_bib_field({name => {'!=' => undef}});
+    $bib_fields = $e->retrieve_all_elastic_bib_field;
 
     my $stats = $e->json_query({
         select => {ccs => ['id', 'opac_visible', 'is_available']},
@@ -288,7 +286,7 @@ sub format_facets {
         my ($field_class, $name) = split(/\|/, $fname);
 
         my ($bib_field) = grep {
-            $_->name eq $name && $_->search_group eq $field_class
+            $_->name eq $name && $_->field_class eq $field_class
         } @$bib_fields;
 
         my $hash = $facets->{$bib_field->metabib_field} = {};
@@ -312,7 +310,7 @@ sub add_elastic_facet_aggregations {
 
     for my $facet (@facet_fields) {
         my $fname = $facet->name;
-        my $fgrp = $facet->search_group;
+        my $fgrp = $facet->field_class;
         $fname = "$fgrp|$fname" if $fgrp;
 
         $elastic_query->{aggs}{$fname} = {terms => {field => "$fname|facet"}};
