@@ -388,6 +388,35 @@ sub index_document {
     return $result;
 }
 
+# Partial document update
+sub update_document {
+    my ($self, $id, $body) = @_;
+
+    my $result;
+
+    eval {
+        $result = $self->es->update(
+            index => $self->index_name,
+            type => 'record',
+            id => $id,
+            body => $body
+        );
+    };
+
+    if ($@) {
+        $logger->error("ES update_document failed with $@");
+        return undef;
+    } 
+
+    if ($result->{failed}) {
+        $logger->error("ES update document $id failed " . Dumper($result));
+        return undef;
+    }
+
+    $logger->debug("ES update => $id succeeded");
+    return $result;
+}
+
 sub search {
     my ($self, $query) = @_;
 

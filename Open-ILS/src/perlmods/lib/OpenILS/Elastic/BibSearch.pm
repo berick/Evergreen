@@ -218,6 +218,16 @@ sub language_analyzers {
     return ("english");
 }
 
+sub skip_marc {
+    my $self = shift;
+    return $self->{skip_marc};
+}
+
+sub skip_holdings {
+    my $self = shift;
+    return $self->{skip_holdings};
+}
+
 sub xsl_file {
     my ($self) = @_;
 
@@ -563,8 +573,9 @@ sub populate_bib_index_batch {
 
     $bib_ids = [@active_ids];
 
-    my $holdings = $self->load_holdings($bib_ids);
-    my $marc = $self->load_marc($bib_ids);
+    my $holdings = $self->load_holdings($bib_ids) unless $self->skip_holdings;
+    my $marc = $self->load_marc($bib_ids) unless $self->skip_marc;
+
     my $bib_fields = new_editor()->retrieve_all_elastic_bib_field;
 
     for my $bib_id (@$bib_ids) {
@@ -572,10 +583,11 @@ sub populate_bib_index_batch {
 
         my $body = {
             bib_source => $rec->{bib_source},
-            metarecord => $rec->{metarecord},
-            marc => $marc->{$bib_id} || [],
-            holdings => $holdings->{$bib_id} || []
+            metarecord => $rec->{metarecord}
         };
+
+        $body->{marc} = $marc->{$bib_id} || [] unless $self->skip_marc;
+        $body->{holdings} = $holdings->{$bib_id} || [] unless $self->skip_holdings;
 
         # ES likes the "T" separator for ISO dates
         ($body->{create_date} = $rec->{create_date}) =~ s/ /T/g;
@@ -608,7 +620,13 @@ sub populate_bib_index_batch {
             }
         }
 
-        return 0 unless $self->index_document($bib_id, $body);
+        if ($self->skip_marc || $self->skip_holdings) {
+            # TODO: In skip mode, assume we are updating documents instead
+            # of creating new ones.  This may need to be more flexible.
+            return 0 unless $self->update_document($bib_id, $body);
+        } else {
+            return 0 unless $self->index_document($bib_id, $body);
+        }
 
         $state->{start_record} = $bib_id + 1;
         $index_count++;

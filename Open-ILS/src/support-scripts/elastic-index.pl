@@ -23,6 +23,8 @@ my $stop_record;
 my $modified_since;
 my $max_duration;
 my $batch_size = 500;
+my $skip_marc;
+my $skip_holdings;
 
 # Database settings read from ENV by default.
 my $db_host = $ENV{PGHOST} || 'localhost';
@@ -48,6 +50,8 @@ GetOptions(
     'max-duration=s'    => \$max_duration,
     'batch-size=s'      => \$batch_size,
     'bib-transform=s'   => \$bib_transform,
+    'skip-marc'         => \$skip_marc,
+    'skip-holdings'     => \$skip_holdings,
     'db-name=s'         => \$db_name,
     'db-host=s'         => \$db_host,
     'db-port=s'         => \$db_port,
@@ -123,6 +127,12 @@ sub help {
                 at regular intervals to keep the ES-indexed data in sync 
                 with the EG data.
 
+            --skip-marc
+            --skip-holdings
+                Bypass indexing the MARC and/or holdings data.  This is
+                useful when reindexing for configuration changes, where
+                the underlying bib data has not changed.
+
             --max-duration <duration>
                 Stop indexing once the process has been running for this
                 amount of time.
@@ -150,8 +160,10 @@ if ($index_class eq 'bib-search') {
     $es = OpenILS::Elastic::BibSearch->new(
         cluster => $cluster, 
         index_name => $index_name,
+        write_mode => 1,
         xsl_file => $bib_transform,
-        write_mode => 1
+        skip_marc => $skip_marc,
+        skip_holdings => $skip_holdings
     );
 }
 
