@@ -41,7 +41,6 @@ CREATE TABLE elastic.index (
                   REFERENCES elastic.cluster (code) ON DELETE CASCADE,
     active        BOOLEAN NOT NULL DEFAULT FALSE,
     num_shards    INTEGER NOT NULL DEFAULT 1,
-    CONSTRAINT    active_index_once_per_cluster UNIQUE (active, index_class, cluster),
     CONSTRAINT    valid_index_class CHECK (index_class IN ('bib-search'))
 );
 
