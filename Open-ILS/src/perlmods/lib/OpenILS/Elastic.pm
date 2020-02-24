@@ -399,7 +399,7 @@ sub update_document {
             index => $self->index_name,
             type => 'record',
             id => $id,
-            body => $body
+            body => {doc => $body}
         );
     };
 
