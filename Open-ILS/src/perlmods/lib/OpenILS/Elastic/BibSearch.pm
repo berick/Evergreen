@@ -268,16 +268,20 @@ sub xsl_sheet {
 sub get_bib_data {
     my ($self, $record_ids) = @_;
 
-    my $bib_data = [];
+    my $records = [];
     my $db_data = $self->get_bib_db_data($record_ids);
 
     for my $db_rec (@$db_data) {
 
-        if ($db_rec->{deleted} == 1) {
-            # No need to extract index values.
-            push(@$bib_data, {deleted => 1});
-            next;
-        }
+        my $rec = {fields => []};
+        push(@$records, $rec);
+
+        # Copy DB data into our record object.
+        $rec->{$_} = $db_rec->{$_} for 
+            qw/id bib_source metarecord create_date edit_date deleted/;
+
+        # No need to extract index values for delete records;
+        next if $rec->{deleted} == 1;
 
         my $marc_doc = XML::LibXML->load_xml(string => $db_rec->{marc});
         my $result = $self->xsl_sheet->transform($marc_doc);
@@ -298,15 +302,11 @@ sub get_bib_data {
                 value => $value
             };
 
-            # Stamp each field with the additional bib metadata.
-            $field->{$_} = $db_rec->{$_} for 
-                qw/id bib_source metarecord create_date edit_date deleted/;
-
-            push(@$bib_data, $field);
+            push(@{$rec->{fields}}, $field);
         }
     }
 
-    return $bib_data;
+    return $records;
 }
 
 sub get_bib_db_data {
@@ -543,7 +543,7 @@ sub populate_bib_index_batch {
 
     $logger->info("ES indexing ".scalar(@$bib_ids)." records");
 
-    my $bib_data = $self->get_bib_data($bib_ids);
+    my $records = $self->get_bib_data($bib_ids);
 
     # Remove records that are marked deleted.
     # This should only happen when running in refresh mode.
@@ -552,9 +552,9 @@ sub populate_bib_index_batch {
     for my $bib_id (@$bib_ids) {
 
         # Every row in the result data contains the 'deleted' value.
-        my ($field) = grep {$_->{id} == $bib_id} @$bib_data;
+        my ($rec) = grep {$_->{id} == $bib_id} @$records;
 
-        if ($field->{deleted} == 1) { # not 't' / 'f'
+        if ($rec->{deleted} == 1) { # not 't' / 'f'
            $self->delete_documents($bib_id); 
         } else {
             push(@active_ids, $bib_id);
@@ -568,34 +568,25 @@ sub populate_bib_index_batch {
     my $bib_fields = new_editor()->retrieve_all_elastic_bib_field;
 
     for my $bib_id (@$bib_ids) {
+        my ($rec) = grep {$_->{id} == $bib_id} @$records;
 
         my $body = {
+            bib_source => $rec->{bib_source},
+            metarecord => $rec->{metarecord},
             marc => $marc->{$bib_id} || [],
             holdings => $holdings->{$bib_id} || []
         };
 
-        # there are multiple rows per bib in the data list.
-        my @fields = grep {$_->{id} == $bib_id} @$bib_data;
+        # ES likes the "T" separator for ISO dates
+        ($body->{create_date} = $rec->{create_date}) =~ s/ /T/g;
+        ($body->{edit_date} = $rec->{edit_date}) =~ s/ /T/g;
 
-        my $first = 1;
-        for my $field (@fields) {
+        for my $field (@{$rec->{fields}}) {
 
             # Ignore any data provided by the transform we have
             # no configuration for.
             next unless $self->get_bib_field_for_data($bib_fields, $field);
         
-            if ($first) {
-                $first = 0;
-                # some values are repeated per field. 
-                # extract them from the first entry.
-                $body->{bib_source} = $field->{bib_source};
-                $body->{metarecord} = $field->{metarecord};
-
-                # ES ikes the "T" separator for ISO dates
-                ($body->{create_date} = $field->{create_date}) =~ s/ /T/g;
-                ($body->{edit_date} = $field->{edit_date}) =~ s/ /T/g;
-            }
-
             my $fclass = $field->{field_class};
             my $fname = $field->{name};
             my $value = $field->{value};
