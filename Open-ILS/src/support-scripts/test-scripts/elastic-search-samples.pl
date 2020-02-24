@@ -14,7 +14,8 @@ binmode(STDOUT, ':utf8');
 my $help;
 my $osrf_config = '/openils/conf/opensrf_core.xml';
 my $cluster = 'main';
-my $index = 'bib-search';
+my $index_class = 'bib-search';
+my $index_name;
 my $quiet = 0;
 my $query_string;
 
@@ -22,6 +23,7 @@ GetOptions(
     'help'              => \$help,
     'osrf-config=s'     => \$osrf_config,
     'cluster=s'         => \$cluster,
+    'index-name=s'      => \$index_name,
     'quiet'             => \$quiet,
 ) || die "\nSee --help for more\n";
 
@@ -29,9 +31,12 @@ sub help {
     print <<HELP;
         Synopsis:
 
-            $0
+            $0 --index-name <name>
 
         Performs a series of canned bib record searches
+
+        Note if --index-name is omitted, the currently active index on 
+        the 'bib-search' index class will be used.
 
 HELP
     exit(0);
@@ -117,8 +122,15 @@ Fieldmapper->import(
     IDL => OpenSRF::Utils::SettingsClient->new->config_value("IDL"));
 OpenILS::Utils::CStoreEditor::init();
 
-my $es = OpenILS::Elastic::BibSearch->new($cluster);
+my $es = OpenILS::Elastic::BibSearch->new(index_name => $index_name);
 $es->connect;
+
+if ($es->index_name) {
+    print "Using bib-search index '" . $es->index_name . "'\n";
+} else {
+    die "No active 'bib-search' index found.  ".
+        "Use --index-name or activate an index in the database.\n";
+}
 
 print "Searching...\n";
 for my $query_part (@$queries) {

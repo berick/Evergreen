@@ -134,11 +134,47 @@ sub load_config {
         return;
     }
 
-    $self->{indices} = $e->search_elastic_index({cluster => $cluster, %active});
+    if (!$self->index_class) {
+        $logger->error("ES index_class required to initialize");
+        return;
+    }
 
-    unless ($self->write_mode || @{$self->indices}) {
+    $self->{indices} = $e->search_elastic_index({
+        cluster => $cluster, 
+        index_class => $self->index_class,
+        %active
+    });
+
+    if ($self->write_mode) {
+
+        if (!$self->index_name) {
+            $logger->error("ES index_name required for write mode");
+            return;
+        }
+
+        return;
+    }
+
+    # read-only mode
+
+    if (!@{$self->indices}) {
         $logger->warn("ES no active indices defined for cluster $cluster");
         return;
+    }
+
+    if (!$self->index_name) {
+        # In non-write mode, if no index name is provided, default
+        # to using the active index on the current index class.
+        
+        my ($index) = grep {
+            $_->index_class eq $self->index_class && $_->active eq 't'
+        } @{$self->{indices}};
+
+        if ($index) {
+            my $name = $index->name;
+            $logger->info("ES no index_name specificed, defaulting to $name");
+            $self->{index_name} = $name;
+        }
     }
 }
 
