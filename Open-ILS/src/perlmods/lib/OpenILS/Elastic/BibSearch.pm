@@ -280,7 +280,7 @@ sub get_bib_data {
         }
 
         my $marc_doc = XML::LibXML->load_xml(string => $db_rec->{marc});
-        my $result = $self->xsl_sheet->transform($marc_doc, target => '"index-values"');
+        my $result = $self->xsl_sheet->transform($marc_doc);
         my $output = $self->xsl_sheet->output_as_chars($result);
 
         my @rows = split(/\n/, $output);

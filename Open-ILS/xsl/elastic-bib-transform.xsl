@@ -1017,13 +1017,8 @@
     <xsl:param name="value"/>
     <xsl:text>sorter _ </xsl:text>
     <xsl:value-of select="$name" />
-    <xsl:if test="$target = 'index-fields'">
-      <xsl:text> _ </xsl:text><!-- weight -->
-    </xsl:if>
-    <xsl:if test="$target = 'index-values'">
-      <xsl:text> </xsl:text>
-      <xsl:value-of select="$value" />
-    </xsl:if>
+    <xsl:text> </xsl:text>
+    <xsl:value-of select="$value" />
     <xsl:text>&#xa;</xsl:text>
   </xsl:template>
 
@@ -1033,20 +1028,15 @@
     <xsl:param name="default_value"/>
     <xsl:text>filter _ </xsl:text>
     <xsl:value-of select="$name" />
-    <xsl:if test="$target = 'index-fields'">
-      <xsl:text> _</xsl:text><!-- weight -->
-    </xsl:if>
-    <xsl:if test="$target = 'index-values'">
-      <xsl:text> </xsl:text>
-      <xsl:choose>
-        <xsl:when test="$default_value and translate($value, ' ', '') = ''">
-          <xsl:value-of select="$default_value" />
-        </xsl:when>
-        <xsl:otherwise>
-          <xsl:value-of select="$value" />
-        </xsl:otherwise>
-      </xsl:choose>
-    </xsl:if>
+    <xsl:text> </xsl:text>
+    <xsl:choose>
+      <xsl:when test="$default_value and translate($value, ' ', '') = ''">
+        <xsl:value-of select="$default_value" />
+      </xsl:when>
+      <xsl:otherwise>
+        <xsl:value-of select="$value" />
+      </xsl:otherwise>
+    </xsl:choose>
     <xsl:text>&#xa;</xsl:text>
   </xsl:template>
 
@@ -1104,13 +1094,11 @@
     "/>
 
     <xsl:if test="
-        $target = 'index-fields' or (
         $item_type_matches and
         $item_form_matches and
         $bib_level_matches and
         $sr_format_matches and
-        $vr_format_matches
-      )">
+        $vr_format_matches">
       <xsl:call-template name="add_filter_entry">
         <xsl:with-param name="name" select="$name" />
         <xsl:with-param name="value" select="$value" />
@@ -1172,27 +1160,18 @@
     <xsl:param name="index_name" />
     <xsl:param name="index_subfields" />
     <xsl:param name="weight" />
-    <xsl:if test="$target = 'index-fields'">
+    <xsl:for-each select="marc:datafield[@tag=$tag] |
+      marc:datafield[@tag='880']/marc:subfield[@code='6'][starts-with(., $tag)]/..">
       <xsl:text>search </xsl:text>
       <xsl:value-of select="$field_class" /><xsl:text> </xsl:text>
       <xsl:value-of select="$index_name" /><xsl:text> </xsl:text>
-      <xsl:value-of select="$weight" />
+      <xsl:call-template name="subfieldSelect">
+        <xsl:with-param name="codes">
+          <xsl:value-of select="$index_subfields" />
+        </xsl:with-param>
+      </xsl:call-template>
       <xsl:text>&#xa;</xsl:text><!-- newline -->
-    </xsl:if>
-    <xsl:if test="$target = 'index-values'">
-      <xsl:for-each select="marc:datafield[@tag=$tag] |
-        marc:datafield[@tag='880']/marc:subfield[@code='6'][starts-with(., $tag)]/..">
-        <xsl:text>search </xsl:text>
-        <xsl:value-of select="$field_class" /><xsl:text> </xsl:text>
-        <xsl:value-of select="$index_name" /><xsl:text> </xsl:text>
-        <xsl:call-template name="subfieldSelect">
-          <xsl:with-param name="codes">
-            <xsl:value-of select="$index_subfields" />
-          </xsl:with-param>
-        </xsl:call-template>
-        <xsl:text>&#xa;</xsl:text><!-- newline -->
-      </xsl:for-each>
-    </xsl:if>
+    </xsl:for-each>
   </xsl:template>
 
   <xsl:template name="add_facet_entry">
@@ -1200,28 +1179,18 @@
     <xsl:param name="field_class" />
     <xsl:param name="index_name" />
     <xsl:param name="facet_subfields" />
-    <xsl:if test="$target = 'index-fields'">
+    <xsl:for-each select="marc:datafield[@tag=$tag] |
+      marc:datafield[@tag='880']/marc:subfield[@code='6'][starts-with(., $tag)]/..">
       <xsl:text>facet </xsl:text>
-      <xsl:value-of select="$field_class"/>
-      <xsl:text> </xsl:text>
-      <xsl:value-of select="$index_name"/>
-      <xsl:text> _</xsl:text><!-- weight -->
+      <xsl:value-of select="$field_class"/><xsl:text> </xsl:text>
+      <xsl:value-of select="$index_name"/><xsl:text> </xsl:text>
+      <xsl:call-template name="subfieldSelect">
+        <xsl:with-param name="codes">
+          <xsl:value-of select="$facet_subfields" />
+        </xsl:with-param>
+      </xsl:call-template>
       <xsl:text>&#xa;</xsl:text><!-- newline -->
-    </xsl:if>
-    <xsl:if test="$target = 'index-values'">
-      <xsl:for-each select="marc:datafield[@tag=$tag] |
-        marc:datafield[@tag='880']/marc:subfield[@code='6'][starts-with(., $tag)]/..">
-        <xsl:text>facet </xsl:text>
-        <xsl:value-of select="$field_class"/><xsl:text> </xsl:text>
-        <xsl:value-of select="$index_name"/><xsl:text> </xsl:text>
-        <xsl:call-template name="subfieldSelect">
-          <xsl:with-param name="codes">
-            <xsl:value-of select="$facet_subfields" />
-          </xsl:with-param>
-        </xsl:call-template>
-        <xsl:text>&#xa;</xsl:text><!-- newline -->
-      </xsl:for-each>
-    </xsl:if>
+    </xsl:for-each>
   </xsl:template>
 
   <!-- Dumps practically the entire document into a single
@@ -1229,15 +1198,10 @@
   -->
   <xsl:template name="keyword_full_entry">
     <xsl:text>search keyword keyword </xsl:text>
-    <xsl:if test="$target = 'index-fields'">
-      <xsl:text>_</xsl:text><!-- weight -->
-    </xsl:if>
-    <xsl:if test="$target = 'index-values'">
-      <xsl:for-each select="marc:datafield">
-        <xsl:call-template name="subfieldSelect" />
-        <xsl:text> </xsl:text>
-      </xsl:for-each>
-    </xsl:if>
+    <xsl:for-each select="marc:datafield">
+      <xsl:call-template name="subfieldSelect" />
+      <xsl:text> </xsl:text>
+    </xsl:for-each>
     <xsl:text>&#xa;</xsl:text><!-- newline -->
   </xsl:template>
 
