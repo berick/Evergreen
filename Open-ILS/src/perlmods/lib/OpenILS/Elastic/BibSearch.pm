@@ -750,7 +750,7 @@ sub load_marc {
     my $bib_ids_str = join(',', @$bib_ids);
 
     my $marc_data = $self->get_db_rows(<<SQL);
-SELECT record, tag, subfield, value
+SELECT DISTINCT record, tag, subfield, value
 FROM metabib.real_full_rec
 WHERE record IN ($bib_ids_str)
 SQL
