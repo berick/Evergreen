@@ -336,7 +336,8 @@ export class ElasticService {
             }
 
             facetData[ebf.field_class()][ebf.name()] = {
-                ebfLabel : ebf.label(),
+                // 'cmfLabel' is what the higher-level code seeks
+                cmfLabel : ebf.label(),
                 valueList : ebfData.sort((a, b) => {
                     if (a.count > b.count) { return -1; }
                     if (a.count < b.count) { return 1; }
