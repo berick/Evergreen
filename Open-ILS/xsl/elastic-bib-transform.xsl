@@ -25,6 +25,7 @@
     <xsl:call-template name="compile_facets" />
     <xsl:call-template name="compile_filters" />
     <xsl:call-template name="compile_sorters" />
+    <xsl:call-template name="compile_marc" />
   </xsl:template>
 
   <xsl:template name="compile_searches">
@@ -1204,6 +1205,34 @@
     </xsl:for-each>
     <xsl:text>&#xa;</xsl:text><!-- newline -->
   </xsl:template>
+
+  <!-- print: marc $tag $subfield $value -->
+  <xsl:template name="compile_marc">
+    <xsl:for-each select="marc:leader">
+      <xsl:text>marc LDR _ </xsl:text>
+      <xsl:value-of select="text()"/>
+    </xsl:for-each>
+    <xsl:for-each select="marc:controlfield">
+      <xsl:text>marc </xsl:text>
+      <xsl:value-of select="@tag" />
+      <xsl:text> _ </xsl:text>
+      <xsl:value-of select="text()"/>
+      <xsl:text>&#xa;</xsl:text><!-- newline -->
+    </xsl:for-each>
+    <xsl:for-each select="marc:datafield">
+      <xsl:variable name="tag" select="@tag" />
+      <xsl:for-each select="marc:subfield">
+        <xsl:text>marc </xsl:text>
+        <xsl:value-of select="$tag" />
+        <xsl:text> </xsl:text>
+        <xsl:value-of select="@code" />
+        <xsl:text> </xsl:text>
+        <xsl:value-of select="text()"/>
+        <xsl:text>&#xa;</xsl:text><!-- newline -->
+      </xsl:for-each>
+    </xsl:for-each>
+  </xsl:template>
+
 
 </xsl:stylesheet>
 

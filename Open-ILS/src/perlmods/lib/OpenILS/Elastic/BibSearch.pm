@@ -218,11 +218,6 @@ sub language_analyzers {
     return ("english");
 }
 
-sub skip_marc {
-    my $self = shift;
-    return $self->{skip_marc};
-}
-
 sub skip_holdings {
     my $self = shift;
     return $self->{skip_holdings};
@@ -574,7 +569,6 @@ sub populate_bib_index_batch {
     $bib_ids = [@active_ids];
 
     my $holdings = $self->load_holdings($bib_ids) unless $self->skip_holdings;
-    my $marc = $self->load_marc($bib_ids) unless $self->skip_marc;
 
     my $bib_fields = new_editor()->retrieve_all_elastic_bib_field;
 
@@ -583,10 +577,10 @@ sub populate_bib_index_batch {
 
         my $body = {
             bib_source => $rec->{bib_source},
-            metarecord => $rec->{metarecord}
+            metarecord => $rec->{metarecord},
+            marc => []
         };
 
-        $body->{marc} = $marc->{$bib_id} || [] unless $self->skip_marc;
         $body->{holdings} = $holdings->{$bib_id} || [] unless $self->skip_holdings;
 
         # ES likes the "T" separator for ISO dates
@@ -594,35 +588,45 @@ sub populate_bib_index_batch {
         ($body->{edit_date} = $rec->{edit_date}) =~ s/ /T/g;
 
         for my $field (@{$rec->{fields}}) {
-
-            # Ignore any data provided by the transform we have
-            # no configuration for.
-            next unless $self->get_bib_field_for_data($bib_fields, $field);
-        
+            my $purpose = $field->{purpose};
             my $fclass = $field->{field_class};
             my $fname = $field->{name};
             my $value = $field->{value};
 
             next unless defined $value && $value ne '';
 
-            $fname = "$fclass|$fname" if $fclass;
-            $fname = "$fname|facet" if $field->{purpose} eq 'facet';
-
-            my $trim = $field->{purpose} eq 'sorter' ? $TRIM_ABOVE : undef;
+            my $trim = $purpose eq 'sorter' ? $TRIM_ABOVE : undef;
             $value = $self->truncate_value($value, $trim);
+
+            if ($purpose eq 'marc') {
+                # NOTE: we could create/require elastic.bib_field entries for 
+                # MARC values as well if we wanted to control the exact
+                # MARC data that's indexed.
+                $self->add_marc_value($body, $fclass, $fname, $value);
+                next;
+            }
+
+            # Ignore any data provided by the transform we have
+            # no configuration for.
+            next unless $self->get_bib_field_for_data($bib_fields, $field);
+        
+            $fname = "$fclass|$fname" if $fclass;
+            $fname = "$fname|facet" if $purpose eq 'facet';
 
             if ($fname eq 'identifier|isbn') {
                 index_isbns($body, $value);
+
             } elsif ($fname eq 'identifier|issn') {
                 index_issns($body, $value);
+
             } else {
                 append_field_value($body, $fname, $value);
             }
         }
 
-        if ($self->skip_marc || $self->skip_holdings) {
-            # TODO: In skip mode, assume we are updating documents instead
-            # of creating new ones.  This may need to be more flexible.
+        if ($self->skip_holdings) {
+            # In skip mode, assume we are updating documents instead
+            # of creating new ones.  
             return 0 unless $self->update_document($bib_id, $body);
         } else {
             return 0 unless $self->index_document($bib_id, $body);
@@ -744,67 +748,43 @@ SQL
     return $holdings;
 }
 
-sub load_marc {
-    my ($self, $bib_ids) = @_;
+sub add_marc_value {
+    my ($self, $rec, $tag, $subfield, $value) = @_;
 
-    my $bib_ids_str = join(',', @$bib_ids);
+    # XSL uses '_' when no subfield is present (e.g. controlfields)
+    $subfield = undef if $subfield eq '_';
 
-    my $marc_data = $self->get_db_rows(<<SQL);
-SELECT DISTINCT record, tag, subfield, value
-FROM metabib.real_full_rec
-WHERE record IN ($bib_ids_str)
-SQL
+    my ($match) = grep {
+        $_->{tag} eq $tag &&
+        ($_->{subfield} || '') eq ($subfield || '')
+    } @{$rec->{marc}};
 
-    $logger->info("ES found ".scalar(@$marc_data).
-        " MARC rows for current record batch");
+    if ($match) {
+        if (ref $match->{value}) {
+            # 3rd or more instance of tag/subfield for this record.
 
-    my $marc = {};
-    for my $row (@$marc_data) {
+            # avoid dupes
+            return if grep {$_ eq $value} @{$match->{value}};
 
-        my $value = $row->{value};
-        next unless defined $value && $value ne '';
-
-        my $subfield = $row->{subfield};
-        my $rec_id = $row->{record};
-        delete $row->{record}; # avoid adding this to the index
-
-        $row->{value} = $value = $self->truncate_value($value);
-
-        $marc->{$rec_id} = [] unless $marc->{$rec_id};
-        delete $row->{subfield} unless defined $subfield;
-
-        # Add values to existing record/tag/subfield rows.
-  
-        my $existing;
-        for my $entry (@{$marc->{$rec_id}}) {
-            next unless $entry->{tag} eq $row->{tag};
-
-            if (defined $subfield) {
-                if (defined $entry->{subfield}) {
-                    if ($subfield eq $entry->{subfield}) {
-                        $existing = $entry;
-                        last;
-                    }
-                }
-            } elsif (!defined $entry->{subfield}) {
-                # Neither has a subfield value / not all tags have subfields
-                $existing = $entry;
-                last;
-            }
-        }
-
-        if ($existing) {
-            
-            $existing->{value} = [$existing->{value}] unless ref $existing->{value};
-            push(@{$existing->{value}}, $value);
+            push(@{$match->{value}}, $value);
 
         } else {
+            # 2nd instance of tag/subfield for this record.
+            
+            # avoid dupes
+            return if $match->{value} eq $value;
 
-            push(@{$marc->{$rec_id}}, $row);
+            $match->{value} = [$match->{value}, $value];
         }
-    }
 
-    return $marc;
+    } else {
+        # first instance of tag/subfield for this record.
+
+        $match = {tag => $tag, value => $value};
+        $match->{subfield} = $subfield if defined $subfield;
+
+        push(@{$rec->{marc}}, $match);
+    }
 }
 
 # Add data to the bib-search index
