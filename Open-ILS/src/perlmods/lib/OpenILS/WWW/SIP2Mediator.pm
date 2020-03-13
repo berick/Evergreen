@@ -530,7 +530,7 @@ sub handle_patron_info {
             {AO => $institution},
             {AA => $barcode},
             {BL => 'Y'}, # valid patron
-            {CQ => 'Y'}  # valid patron password
+            {CQ => $password ? 'Y' : 'N'}  # password verified if exists
         ]
     };
 }
@@ -560,10 +560,13 @@ sub get_patron_details {
     my $patron = $details->{patron} = $card->usr;
     $patron->card($card);
 
-    return undef unless
-        $U->verify_migrated_user_password($e, $patron->id, $password);
+    # We only verify the password if one is provided.
+    return undef if defined $password &&
+        !$U->verify_migrated_user_password($e, $patron->id, $password);
 
     set_patron_privileges($session, $instconf, $details);
+
+    return $details;
 }
 
 sub set_patron_privileges {
@@ -599,7 +602,9 @@ sub set_patron_privileges {
         || $patron->card->active eq 'f'
     );
 
-    my $blocks = new_editor()->json_query({
+    # No need for the extra call to fetch penalties if the user
+    # is already blocked.
+    my $blocks = $blocked ? [] : new_editor()->json_query({
         select => {csp => ['block_list']},
         from => {ausp => 'csp'},
         where => {
@@ -609,31 +614,32 @@ sub set_patron_privileges {
                     {stop_date => undef},
                     {stop_date => {'>' => 'now'}}
                 ],
-                org_unit => $U->get_org_full_path($session->{login}->ws_ou)
+                org_unit => 
+                    $U->get_org_full_path($session->account->{login}->ws_ou)
             },
             '+csp' => {
                 '-and' => [
-                    block_list => {'!=' => undef},
-                    block_list => {'!=' => ''},
+                    {block_list => {'!=' => undef}},
+                    {block_list => {'!=' => ''}},
                 ]
             }
         }
     });
 
-    return unless @$blocks; # nothing left to check.
+    return unless $blocked || @$blocks; # nothing left to check.
 
     my @block_tags = map {$_->{block_list}} @$blocks;
 
-    $details->{holds_denied} = 1 if grep {$_ =~ /HOLD/} @block_tags;
+    $details->{holds_denied} = 1 if $blocked || grep {$_ =~ /HOLD/} @block_tags;
 
-    # Ignore loan-related penalties?
+    # Ignore loan-related blocks?
     return if $instconf->{patron_status_permit_loans};
 
     # In evergreen, recalls are a type of hold.
     $details->{recall_denied} = $details->{holds_denied};
 
-    $details->{charge_denied} = 1 if grep {$_ =~ /CIRC/} @block_tags;
-    $details->{renew_denied} = 1 if grep {$_ =~ /RENEW/} @block_tags;
+    $details->{charge_denied} = 1 if $blocked || grep {$_ =~ /CIRC/} @block_tags;
+    $details->{renew_denied} = 1 if $blocked || grep {$_ =~ /RENEW/} @block_tags;
 }
 
 
