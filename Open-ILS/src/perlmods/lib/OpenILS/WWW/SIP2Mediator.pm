@@ -11,6 +11,7 @@
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
+#
 # ---------------------------------------------------------------
 # Code borrows heavily and sometimes copies directly from from
 # ../SIP* and SIPServer*
@@ -22,8 +23,7 @@ use OpenSRF::Utils::Logger q/$logger/;
 use OpenILS::Application::AppUtils;
 my $U = 'OpenILS::Application::AppUtils';
 
-# Note a cache instance cannot be instantiated until after
-# opensrf has connected (see init below).
+# Cache instances cannot be created until opensrf is connected.
 my $_cache;
 sub cache {
     $_cache = OpenSRF::Utils::Cache->new unless $_cache;
@@ -150,7 +150,8 @@ my $config = { # TODO: move to external config / database settings
         options => {
             due_date_use_sip_date_format => 0,
             patron_status_permit_loans => 0,
-            patron_status_permit_all => 0
+            patron_status_permit_all => 0,
+            msg64_hold_items_available => 0
         }
     }]
 };
@@ -175,6 +176,18 @@ sub init {
 sub sipdate {
     my $date = shift || DateTime->now;
     return $date->strftime($SIP_DATE_FORMAT);
+}
+
+sub sipbool {
+    my ($bool, $use_n) = @_;
+    return 'Y' if $bool;
+    return $use_n ? 'N' : ' ';
+}
+
+sub count4 {
+    my $value = shift;
+    return '    ' unless defined $value;
+    return sprintf("%04d", $value);
 }
 
 sub handler {
@@ -222,7 +235,7 @@ sub handler {
     return Apache2::Const::OK;
 }
 
-# Returns the value of the first occurrence of the requested field by SIP code.
+# Returns the value of the first occurrence of the requested SIP code.
 sub get_field_value {
     my ($message, $code) = @_;
     for my $field (@{$message->{fields}}) {
@@ -234,6 +247,7 @@ sub get_field_value {
     return undef;
 }
 
+# Returns the configuation chunk mapped to the requested institution.
 sub get_inst_config {
     my $institution = shift;
     my ($instconf) = grep {$_->{id} eq $institution} @{$config->{institutions}};
@@ -245,6 +259,7 @@ sub get_inst_config {
     return $instconf;
 }
 
+# Login to Evergreen and cache the login data.
 sub handle_login {
     my ($seskey, $message) = @_;
 
@@ -292,16 +307,16 @@ sub handle_sc_status {
     my $response = {
         code => '98',
         fixed_fields => [
-            'Y',        # online_status
-            'Y',        # checkin_ok
-            'Y',        # checkout_ok
-            'Y',        # acs_renewal_policy
-            'N',        # status_update_ok
-            'N',        # offline_ok
-            '999',      # timeout_period
-            '999',      # retries_allowed
-            sipdate(),  # transaction date
-            '2.00'      # protocol_version
+            sipbool(1),    # online_status
+            sipbool(1),    # checkin_ok
+            sipbool(1),    # checkout_ok
+            sipbool(1),    # acs_renewal_policy
+            sipbool(0, 1), # status_update_ok
+            sipbool(0, 1), # offline_ok
+            '999',         # timeout_period
+            '999',         # retries_allowed
+            sipdate(),     # transaction date
+            '2.00'         # protocol_version
         ],
         fields => [
             {AO => $instname},
@@ -317,13 +332,18 @@ sub handle_item_info {
     my $institution = get_field_value($message, 'AO');
     my $instconf = get_inst_config($institution) || return undef;
     my $barcode = get_field_value($message, 'AB');
-    my $item_details = get_item_details($session, $instconf, $barcode);
+    my $idetails = get_item_details($session, $instconf, $barcode);
 
-    if (!$item_details) {
+    if (!$idetails) {
         # No matching item found, return a minimal response.
         return {
             code => '18',
-            fixed_fields => ['01', '01', '01', sipdate()],
+            fixed_fields => [
+                '01', # circ status: other/Unknown
+                '01', # security marker: other/unknown
+                '01', # fee type: other/unknown
+                sipdate()
+            ],
             fields => [{AB => $barcode, AJ => ''}]
         };
     };
@@ -331,23 +351,23 @@ sub handle_item_info {
     return {
         code => '18',
         fixed_fields => [
-            $item_details->{circ_status},
+            $idetails->{circ_status},
             '02', # Security Marker, consistent with ../SIP*
-            $item_details->{fee_type},
+            $idetails->{fee_type},
             sipdate()
         ],
         fields => [
             {AB => $barcode},
-            {AJ => $item_details->{title}},
-            {CF => $item_details->{hold_queue_length}},
-            {AH => $item_details->{due_date}},
-            {CM => $item_details->{hold_pickup_date}},
-            {BG => $item_details->{item}->circ_lib->shortname},
+            {AJ => $idetails->{title}},
+            {CF => $idetails->{hold_queue_length}},
+            {AH => $idetails->{due_date}},
+            {CM => $idetails->{hold_pickup_date}},
+            {BG => $idetails->{item}->circ_lib->shortname},
             {BH => $instconf->{currency}},
-            {BV => $item_details->{item}->deposit_amount},
-            {CK => $item_details->{media_type}},
-            {AQ => $item_details->{item}->circ_lib->shortname},
-            {AP => $item_details->{item}->circ_lib->shortname},
+            {BV => $idetails->{item}->deposit_amount},
+            {CK => $idetails->{media_type}},
+            {AQ => $idetails->{item}->circ_lib->shortname},
+            {AP => $idetails->{item}->circ_lib->shortname},
         ]
     };
 }
@@ -479,29 +499,27 @@ sub handle_patron_info {
     my $instconf = get_inst_config($institution) || return undef;
     my $barcode = get_field_value($message, 'AA');
     my $password = get_field_value($message, 'AD');
-    my $start_item = get_field_value($message, 'BP');
-    my $end_item = get_field_value($message, 'BQ');
 
-    my $patron_details =
-        get_patron_details($session, $instconf, $barcode, $password);
+    my $pdetails =
+        get_patron_details($session, $instconf, $message, $barcode, $password);
 
-    if (!$patron_details) {
+    if (!$pdetails) {
         return {
             code => '64',
             fixed_fields => [
-                'Y', # charge denied
-                'Y', # renew denied
-                'Y', # recall denied
-                'Y', # holds denied
+                sipbool(1), # charge denied
+                sipbool(1), # renew denied
+                sipbool(1), # recall denied
+                sipbool(1), # holds denied
                 split('', (' ' x 10)),
                 '000', # language
-                sipdate(),
+                sipdate()
             ],
             fields => [
                 {AO => $institution},
                 {AA => $barcode},
-                {BL => 'N'}, # valid patron
-                {CQ => 'N'}  # valid patron password
+                {BL => sipbool(0, 1)}, # valid patron
+                {CQ => sipbool(0, 1)}  # valid patron password
             ]
         };
     }
@@ -509,34 +527,40 @@ sub handle_patron_info {
     return {
         code => '64',
         fixed_fields => [
-            $patron_details->{charge_denied}   ? 'Y' : ' ',
-            $patron_details->{renew_denied}    ? 'Y' : ' ',
-            $patron_details->{recall_denied}   ? 'Y' : ' ',
-            $patron_details->{holds_denied}    ? 'Y' : ' ',
-            $patron_details->{patron}->card->active eq 'f' ? 'Y' : ' ',
-            ' ', # too many charged
-            $patron_details->{too_may_overdue} ? 'Y' : ' ',
-            ' ', # too many renewals
-            $patron_details->{too_many_claims_returned}  ? 'Y' : ' ',
-            ' ', # too many lost
-            $patron_details->{too_many_fines}  ? 'Y' : ' ',
-            $patron_details->{too_many_fines}  ? 'Y' : ' ', # too many fees
-            $patron_details->{recall_overdue}  ? 'Y' : ' ',
-            $patron_details->{too_many_fines}  ? 'Y' : ' ', # too many billed
+            sipbool($pdetails->{charge_denied}),
+            sipbool($pdetails->{renew_denied}),
+            sipbool($pdetails->{recall_denied}),
+            sipbool($pdetails->{holds_denied}),
+            sipbool($pdetails->{patron}->card->active eq 'f'),
+            sipbool(0), # too many charged
+            sipbool($pdetails->{too_may_overdue}),
+            sipbool(0), # too many renewals
+            sipbool(0), # too many claims retruned
+            sipbool(0), # too many lost
+            sipbool($pdetails->{too_many_fines}),
+            sipbool($pdetails->{too_many_fines}),
+            sipbool(0), # recall overdue
+            sipbool($pdetails->{too_many_fines}),
             '000', # language
             sipdate(),
+            count4($pdetails->{holds_count}),
+            count4($pdetails->{overdue_count}),
+            count4($pdetails->{out_count}),
+            count4($pdetails->{fine_count}),
+            count4($pdetails->{recall_count}),
+            count4($pdetails->{unavail_holds_count}),
         ],
         fields => [
             {AO => $institution},
             {AA => $barcode},
-            {BL => 'Y'}, # valid patron
-            {CQ => $password ? 'Y' : 'N'}  # password verified if exists
+            {BL => sipbool(1)}, # valid patron
+            {CQ => sipbool($password, 1)}  # password verified if exists
         ]
     };
 }
 
 sub get_patron_details {
-    my ($session, $instconf, $barcode, $password) = @_;
+    my ($session, $instconf, $message, $barcode, $password) = @_;
 
     my $e = new_editor();
     my $details = {};
@@ -560,24 +584,86 @@ sub get_patron_details {
     my $patron = $details->{patron} = $card->usr;
     $patron->card($card);
 
-    # We only verify the password if one is provided.
+    # We only attempt to verify the password if one is provided.
     return undef if defined $password &&
         !$U->verify_migrated_user_password($e, $patron->id, $password);
 
-    set_patron_privileges($session, $instconf, $details);
+    my $penalties = get_patron_penalties($session, $patron);
+
+    set_patron_privileges($session, $instconf, $details, $penalties);
+
+    $details->{too_many_overdue} = 1 if
+        grep {$_->{id} == OILS_PENALTY_PATRON_EXCEEDS_OVERDUE_COUNT}
+        @$penalties;
+
+    $details->{too_many_fines} = 1 if
+        grep {$_->{id} == OILS_PENALTY_PATRON_EXCEEDS_FINES}
+        @$penalties;
+
+    set_patron_summary_items($session, $instconf, $message, $details);
 
     return $details;
 }
 
-sub set_patron_privileges {
-    my ($session, $instconf, $details) = @_;
-    my $patron = $details->{patron};
 
-    # Assume all are allowed and modify as needed.
-    $details->{charge_denied} = 0;
-    $details->{recall_denied} = 0;
-    $details->{renew_denied} = 0;
-    $details->{holds_denied} = 0;
+# Sets:
+#    holds_count
+#    overdue_count
+#    out_count
+#    fine_count
+#    recall_count
+#    unavail_holds_count
+sub set_patron_summary_items {
+    my ($session, $instconf, $message, $details) = @_;
+
+    my $patron = $details->{patron};
+    my $start_item = get_field_value($message, 'BP');
+    my $end_item = get_field_value($message, 'BQ');
+    my @summary = @{$message->{fixed_fields}}[21 .. 30];
+
+    my $e = new_editor();
+
+    my $holds_where = {
+        usr => $patron->id,
+        fulfillment_time => undef,
+        cancel_time => undef
+    };
+
+    $holds_where->{current_shelf_lib} = {'=' => {'+ahr' => 'pickup_lib'}} 
+        if $instconf->{msg64_hold_items_available};
+
+    my $hold_ids = $e->json_query({
+        select => {ahr => ['id']},
+        from => 'ahr',
+        where => {'+ahr' => $holds_where}
+    });
+
+    $details->{holds_count} = scalar(@$hold_ids);
+
+    my $circ_ids = $e->retrieve_action_open_circ_list($patron->id);
+    my $overdue_ids = [ grep {$_ > 0} split(',', $circ_ids->overdue) ];
+    my $out_ids = [ grep {$_ > 0} split(',', $circ_ids->out) ];
+
+    $details->{overdue_count} = scalar(@$overdue_ids);
+    $details->{out_count} = scalar(@$out_ids) + scalar(@$overdue_ids);
+
+    $details->{recall_count} = undef; # not supported
+
+    my $xacts = $U->simplereq(
+        'open-ils.actor',                                
+        'open-ils.actor.user.transactions.history.have_balance',               
+        $session->account->{authtoken},
+        $patron->id
+    );
+
+    $details->{fine_count} = scalar(@$xacts);
+
+    # TODO: unavail holds count; summary details request
+}
+
+sub set_patron_privileges {
+    my ($session, $instconf, $details, $penalties) = @_;
+    my $patron = $details->{patron};
 
     my $expire = DateTime::Format::ISO8601->new
         ->parse_datetime(clean_ISO8601($patron->expire_date));
@@ -586,8 +672,8 @@ sub set_patron_privileges {
         $logger->info(
             "SIP2 Patron account is expired; all privileges blocked");
         $details->{charge_denied} = 1;
-        $details->{renew_denied} = 1;
         $details->{recall_denied} = 1;
+        $details->{renew_denied} = 1;
         $details->{holds_denied} = 1;
         return;
     }
@@ -602,10 +688,32 @@ sub set_patron_privileges {
         || $patron->card->active eq 'f'
     );
 
-    # No need for the extra call to fetch penalties if the user
-    # is already blocked.
-    my $blocks = $blocked ? [] : new_editor()->json_query({
-        select => {csp => ['block_list']},
+    my @block_tags = map {$_->{block_list}} grep {$_->{block_list}} @$penalties;
+
+    return unless $blocked || @block_tags; # no blocks remain
+
+    $details->{holds_denied} = ($blocked || grep {$_ =~ /HOLD/} @block_tags);
+
+    # Ignore loan-related blocks?
+    return if $instconf->{patron_status_permit_loans};
+
+    $details->{charge_denied} = ($blocked || grep {$_ =~ /CIRC/} @block_tags);
+    $details->{renew_denied} = ($blocked || grep {$_ =~ /RENEW/} @block_tags);
+
+    # In evergreen, patrons cannot create Recall holds directly, but that
+    # doesn't mean they would not have said privilege if the functionality
+    # existed.  Base the ability to perform recalls on whether they have
+    # checkout and holds privilege, since both would be needed for recalls.
+    $details->{recall_denied} = 
+        ($details->{charge_denied} || $details->{holds_denied});
+}
+
+# Returns an array of penalty hashes with keys "id" and "block_list"
+sub get_patron_penalties {
+    my ($session, $patron) = @_;
+
+    return new_editor()->json_query({
+        select => {csp => ['id', 'block_list']},
         from => {ausp => 'csp'},
         where => {
             '+ausp' => {
@@ -616,31 +724,11 @@ sub set_patron_privileges {
                 ],
                 org_unit => 
                     $U->get_org_full_path($session->account->{login}->ws_ou)
-            },
-            '+csp' => {
-                '-and' => [
-                    {block_list => {'!=' => undef}},
-                    {block_list => {'!=' => ''}},
-                ]
             }
         }
     });
-
-    return unless $blocked || @$blocks; # nothing left to check.
-
-    my @block_tags = map {$_->{block_list}} @$blocks;
-
-    $details->{holds_denied} = 1 if $blocked || grep {$_ =~ /HOLD/} @block_tags;
-
-    # Ignore loan-related blocks?
-    return if $instconf->{patron_status_permit_loans};
-
-    # In evergreen, recalls are a type of hold.
-    $details->{recall_denied} = $details->{holds_denied};
-
-    $details->{charge_denied} = 1 if $blocked || grep {$_ =~ /CIRC/} @block_tags;
-    $details->{renew_denied} = 1 if $blocked || grep {$_ =~ /RENEW/} @block_tags;
 }
+
 
 
 
