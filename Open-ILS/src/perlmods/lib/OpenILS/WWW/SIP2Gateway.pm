@@ -92,7 +92,7 @@ sub authenticate {
     return 1;
 }
 
-package OpenILS::WWW::SIP2Mediator;
+package OpenILS::WWW::SIP2Gateway;
 use strict; use warnings;
 use Apache2::Const -compile =>
     qw(OK FORBIDDEN NOT_FOUND HTTP_INTERNAL_SERVER_ERROR HTTP_BAD_REQUEST);
@@ -107,6 +107,7 @@ use OpenSRF::Utils::Logger q/$logger/;
 use OpenILS::Application::AppUtils;
 use OpenILS::Utils::DateTime qw/:datetime/;
 use OpenILS::Const qw/:const/;
+use OpenILS::WWW::SIP2Gateway::Patron;
 
 my $json = JSON::XS->new;
 $json->ascii(1);
@@ -114,7 +115,8 @@ $json->allow_nonref(1);
 
 my $SIP_DATE_FORMAT = "%Y%m%d    %H%M%S";
 
-my $config = { # TODO: move to external config / database settings
+ # TODO: move to config / database
+my $config = {
     options => {
         # Allow 99 (sc status) message before successful 93 (login) message
         allow_sc_status_before_login => 1
@@ -496,12 +498,20 @@ sub handle_patron_info {
     my $account = $session->account;
 
     my $institution = get_field_value($message, 'AO');
-    my $instconf = get_inst_config($institution) || return undef;
     my $barcode = get_field_value($message, 'AA');
     my $password = get_field_value($message, 'AD');
+    my $instconf = get_inst_config($institution) || return undef;
+    my $summary = $message->{fixed_fields}->[2];
 
-    my $pdetails =
-        get_patron_details($session, $instconf, $message, $barcode, $password);
+    my $pdetails = OpenILS::WWW::SIP2Gateway::Patron->get_patron_details(
+        session => $session,
+        instconf => $instconf,
+        barcode => $barcode,
+        password => $password,
+        summary_start_item => get_field_value($message, 'BP'),
+        summary_end_item => get_field_value($message, 'BQ'),
+        summary_list_items => patron_summary_list_items($summary)
+    );
 
     if (!$pdetails) {
         return {
@@ -559,177 +569,20 @@ sub handle_patron_info {
     };
 }
 
-sub get_patron_details {
-    my ($session, $instconf, $message, $barcode, $password) = @_;
 
-    my $e = new_editor();
-    my $details = {};
+# Determines which class of data the SIP client wants detailed
+# information on in the patron info request.
+sub patron_summary_list_items {
+    my $summary = shift;
 
-    my $card = $e->search_actor_card([{
-        barcode => $barcode
-    }, {
-        flesh => 3,
-        flesh_fields => {
-            ac => [qw/usr/],
-            au => [qw/
-                billing_address
-                mailing_address
-                profile
-                stat_cat_entries
-            /],
-            actscecm => [qw/stat_cat/]
-        }
-    }])->[0];
+    my $idx = index($summary, 'Y');
 
-    my $patron = $details->{patron} = $card->usr;
-    $patron->card($card);
-
-    # We only attempt to verify the password if one is provided.
-    return undef if defined $password &&
-        !$U->verify_migrated_user_password($e, $patron->id, $password);
-
-    my $penalties = get_patron_penalties($session, $patron);
-
-    set_patron_privileges($session, $instconf, $details, $penalties);
-
-    $details->{too_many_overdue} = 1 if
-        grep {$_->{id} == OILS_PENALTY_PATRON_EXCEEDS_OVERDUE_COUNT}
-        @$penalties;
-
-    $details->{too_many_fines} = 1 if
-        grep {$_->{id} == OILS_PENALTY_PATRON_EXCEEDS_FINES}
-        @$penalties;
-
-    set_patron_summary_items($session, $instconf, $message, $details);
-
-    return $details;
+    return 'hold_items'        if $idx == 0;
+    return 'overdue_items'     if $idx == 1;
+    return 'charged_items'     if $idx == 2;
+    return 'fine_items'        if $idx == 3;
+    return 'recall_items'      if $idx == 4;
+    return 'unavailable_holds' if $idx == 5;
 }
-
-
-# Sets:
-#    holds_count
-#    overdue_count
-#    out_count
-#    fine_count
-#    recall_count
-#    unavail_holds_count
-sub set_patron_summary_items {
-    my ($session, $instconf, $message, $details) = @_;
-
-    my $patron = $details->{patron};
-    my $start_item = get_field_value($message, 'BP');
-    my $end_item = get_field_value($message, 'BQ');
-    my @summary = @{$message->{fixed_fields}}[21 .. 30];
-
-    my $e = new_editor();
-
-    my $holds_where = {
-        usr => $patron->id,
-        fulfillment_time => undef,
-        cancel_time => undef
-    };
-
-    $holds_where->{current_shelf_lib} = {'=' => {'+ahr' => 'pickup_lib'}} 
-        if $instconf->{msg64_hold_items_available};
-
-    my $hold_ids = $e->json_query({
-        select => {ahr => ['id']},
-        from => 'ahr',
-        where => {'+ahr' => $holds_where}
-    });
-
-    $details->{holds_count} = scalar(@$hold_ids);
-
-    my $circ_ids = $e->retrieve_action_open_circ_list($patron->id);
-    my $overdue_ids = [ grep {$_ > 0} split(',', $circ_ids->overdue) ];
-    my $out_ids = [ grep {$_ > 0} split(',', $circ_ids->out) ];
-
-    $details->{overdue_count} = scalar(@$overdue_ids);
-    $details->{out_count} = scalar(@$out_ids) + scalar(@$overdue_ids);
-
-    $details->{recall_count} = undef; # not supported
-
-    my $xacts = $U->simplereq(
-        'open-ils.actor',                                
-        'open-ils.actor.user.transactions.history.have_balance',               
-        $session->account->{authtoken},
-        $patron->id
-    );
-
-    $details->{fine_count} = scalar(@$xacts);
-
-    # TODO: unavail holds count; summary details request
-}
-
-sub set_patron_privileges {
-    my ($session, $instconf, $details, $penalties) = @_;
-    my $patron = $details->{patron};
-
-    my $expire = DateTime::Format::ISO8601->new
-        ->parse_datetime(clean_ISO8601($patron->expire_date));
-
-    if ($expire < DateTime->now) {
-        $logger->info(
-            "SIP2 Patron account is expired; all privileges blocked");
-        $details->{charge_denied} = 1;
-        $details->{recall_denied} = 1;
-        $details->{renew_denied} = 1;
-        $details->{holds_denied} = 1;
-        return;
-    }
-
-    # Non-expired patrons are allowed all privileges when 
-    # patron_status_permit_all is true.
-    return if $instconf->{patron_status_permit_all};
-
-    my $blocked = (
-           $patron->barred eq 't'
-        || $patron->active eq 'f'
-        || $patron->card->active eq 'f'
-    );
-
-    my @block_tags = map {$_->{block_list}} grep {$_->{block_list}} @$penalties;
-
-    return unless $blocked || @block_tags; # no blocks remain
-
-    $details->{holds_denied} = ($blocked || grep {$_ =~ /HOLD/} @block_tags);
-
-    # Ignore loan-related blocks?
-    return if $instconf->{patron_status_permit_loans};
-
-    $details->{charge_denied} = ($blocked || grep {$_ =~ /CIRC/} @block_tags);
-    $details->{renew_denied} = ($blocked || grep {$_ =~ /RENEW/} @block_tags);
-
-    # In evergreen, patrons cannot create Recall holds directly, but that
-    # doesn't mean they would not have said privilege if the functionality
-    # existed.  Base the ability to perform recalls on whether they have
-    # checkout and holds privilege, since both would be needed for recalls.
-    $details->{recall_denied} = 
-        ($details->{charge_denied} || $details->{holds_denied});
-}
-
-# Returns an array of penalty hashes with keys "id" and "block_list"
-sub get_patron_penalties {
-    my ($session, $patron) = @_;
-
-    return new_editor()->json_query({
-        select => {csp => ['id', 'block_list']},
-        from => {ausp => 'csp'},
-        where => {
-            '+ausp' => {
-                usr => $patron->id,
-                '-or' => [
-                    {stop_date => undef},
-                    {stop_date => {'>' => 'now'}}
-                ],
-                org_unit => 
-                    $U->get_org_full_path($session->account->{login}->ws_ou)
-            }
-        }
-    });
-}
-
-
-
 
 1;
