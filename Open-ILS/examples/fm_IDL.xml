@@ -13435,6 +13435,54 @@ SELECT  usr,
 		</permacrud>
 	</class>
 
+	<class id="csa" controller="open-ils.cstore open-ils.pcrud"
+		oils_obj:fieldmapper="config::sip_account" 
+		oils_persist:tablename="config.sip_account" 
+		reporter:label="SIP AccountS">
+		<fields oils_persist:primary="id" oils_persist:sequence="config.sip_account_id_seq">
+			<field name="id" reporter:datatype="id" reporter:label="ID" reporter:selector="sip_username"/>
+			<field name="institution" reporter:datatype="text" reporter:label="Institution" oils_obj:required="true"/>
+			<field name="sip_username" reporter:datatype="text" reporter:label="SIP Username" oils_obj:required="true"/>
+			<field name="usr" reporter:datatype="link" reporter:label="ILS User" oils_obj:required="true"/>
+			<field name="workstation" reporter:datatype="link" reporter:label="Workstation"/>
+			<field name="activity_type" reporter:datatype="link" reporter:label="Activity Type"/>
+			<field name="av_format" reporter:datatype="text" reporter:label="SIP AV Format"/>
+		</fields>
+		<links>
+			<link field="usr" reltype="has_a" key="id" map="" class="au"/>
+			<link field="workstation" reltype="has_a" key="id" map="" class="aws"/>
+			<link field="activity_type" reltype="has_a" key="id" map="" class="cuat"/>
+		</links>
+		<permacrud xmlns="http://open-ils.org/spec/opensrf/IDL/permacrud/v1">
+			<actions>
+				<create permission="SIP_ADMIN" global_required="true"/>
+				<retrieve permission="SIP_ADMIN" global_required="true"/>
+				<update permission="SIP_ADMIN" global_required="true"/>
+				<delete permission="SIP_ADMIN" global_required="true"/>
+			</actions>
+		</permacrud>
+	</class>
+
+	<class id="css" controller="open-ils.cstore open-ils.pcrud"
+		oils_obj:fieldmapper="config::sip_setting" 
+		oils_persist:tablename="config.sip_setting" 
+		reporter:label="SIP Settings">
+		<fields oils_persist:primary="id" oils_persist:sequence="config.sip_setting_id_seq">
+			<field name="id" reporter:datatype="id" reporter:label="ID" reporter:selector="sip_username"/>
+			<field name="institution" reporter:datatype="text" reporter:label="Institution" oils_obj:required="true"/>
+			<field name="name" reporter:datatype="text" reporter:label="Institution" oils_obj:required="true"/>
+			<field name="value" reporter:datatype="text" reporter:label="Institution" oils_obj:required="true"/>
+		</fields>
+		<permacrud xmlns="http://open-ils.org/spec/opensrf/IDL/permacrud/v1">
+			<actions>
+				<create permission="SIP_ADMIN" global_required="true"/>
+				<retrieve permission="SIP_ADMIN" global_required="true"/>
+				<update permission="SIP_ADMIN" global_required="true"/>
+				<delete permission="SIP_ADMIN" global_required="true"/>
+			</actions>
+		</permacrud>
+	</class>
+
 	<!-- ********************************************************************************************************************* -->
 </IDL>
 
