@@ -65,17 +65,16 @@ sub authenticate {
     my $seskey = $self->seskey;
 
     my $auth = $U->simplereq(
-        'open-ils.auth',
-        'open-ils.auth.login', {
-        username => $account->{ils_username},
-        password => $account->{ils_password},
+        'open-ils.auth_internal',
+        'open-ils.auth_internal.session.create', {
+        user_id => $account->{ils_usr},
         workstation => $account->{ils_workstation},
-        type => 'staff'
+        login_type => 'staff'
     });
 
     if ($auth->{textcode} ne 'SUCCESS') {
         $logger->warn(
-            "SIP2 login failed for ils_username".$account->{ils_username});
+            "SIP2 login failed for ils_usr".$account->{ils_usr});
         return 0;
     }
 
@@ -108,6 +107,7 @@ use OpenILS::Application::AppUtils;
 use OpenILS::Utils::DateTime qw/:datetime/;
 use OpenILS::Const qw/:const/;
 use OpenILS::WWW::SIP2Gateway::Patron;
+use OpenILS::WWW::SIP2Gateway::Item;
 
 my $json = JSON::XS->new;
 $json->ascii(1);
@@ -124,8 +124,7 @@ my $config = {
     accounts => [{
         sip_username => 'sip',
         sip_password => 'sip',
-        ils_username => 'admin',
-        ils_password => 'demo123',
+        ils_usr => 1,
         ils_workstation => 'BR1-gamma'
     }],
     institutions => [{
@@ -180,10 +179,16 @@ sub sipdate {
     return $date->strftime($SIP_DATE_FORMAT);
 }
 
+# False == 'N'
 sub sipbool {
-    my ($bool, $use_n) = @_;
-    return 'Y' if $bool;
-    return $use_n ? 'N' : ' ';
+    my $bool = shift;
+    return $bool ? 'Y' : 'N';
+}
+
+# False == ' '
+sub spacebool {
+    my $bool = shift;
+    return $bool ? 'Y' : ' ';
 }
 
 sub count4 {
@@ -313,8 +318,8 @@ sub handle_sc_status {
             sipbool(1),    # checkin_ok
             sipbool(1),    # checkout_ok
             sipbool(1),    # acs_renewal_policy
-            sipbool(0, 1), # status_update_ok
-            sipbool(0, 1), # offline_ok
+            sipbool(0),    # status_update_ok
+            sipbool(0),    # offline_ok
             '999',         # timeout_period
             '999',         # retries_allowed
             sipdate(),     # transaction date
@@ -334,7 +339,12 @@ sub handle_item_info {
     my $institution = get_field_value($message, 'AO');
     my $instconf = get_inst_config($institution) || return undef;
     my $barcode = get_field_value($message, 'AB');
-    my $idetails = get_item_details($session, $instconf, $barcode);
+
+    my $idetails = OpenILS::WWW::SIP2Gateway::Item->get_item_details(
+        session => $session,
+        instconf => $instconf,
+        barcode => $barcode
+    );
 
     if (!$idetails) {
         # No matching item found, return a minimal response.
@@ -374,125 +384,6 @@ sub handle_item_info {
     };
 }
 
-sub get_item_details {
-    my ($session, $instconf, $barcode) = @_;
-    my $e = new_editor();
-
-    my $item = $e->search_asset_copy([{
-        barcode => $barcode,
-        deleted => 'f'
-    }, {
-        flesh => 3,
-        flesh_fields => {
-            acp => [qw/circ_lib call_number
-                status stat_cat_entry_copy_maps circ_modifier/],
-            acn => [qw/owning_lib record/],
-            bre => [qw/flat_display_entries/],
-            ascecm => [qw/stat_cat stat_cat_entry/],
-        }
-    }])->[0];
-
-    return undef unless $item;
-
-    my $details = {item => $item};
-
-    $details->{circ} = $e->search_action_circulation([{
-        target_copy => $item->id,
-        checkin_time => undef,
-        '-or' => [
-            {stop_fines => undef},
-            {stop_fines => [qw/MAXFINES LONGOVERDUE/]},
-        ]
-    }, {
-        flesh => 2,
-        flesh_fields => {circ => ['usr'], au => ['card']}
-    }])->[0];
-
-    if ($item->status->id == OILS_COPY_STATUS_IN_TRANSIT) {
-        $details->{transit} = $e->search_action_transit_copy([{
-            target_copy => $item->id,
-            dest_recv_time => undef,
-            cancel_time => undef
-        },{
-            flesh => 1,
-            flesh_fields => {atc => ['dest']}
-        }])->[0];
-    }
-
-    if ($item->status->id == OILS_COPY_STATUS_ON_HOLDS_SHELF || (
-        $details->{transit} &&
-        $details->{transit}->copy_status == OILS_COPY_STATUS_ON_HOLDS_SHELF)) {
-
-        $details->{hold} = $e->search_action_hold_request([{
-            current_copy        => $item->id,
-            capture_time        => {'!=' => undef},
-            cancel_time         => undef,
-            fulfillment_time    => undef
-        }, {
-            limit => 1,
-            flesh => 1,
-            flesh_fields => {ahr => ['pickup_lib']}
-        }])->[0];
-    }
-
-    my ($title_entry) = grep {$_->name eq 'title'}
-        @{$item->call_number->record->flat_display_entries};
-
-    $details->{title} = $title_entry ? $title_entry->value : '';
-
-    # Same as ../SIP*
-    $details->{hold_queue_length} = $details->{hold} ? 1 : 0;
-
-    $details->{circ_status} = circulation_status($item->status->id);
-
-    $details->{fee_type} =
-        ($item->deposit_amount > 0.0 && $item->deposit eq 'f') ?
-        '06' : '01';
-
-    my $cmod = $item->circ_modifier;
-    $details->{magnetic_media} = $cmod && $cmod->magnetic_media eq 't';
-    $details->{media_type} = $cmod ? $cmod->sip2_media_type : '001';
-
-    if ($details->{circ}) {
-
-        my $due_date = DateTime::Format::ISO8601->new->
-            parse_datetime(clean_ISO8601($details->{circ}->due_date));
-
-        $details->{due_date} =
-            $instconf->{due_date_use_sip_date_format} ?
-            sipdate($due_date) :
-            $due_date->strftime('%F %T');
-    }
-
-    if ($details->{hold}) {
-        my $pickup_date = $details->{hold}->shelf_expire_time;
-        $details->{hold_pickup_date} =
-            $pickup_date ? sipdate($pickup_date) : undef;
-    }
-
-    return $details;
-}
-
-# Maps item status to SIP circulation status constants.
-sub circulation_status {
-    my $stat = shift;
-
-    return '02' if $stat == OILS_COPY_STATUS_ON_ORDER;
-    return '03' if $stat == OILS_COPY_STATUS_AVAILABLE;
-    return '04' if $stat == OILS_COPY_STATUS_CHECKED_OUT;
-    return '06' if $stat == OILS_COPY_STATUS_IN_PROCESS;
-    return '08' if $stat == OILS_COPY_STATUS_ON_HOLDS_SHELF;
-    return '09' if $stat == OILS_COPY_STATUS_RESHELVING;
-    return '10' if $stat == OILS_COPY_STATUS_IN_TRANSIT;
-    return '12' if (
-        $stat == OILS_COPY_STATUS_LOST ||
-        $stat == OILS_COPY_STATUS_LOST_AND_PAID
-    );
-    return '13' if $stat == OILS_COPY_STATUS_MISSING;
-
-    return '01';
-}
-
 sub handle_patron_info {
     my ($session, $message) = @_;
     my $account = $session->account;
@@ -517,10 +408,10 @@ sub handle_patron_info {
         return {
             code => '64',
             fixed_fields => [
-                sipbool(1), # charge denied
-                sipbool(1), # renew denied
-                sipbool(1), # recall denied
-                sipbool(1), # holds denied
+                spacebool(1), # charge denied
+                spacebool(1), # renew denied
+                spacebool(1), # recall denied
+                spacebool(1), # holds denied
                 split('', (' ' x 10)),
                 '000', # language
                 sipdate()
@@ -528,8 +419,8 @@ sub handle_patron_info {
             fields => [
                 {AO => $institution},
                 {AA => $barcode},
-                {BL => sipbool(0, 1)}, # valid patron
-                {CQ => sipbool(0, 1)}  # valid patron password
+                {BL => sipbool(0)}, # valid patron
+                {CQ => sipbool(0)}  # valid patron password
             ]
         };
     }
@@ -537,20 +428,20 @@ sub handle_patron_info {
     return {
         code => '64',
         fixed_fields => [
-            sipbool($pdetails->{charge_denied}),
-            sipbool($pdetails->{renew_denied}),
-            sipbool($pdetails->{recall_denied}),
-            sipbool($pdetails->{holds_denied}),
-            sipbool($pdetails->{patron}->card->active eq 'f'),
-            sipbool(0), # too many charged
-            sipbool($pdetails->{too_may_overdue}),
-            sipbool(0), # too many renewals
-            sipbool(0), # too many claims retruned
-            sipbool(0), # too many lost
-            sipbool($pdetails->{too_many_fines}),
-            sipbool($pdetails->{too_many_fines}),
-            sipbool(0), # recall overdue
-            sipbool($pdetails->{too_many_fines}),
+            spacebool($pdetails->{charge_denied}),
+            spacebool($pdetails->{renew_denied}),
+            spacebool($pdetails->{recall_denied}),
+            spacebool($pdetails->{holds_denied}),
+            spacebool($pdetails->{patron}->card->active eq 'f'),
+            spacebool(0), # too many charged
+            spacebool($pdetails->{too_may_overdue}),
+            spacebool(0), # too many renewals
+            spacebool(0), # too many claims retruned
+            spacebool(0), # too many lost
+            spacebool($pdetails->{too_many_fines}),
+            spacebool($pdetails->{too_many_fines}),
+            spacebool(0), # recall overdue
+            spacebool($pdetails->{too_many_fines}),
             '000', # language
             sipdate(),
             count4($pdetails->{holds_count}),
@@ -563,8 +454,8 @@ sub handle_patron_info {
         fields => [
             {AO => $institution},
             {AA => $barcode},
-            {BL => sipbool(1)}, # valid patron
-            {CQ => sipbool($password, 1)}  # password verified if exists
+            {BL => sipbool(1)},         # valid patron
+            {CQ => sipbool($password)}  # password verified if exists
         ]
     };
 }
