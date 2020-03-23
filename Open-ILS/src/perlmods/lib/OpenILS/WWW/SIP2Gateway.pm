@@ -160,7 +160,6 @@ my $config = {
 my $osrf_config;
 sub import {
     $osrf_config = shift;
-    warn "OSRF CONFIG IS $osrf_config\n";
 }
 
 my $init_complete = 0;
