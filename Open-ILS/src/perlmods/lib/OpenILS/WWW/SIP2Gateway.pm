@@ -113,7 +113,7 @@ my $json = JSON::XS->new;
 $json->ascii(1);
 $json->allow_nonref(1);
 
-my $SIP_DATE_FORMAT = "%Y%m%d    %H%M%S";
+use constant SIP_DATE_FORMAT => "%Y%m%d    %H%M%S";
 
  # TODO: move to config / database
 my $config = {
@@ -162,6 +162,7 @@ sub import {
     $osrf_config = shift;
 }
 
+my $config;
 my $init_complete = 0;
 sub init {
     return if $init_complete;
@@ -170,12 +171,48 @@ sub init {
     OpenSRF::System->bootstrap_client(config_file => $osrf_config);
     OpenILS::Utils::CStoreEditor->init;
 
-    return Apache2::Const::OK;
+    my $e = new_editor();
+
+    my $settings = $e->retrieve_all_config_sip_setting;
+
+    $config = {
+        institutions => []
+    };
+
+    # Institution specific settings.
+    # In addition to the options, this tells us what institutions we support.
+    for my $set (grep {$_->institution ne '*'} @$settings) {
+        my $inst = $set->institution;
+        my $value = $json->decode($set->value);
+        my $name = $set->name;
+
+        my ($inst_conf) = 
+            grep {$_->id eq $inst} @{$config->{institutions}} ||
+            {   id => $inst,
+                currency => 'USD',
+                supports => [],
+                options => {}
+            };
+
+        $inst_conf->{options}->{$name} = $value;
+    }
+
+    # Global options only are only used when they do not replace
+    # institution-specific options.
+    for my $set (grep {$_->institution eq '*'} @$settings) {
+        my $name = $set->name;
+        my $value = $json->decode($set->value);
+
+        for my $inst_conf (@{$config->{institutions}}) {
+            $inst_conf->{options}->{$name} = $value
+                unless exists $inst_conf->{options}->{$name};
+        }
+    }
 }
 
 sub sipdate {
     my $date = shift || DateTime->now;
-    return $date->strftime($SIP_DATE_FORMAT);
+    return $date->strftime(SIP_DATE_FORMAT);
 }
 
 # False == 'N'
