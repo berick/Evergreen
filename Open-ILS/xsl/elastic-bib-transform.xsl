@@ -292,7 +292,6 @@
       <xsl:with-param name="field_class">title</xsl:with-param>
       <xsl:with-param name="index_name">maintitle</xsl:with-param>
       <xsl:with-param name="index_subfields">a</xsl:with-param>
-      <xsl:with-param name="weight">10</xsl:with-param>
     </xsl:call-template>
     <xsl:call-template name="add_search_entry">
       <xsl:with-param name="tag">245</xsl:with-param>
@@ -329,6 +328,18 @@
       <xsl:with-param name="field_class">keyword</xsl:with-param>
       <xsl:with-param name="index_name">publisher</xsl:with-param>
       <xsl:with-param name="index_subfields">b</xsl:with-param>
+    </xsl:call-template>
+    <xsl:call-template name="add_search_entry">
+      <xsl:with-param name="tag">245</xsl:with-param>
+      <xsl:with-param name="field_class">keyword</xsl:with-param>
+      <xsl:with-param name="index_name">title</xsl:with-param>
+      <xsl:with-param name="index_subfields">a</xsl:with-param>
+    </xsl:call-template>
+    <xsl:call-template name="add_search_entry">
+      <xsl:with-param name="tag">100</xsl:with-param>
+      <xsl:with-param name="field_class">keyword</xsl:with-param>
+      <xsl:with-param name="index_name">author</xsl:with-param>
+      <xsl:with-param name="index_subfields">abcdq</xsl:with-param>
     </xsl:call-template>
     <xsl:call-template name="add_search_entry">
       <xsl:with-param name="tag">400</xsl:with-param>
