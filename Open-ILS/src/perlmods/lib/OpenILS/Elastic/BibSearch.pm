@@ -198,13 +198,14 @@ my $BASE_PROPERTIES = {
     }
 };
 
-# Create aliases so users can user for 'author' with 'au', etc.
+# Map 'au' to 'author', etc.
 my %SEARCH_CLASS_ALIAS_MAP = (
     ti => 'title.text',
     au => 'author.text',
     su => 'subject.text',
     se => 'series.text',
     kw => 'keyword.text',
+    pu => 'keyword|publisher.text',
     id => 'identifier'
 );
 

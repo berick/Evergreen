@@ -215,6 +215,11 @@ sub find_or_create_index_config {
 
     $e->commit;
 
+    # Pull the latest data from the DB to pick up any defaults.
+    $e->xact_begin;
+    $conf = $e->retrieve_elastic_index($conf->id);
+    $e->rollback;
+
     push(@{$self->indices}, $conf);
 
     return $conf;
@@ -318,11 +323,15 @@ sub delete_index {
 
     if (!$conf) {
         $e->rollback;
-        return;
+        return 0;
     }
 
     # Remove from EG database
-    $e->delete_elastic_index($conf) or return $e->die_event;
+    unless ($e->delete_elastic_index($conf)) {
+        $e->rollback;
+        return 0;
+    }
+
     $e->commit;
 
     # Remove from local cache
@@ -332,6 +341,8 @@ sub delete_index {
             $_->index_class ne $self->index_class
         } @{$self->indices}
     ]);
+
+    return 1;
 }
 
 # Remove multiple documents from the index by ID.
