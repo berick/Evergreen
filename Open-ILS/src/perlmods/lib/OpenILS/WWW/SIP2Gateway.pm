@@ -40,9 +40,15 @@ sub from_cache {
     my ($class, $seskey) = @_;
 
     my $account = cache()->get_cache("sip2_$seskey");
-    return undef unless $account;
 
-    return $class->new(seskey => $seskey, account => $account);
+    if ($account) {
+        return $class->new(seskey => $seskey, account => $account);
+
+    } else {
+
+        $logger->warn("SIP2: No session found in cache for key $seskey");
+        return undef;
+    }
 }
 
 sub seskey {
@@ -116,7 +122,7 @@ $json->allow_nonref(1);
 use constant SIP_DATE_FORMAT => "%Y%m%d    %H%M%S";
 
  # TODO: move to config / database
-my $config = {
+my $_config = {
     options => {
         # Allow 99 (sc status) message before successful 93 (login) message
         allow_sc_status_before_login => 1
@@ -175,9 +181,7 @@ sub init {
 
     my $settings = $e->retrieve_all_config_sip_setting;
 
-    $config = {
-        institutions => []
-    };
+    $config = {institutions => []};
 
     # Institution specific settings.
     # In addition to the options, this tells us what institutions we support.
@@ -189,7 +193,7 @@ sub init {
         my ($inst_conf) = 
             grep {$_->id eq $inst} @{$config->{institutions}} ||
             {   id => $inst,
-                currency => 'USD',
+                currency => 'USD', # TODO
                 supports => [],
                 options => {}
             };
@@ -197,8 +201,8 @@ sub init {
         $inst_conf->{options}->{$name} = $value;
     }
 
-    # Global options only are only used when they do not replace
-    # institution-specific options.
+    # Apply values for global options without replacing 
+    # institution-specific values.
     for my $set (grep {$_->institution eq '*'} @$settings) {
         my $name = $set->name;
         my $value = $json->decode($set->value);
@@ -236,14 +240,23 @@ sub count4 {
 sub handler {
     my $r = shift;
     my $cgi = CGI->new;
+    my ($message, $msg_code, $response);
 
     init();
 
     my $seskey = $cgi->param('session');
     my $msg_json = $cgi->param('message');
-    my $message = $json->decode($msg_json);
-    my $msg_code = $message->{code};
-    my $response;
+
+    if ($seskey && $msg_json) {
+        eval { $message = $json->decode($msg_json) };
+        if ($message) {
+            $msg_code = $message->{code};
+        } else {
+            $logger->error("SIP2: Error parsing message JSON: $@ : $msg_json");
+        }
+    }
+
+    return Apache2::Const::HTTP_BAD_REQUEST unless $msg_code;
 
     if ($msg_code eq '93') {
         $response = handle_login($seskey, $message);
@@ -296,7 +309,7 @@ sub get_inst_config {
     my ($instconf) = grep {$_->{id} eq $institution} @{$config->{institutions}};
 
     $logger->error(
-        "SIP2 has no configuration for institution: $institution")
+        "SIP2: has no configuration for institution: $institution")
         unless $instconf;
 
     return $instconf;
@@ -325,7 +338,7 @@ sub handle_login {
             if $session->authenticate($account);
 
     } else {
-        $logger->info("SIP2 login failed for user=$sip_username")
+        $logger->info("SIP2: login failed for user=$sip_username")
     }
 
     return $response;
