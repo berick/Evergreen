@@ -25,6 +25,7 @@
     <xsl:call-template name="compile_facets" />
     <xsl:call-template name="compile_filters" />
     <xsl:call-template name="compile_sorters" />
+    <xsl:call-template name="compile_headings" />
     <xsl:call-template name="compile_marc" />
   </xsl:template>
 
@@ -623,6 +624,44 @@
     </xsl:call-template>
   </xsl:template>
 
+  <xsl:template name="compile_headings">
+    <xsl:call-template name="add_heading_entry">
+      <xsl:with-param name="tag">650</xsl:with-param>
+      <xsl:with-param name="field_class">subject</xsl:with-param>
+      <xsl:with-param name="index_subfields">abcdvxyz</xsl:with-param>
+    </xsl:call-template>
+    <xsl:call-template name="add_heading_entry">
+      <xsl:with-param name="tag">651</xsl:with-param>
+      <xsl:with-param name="field_class">subject</xsl:with-param>
+      <xsl:with-param name="index_subfields">avxyz</xsl:with-param>
+    </xsl:call-template>
+    <xsl:call-template name="add_heading_entry">
+      <xsl:with-param name="tag">655</xsl:with-param>
+      <xsl:with-param name="field_class">subject</xsl:with-param>
+      <xsl:with-param name="index_subfields">abcvxyz</xsl:with-param>
+    </xsl:call-template>
+    <xsl:call-template name="add_heading_entry">
+      <xsl:with-param name="tag">630</xsl:with-param>
+      <xsl:with-param name="field_class">subject</xsl:with-param>
+      <xsl:with-param name="index_subfields">adfgklmnoprstvxyz</xsl:with-param>
+    </xsl:call-template>
+    <xsl:call-template name="add_heading_entry">
+      <xsl:with-param name="tag">600</xsl:with-param>
+      <xsl:with-param name="field_class">subject</xsl:with-param>
+      <xsl:with-param name="index_subfields">abcdfgjklmnopqrstuvxyz</xsl:with-param>
+    </xsl:call-template>
+    <xsl:call-template name="add_heading_entry">
+      <xsl:with-param name="tag">610</xsl:with-param>
+      <xsl:with-param name="field_class">subject</xsl:with-param>
+      <xsl:with-param name="index_subfields">abcdfgklmnoprstuvxyz</xsl:with-param>
+    </xsl:call-template>
+    <xsl:call-template name="add_heading_entry">
+      <xsl:with-param name="tag">611</xsl:with-param>
+      <xsl:with-param name="field_class">subject</xsl:with-param>
+      <xsl:with-param name="index_subfields">acdefgjklnpqstuvxyz</xsl:with-param>
+    </xsl:call-template>
+  </xsl:template>
+
   <xsl:template name="compile_sorters">
 
     <!-- author sort is the first 1XX value -->
@@ -1177,6 +1216,27 @@
       <xsl:text>search </xsl:text>
       <xsl:value-of select="$field_class" /><xsl:text> </xsl:text>
       <xsl:value-of select="$index_name" /><xsl:text> </xsl:text>
+      <xsl:call-template name="subfieldSelect">
+        <xsl:with-param name="codes">
+          <xsl:value-of select="$index_subfields" />
+        </xsl:with-param>
+      </xsl:call-template>
+      <xsl:text>&#xa;</xsl:text><!-- newline -->
+    </xsl:for-each>
+  </xsl:template>
+
+  <!-- TODO heading joiner -->
+  <xsl:template name="add_heading_entry">
+    <xsl:param name="tag" />
+    <xsl:param name="field_class" />
+    <xsl:param name="index_subfields" />
+    <xsl:param name="weight" />
+    <xsl:for-each select="marc:datafield[@tag=$tag] |
+      marc:datafield[@tag='880']/marc:subfield[@code='6'][starts-with(., $tag)]/..">
+      <xsl:text>heading </xsl:text>
+      <xsl:value-of select="$field_class" />
+      <!-- don't worry about names with headings -->
+      <xsl:text> _ </xsl:text>
       <xsl:call-template name="subfieldSelect">
         <xsl:with-param name="codes">
           <xsl:value-of select="$index_subfields" />

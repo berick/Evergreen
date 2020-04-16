@@ -47,9 +47,6 @@ CREATE TABLE elastic.index (
 CREATE UNIQUE INDEX active_index_once_per_cluster 
     ON elastic.index (index_class, cluster) WHERE active is TRUE;
 
--- XXX consider storing the xsl chunk directly on the field,
--- then stitching the chunks together for indexing.  This would
--- require a search chunk and a facet chunk.
 CREATE TABLE elastic.bib_field (
     id              SERIAL PRIMARY KEY,
     name            TEXT NOT NULL,
@@ -57,6 +54,7 @@ CREATE TABLE elastic.bib_field (
     field_class     TEXT REFERENCES config.metabib_class(name) ON DELETE CASCADE,
     search_field    BOOLEAN NOT NULL DEFAULT FALSE,
     facet_field     BOOLEAN NOT NULL DEFAULT FALSE,
+    browse_field    BOOLEAN NOT NULL DEFAULT FALSE,
     filter          BOOLEAN NOT NULL DEFAULT FALSE,
     sorter          BOOLEAN NOT NULL DEFAULT FALSE,
     weight          INTEGER NOT NULL DEFAULT 1,
@@ -204,6 +202,15 @@ VALUES
     (NULL, 'titlesort', 'Title Sort', 
         FALSE, FALSE, FALSE, TRUE, 1)
 ;
+
+
+-- Add bib browse heading fields
+INSERT INTO elastic.bib_field
+    (field_class, name, label, browse_field)
+VALUES 
+    ('subject', 'heading', 'Subject Headings', TRUE)
+;
+
 
 COMMIT;
 

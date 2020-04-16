@@ -101,6 +101,42 @@ my $BASE_PROPERTIES = {
             opac_visible => {type => 'boolean'}
         }
     },
+
+    # Headings extracted from each bib record, potentially augmented
+    # with authority data (see ./AuthorityBrowse.pm)
+    headings => {
+        type => 'nested',
+        properties => {
+            field_class => {type => 'keyword'},
+
+            # This assume headings browse will use "starts with" queries
+            # to find the entry point for browsing.  Simple lowercase
+            # keyword should suffice for that.
+            heading => {
+                type => 'keyword',
+                normalizer => 'custom_lowercase',
+            },
+
+            # Authority record that matches the heading.  This value
+            # may be unset if no such authorit exists.
+            authority => 'integer',
+
+            # If a target value is set, this particular authority record
+            # matches a heading related to a heading native to the
+            # current bib record (up to one linkage away), instead of a
+            # heading that resides directly on the indexed bib record.
+            # 'target' will always refer to an 'authority' value for a
+            # heading on the same bib record.
+            #
+            # For the purposes of collecting the initial browse data,
+            # we don't care about the nature of the relationship between
+            # the two authorities (narrower term, later heading, etc.)
+            # We only care if a linkage exists we should display.
+            target => 'integer'
+        }
+    },
+
+    # Raw MARC data
     marc => {
         type => 'nested',
         properties => {
@@ -579,7 +615,8 @@ sub populate_bib_index_batch {
         my $body = {
             bib_source => $rec->{bib_source},
             metarecord => $rec->{metarecord},
-            marc => []
+            marc => [],
+            headings => []
         };
 
         $body->{holdings} = $holdings->{$bib_id} || [] unless $self->skip_holdings;
@@ -610,6 +647,11 @@ sub populate_bib_index_batch {
             # Ignore any data provided by the transform we have
             # no configuration for.
             next unless $self->get_bib_field_for_data($bib_fields, $field);
+
+            if ($purpose eq 'heading') {
+                $self->add_bib_heading($body, $fclass, $value);
+                next;
+            }
         
             $fname = "$fclass|$fname" if $fclass;
             $fname = "$fname|facet" if $purpose eq 'facet';
@@ -641,6 +683,19 @@ sub populate_bib_index_batch {
         $bib_ids->[0] . '...' . $bib_ids->[-1]);
 
     return $index_count;
+}
+
+
+sub add_bib_heading {
+    my ($self, $body, $fclass, $value) = @_;
+
+    my ($exists) = grep {
+        $_->{field_class} eq $fclass && $_->{heading} eq $value 
+    } @{$body->{headings}};
+
+    return if $exists;
+
+    push(@{$body->{headings}}, {field_class => $fclass, heading => $value});
 }
 
 
