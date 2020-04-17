@@ -1235,7 +1235,8 @@
       marc:datafield[@tag='880']/marc:subfield[@code='6'][starts-with(., $tag)]/..">
       <xsl:text>heading </xsl:text>
       <xsl:value-of select="$field_class" />
-      <xsl:text> heading </xsl:text><!-- generic name -->
+      <!-- don't worry about names with headings -->
+      <xsl:text> _ </xsl:text>
       <xsl:call-template name="subfieldSelect">
         <xsl:with-param name="codes">
           <xsl:value-of select="$index_subfields" />

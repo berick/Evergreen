@@ -54,7 +54,7 @@ CREATE TABLE elastic.bib_field (
     field_class     TEXT REFERENCES config.metabib_class(name) ON DELETE CASCADE,
     search_field    BOOLEAN NOT NULL DEFAULT FALSE,
     facet_field     BOOLEAN NOT NULL DEFAULT FALSE,
-    heading_field    BOOLEAN NOT NULL DEFAULT FALSE,
+    browse_field    BOOLEAN NOT NULL DEFAULT FALSE,
     filter          BOOLEAN NOT NULL DEFAULT FALSE,
     sorter          BOOLEAN NOT NULL DEFAULT FALSE,
     weight          INTEGER NOT NULL DEFAULT 1,
@@ -206,7 +206,7 @@ VALUES
 
 -- Add bib browse heading fields
 INSERT INTO elastic.bib_field
-    (field_class, name, label, heading_field)
+    (field_class, name, label, browse_field)
 VALUES 
     ('subject', 'heading', 'Subject Headings', TRUE)
 ;

@@ -119,7 +119,7 @@ my $BASE_PROPERTIES = {
 
             # Authority record that matches the heading.  This value
             # may be unset if no such authorit exists.
-            authority => {type => 'integer'},
+            authority => 'integer',
 
             # If a target value is set, this particular authority record
             # matches a heading related to a heading native to the
@@ -132,7 +132,7 @@ my $BASE_PROPERTIES = {
             # we don't care about the nature of the relationship between
             # the two authorities (narrower term, later heading, etc.)
             # We only care if a linkage exists we should display.
-            target => {type => 'integer'}
+            target => 'integer'
         }
     },
 
@@ -563,7 +563,6 @@ sub get_bib_field_for_data {
     my ($match) = grep {
         ($_->search_field eq 't' && $field->{purpose} eq 'search') ||
         ($_->facet_field eq 't' && $field->{purpose} eq 'facet') ||
-        ($_->heading_field eq 't' && $field->{purpose} eq 'heading') ||
         ($_->filter eq 't' && $field->{purpose} eq 'filter') ||
         ($_->sorter eq 't' && $field->{purpose} eq 'sorter')
     } @matches;

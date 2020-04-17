@@ -13027,7 +13027,6 @@ SELECT  usr,
 			<field reporter:label="Field Class" name="field_class" reporter:datatype="text"/>
 			<field reporter:label="Is Search Field" name="search_field" reporter:datatype="bool"/>
 			<field reporter:label="Is Facet Field" name="facet_field" reporter:datatype="bool"/>
-			<field reporter:label="Is Heading Field" name="heading_field" reporter:datatype="bool"/>
 			<field reporter:label="Is Filter Field" name="filter" reporter:datatype="bool"/>
 			<field reporter:label="Is Sort Field" name="sorter" reporter:datatype="bool"/>
 			<field reporter:label="Field Weight (Boost)" name="weight" reporter:datatype="int"/>
