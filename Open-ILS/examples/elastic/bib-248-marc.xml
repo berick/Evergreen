@@ -62,6 +62,7 @@
   <datafield tag="650" ind1=" " ind2="0">
     <subfield code="a">Virtual reality</subfield>
     <subfield code="v">Fiction.</subfield>
+    <subfield code="0">(FOO)123</subfield>
   </datafield>
   <datafield tag="650" ind1=" " ind2="0">
     <subfield code="a">Utopias</subfield>

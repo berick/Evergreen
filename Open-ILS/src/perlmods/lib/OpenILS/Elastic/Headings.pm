@@ -12,7 +12,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR code.  See the
 # GNU General Public License for more details.
 # ---------------------------------------------------------------
-package OpenILS::Elastic::BibSearch;
+package OpenILS::Elastic::Headings;
 use strict;
 use warnings;
 use DateTime;
@@ -29,54 +29,18 @@ use base qw/OpenILS::Elastic/;
 
 # default number of bibs to index per batch.
 my $DEFAULT_BIB_BATCH_SIZE = 500;
-my $INDEX_CLASS = 'bib-search';
+my $INDEX_CLASS = 'headings';
 
-# https://www.elastic.co/guide/en/elasticsearch/reference/current/ignore-above.html
-# Useful for ignoring excessively long filters and facets.
-# Only applied to the keyword variation of each index.  Does not affect
-# the 'text' varieties. The selected limit is arbitrary.
-my $IGNORE_ABOVE = 256;
-
-# Individual characters of some values like sorters provide less and less
-# value as the length of the text gets longer and longer.  Unlike
-# $IGNORE_ABOVE, this only trims the string, it does not prevent it from
-# getting indexed in the first place.  The selected limit is arbitrary.
+# Individual characters of some values like headings provide less and 
+# less value as the length of the text gets longer and longer.
 my $TRIM_ABOVE = 512;
 
 my $BASE_INDEX_SETTINGS = {
     analysis => {
-        analyzer => {
-            folding => {
-                filter => ['lowercase', 'asciifolding'],
-                tokenizer => 'standard'
-            },
-            stripdots => {
-                # "R.E.M." => "REM"
-                char_filter => ['stripdots'],
-                filter => ['lowercase'],
-                tokenizer => 'standard'
-            },
-            spacedots => {
-                # "R.E.M." => "R E M"
-                char_filter => ['spacedots'],
-                filter => ['lowercase'],
-                tokenizer => 'standard'
-            }
-        },
         normalizer =>  {
             custom_lowercase => {
                 type => 'custom',
                 filter => ['lowercase']
-            }
-        },
-        char_filter => {
-            stripdots => {
-                type => 'mapping',
-                mappings => ['. =>']
-            },
-            spacedots => {
-                type => 'mapping',
-                mappings => ['. => " "']
             }
         }
     }
@@ -84,146 +48,37 @@ my $BASE_INDEX_SETTINGS = {
 
 # Well-known bib-search index properties
 my $BASE_PROPERTIES = {
-    bib_source  => {type => 'integer'},
-    create_date => {type => 'date'},
-    edit_date   => {type => 'date'},
-    metarecord  => {type => 'integer'},
+    field_class => {type => 'keyword'},
 
-    # Holdings summaries.  For bib-search, we don't need
-    # copy-specific details, only aggregate visibility information.
-    holdings => {
-        type => 'nested',
-        properties => {
-            status => {type => 'integer'},
-            circ_lib => {type => 'integer'},
-            location => {type => 'integer'},
-            circulate => {type => 'boolean'},
-            opac_visible => {type => 'boolean'}
-        }
-    },
-    marc => {
-        type => 'nested',
-        properties => {
-            tag => {
-                type => 'keyword',
-                normalizer => 'custom_lowercase'
-            },
-            subfield => {
-                type => 'keyword',
-                normalizer => 'custom_lowercase'
-            },
-            value => {
-                type => 'text',
-                fields => {
-                    text_folded => {
-                        type => 'text',
-                        analyzer => 'folding'
-                    }
-                }
-            }
-        }
+    # Heading value for display.
+    heading => {
+        type => 'keyword',
+        normalizer => 'custom_lowercase'
     },
 
-    # Make it possible to search across all fields in a search group.
-    # Values from grouped fields are copied into the group field.
-    # Here we make some assumptions about the general purpose of
-    # each group.
-    # The 'keyword' variation of each is used for exact matches, 
-    # starts with, and similar searches.
-    # Note the ignore_above only affects the 'keyword' version of the
-    # field, the assumption being text that large would solely be
-    # searched via 'text' indexes.
-    title => {
+    # E.g. titles with nonfiling chars removed.
+    heading_sort => {
         type => 'keyword',
-        ignore_above => $IGNORE_ABOVE,
-        normalizer => 'custom_lowercase',
-        fields => {
-            text => {type => 'text'},
-            text_folded => {type => 'text', analyzer => 'folding'},
-            text_spacedots => {type => 'text', analyzer => 'spacedots'},
-            text_stripdots => {type => 'text', analyzer => 'stripdots'}
-        }
+        normalizer => 'custom_lowercase'
     },
-    author => {
-        type => 'keyword',
-        ignore_above => $IGNORE_ABOVE,
-        normalizer => 'custom_lowercase',
-        fields => {
-            text => {type => 'text'},
-            text_folded => {type => 'text', analyzer => 'folding'},
-            text_spacedots => {type => 'text', analyzer => 'spacedots'},
-            text_stripdots => {type => 'text', analyzer => 'stripdots'}
-        }
-    },
-    subject => {
-        type => 'keyword',
-        ignore_above => $IGNORE_ABOVE,
-        normalizer => 'custom_lowercase',
-        fields => {
-            text => {type => 'text'},
-            text_folded => {type => 'text', analyzer => 'folding'},
-            text_spacedots => {type => 'text', analyzer => 'spacedots'},
-            text_stripdots => {type => 'text', analyzer => 'stripdots'}
-        }
-    },
-    series => {
-        type => 'keyword',
-        ignore_above => $IGNORE_ABOVE,
-        normalizer => 'custom_lowercase',
-        fields => {
-            text => {type => 'text'},
-            text_folded => {type => 'text', analyzer => 'folding'},
-            text_spacedots => {type => 'text', analyzer => 'spacedots'},
-            text_stripdots => {type => 'text', analyzer => 'stripdots'}
-        }
-    },
-    keyword => {
-        # term (aka "keyword") searches are not used on the 
-        # keyword field, but we structure the index just the same
-        # for consistency with other group fields.
-        type => 'keyword',
-        ignore_above => 1, # essentially a no-op.
-        fields => {
-            text => {type => 'text'},
-            text_folded => {type => 'text', analyzer => 'folding'},
-            text_spacedots => {type => 'text', analyzer => 'spacedots'},
-            text_stripdots => {type => 'text', analyzer => 'stripdots'}
-        }
-    },
-    # Identifier fields only support 'keyword' indexes, no full-text.
-    identifier => {
-        type => 'keyword',
-        ignore_above => $IGNORE_ABOVE,
-        normalizer => 'custom_lowercase',
-    }
-};
 
-# Map 'au' to 'author', etc.
-my %SEARCH_CLASS_ALIAS_MAP = (
-    ti => 'title.text',
-    au => 'author.text',
-    su => 'subject.text',
-    se => 'series.text',
-    kw => 'keyword.text',
-    pu => 'keyword|publisher.text',
-    id => 'identifier'
-);
+    # Bib records that contain this heading.
+    bibs => {type => 'integer'},
+
+    # Authority records appearing in the $0 on the heading within
+    # the bib record.  Typically there will be at most one main 
+    # entry authority record per heading, but it's not guaranteed.
+    authorities => {type => 'integer'},
+
+    # Authority records which refer to the main entry authorities above
+    # or are referred to by the main entry authorities above.
+    linked_authorities => {type => 'integer'}
 
 sub index_class {
     return $INDEX_CLASS;
 }
 
-# TODO: determine when/how to apply language analyzers.
-# e.g. create lang-specific index fields?
-sub language_analyzers {
-    return ("english");
-}
-
-sub skip_holdings {
-    my $self = shift;
-    return $self->{skip_holdings};
-}
-
+# TODO: move to BibCommon
 sub xsl_file {
     my ($self) = @_;
 
@@ -315,6 +170,7 @@ sub get_bib_data {
     return $records;
 }
 
+# KEEP HERE
 sub get_bib_db_data {
     my ($self, $record_ids) = @_;
 
@@ -323,108 +179,13 @@ sub get_bib_db_data {
     my $sql = <<SQL;
 SELECT DISTINCT ON (bre.id)
     bre.id, 
-    bre.create_date, 
-    bre.edit_date, 
-    bre.source AS bib_source,
     bre.deleted,
     bre.marc
 FROM biblio.record_entry bre
-LEFT JOIN metabib.metarecord_source_map mmrsm ON (mmrsm.source = bre.id)
 WHERE bre.id IN ($ids_str)
 SQL
 
     return $self->get_db_rows($sql);
-}
-
-sub create_index_properties {
-    my ($self) = @_;
-
-    my $properties = $BASE_PROPERTIES;
-
-    # Add the language analyzers to the MARC mappings
-    for my $lang_analyzer ($self->language_analyzers) {
-        $properties->{marc}->{properties}->{value}->{fields}->{"text_$lang_analyzer"} = {
-            type => 'text',
-            analyzer => $lang_analyzer
-        };
-
-        # Apply language analysis to grouped fields, however skip
-        # the 'author' and 'identifier' groups since it makes less sense to 
-        # language-analyze proper names and identifiers.
-        $properties->{$_}->{fields}->{"text_$lang_analyzer"} = {
-            type => 'text',
-            analyzer => $lang_analyzer
-        } foreach qw/title subject series keyword/;
-    }
-
-    my $fields = new_editor()->retrieve_all_elastic_bib_field;
-
-    for my $field (@$fields) {
-
-        my $field_name = $field->name;
-        my $field_class = $field->field_class;
-        $field_name = "$field_class|$field_name" if $field_class;
-
-        my $def;
-
-        if ($field_class) {
-            if ($field->search_field eq 't') {
-
-                # Use the same fields and analysis as the 'grouped' field.
-                $def = clone($properties->{$field_class});
-
-                # Copy grouped fields into their group parent field.
-                $def->{copy_to} = $field_class;
-
-                # Apply ranking boost to each analysis variation.
-                my $flds = $def->{fields};
-                if ($flds && (my $boost = ($field->weight || 1)) > 1) {
-                    $flds->{$_}->{boost} = $boost foreach keys %$flds;
-                }
-            }
-
-        } else {
-            # Filters and sorters
-
-            $def = {
-                type => 'keyword',
-                normalizer => 'custom_lowercase'
-            };
-
-            # Long sorter values are not necessarily unexpected,
-            # e.g. long titles.
-            $def->{ignore_above} = $IGNORE_ABOVE unless $field->sorter eq 't';
-        }
-
-        if ($def) {
-            $logger->debug("ES adding field $field_name: ". 
-                OpenSRF::Utils::JSON->perl2JSON($def));
-    
-            $properties->{$field_name} = $def;
-        }
-
-        # Search and facet fields can have the same name/group pair,
-        # but are stored as separate fields in ES since the content
-        # may vary between the two.
-        if ($field->facet_field eq 't') {
-
-            # Facet fields are stored as separate fields, because their
-            # content may differ from the matching search field.
-            $field_name = "$field_name|facet";
-
-            $def = {
-                type => 'keyword',
-                ignore_above => $IGNORE_ABOVE
-            };
-
-            $logger->debug("ES adding field $field_name: ". 
-                OpenSRF::Utils::JSON->perl2JSON($def));
-
-            $properties->{$field_name} = $def;
-        }
-    }
-
-    return $properties;
 }
 
 sub create_index {
@@ -442,7 +203,7 @@ sub create_index {
     $logger->info(
         "ES creating index '$index_name' on cluster '".$self->cluster."'");
 
-    my $properties = $self->create_index_properties;
+    my $properties = $BASE_PROPERTIES;
 
     my $settings = $BASE_INDEX_SETTINGS;
     $settings->{number_of_replicas} = scalar(@{$self->nodes});
@@ -470,13 +231,6 @@ sub create_index {
     for my $field (keys %$properties) {
         return 0 unless 
             $self->create_one_field_index($field, $properties->{$field});
-    }
-
-    # Now that we've added the configured fields,
-    # add the shortened field_class aliases.
-    while (my ($alias, $field) = each %SEARCH_CLASS_ALIAS_MAP) {
-        return 0 unless $self->create_one_field_index(
-            $alias, {type => 'alias', path => $field});
     }
 
     return 1;
@@ -524,6 +278,7 @@ sub get_bib_field_for_data {
     my ($match) = grep {
         ($_->search_field eq 't' && $field->{purpose} eq 'search') ||
         ($_->facet_field eq 't' && $field->{purpose} eq 'facet') ||
+        ($_->heading_field eq 't' && $field->{purpose} eq 'heading') ||
         ($_->filter eq 't' && $field->{purpose} eq 'filter') ||
         ($_->sorter eq 't' && $field->{purpose} eq 'sorter')
     } @matches;
@@ -536,7 +291,7 @@ sub get_bib_field_for_data {
     return $match;
 }
 
-sub populate_bib_index_batch {
+sub add_bib_headings_batch {
     my ($self, $state) = @_;
 
     my $index_count = 0;
@@ -548,6 +303,8 @@ sub populate_bib_index_batch {
 
     my $records = $self->get_bib_data($bib_ids);
 
+    # TODO: remove data for deleted bibs
+=head comment
     # Remove records that are marked deleted.
     # This should only happen when running in refresh mode.
 
@@ -565,15 +322,18 @@ sub populate_bib_index_batch {
     }
 
     $bib_ids = [@active_ids];
-
-    my $holdings = $self->load_holdings($bib_ids) unless $self->skip_holdings;
+=cut
 
     my $bib_fields = new_editor()->retrieve_all_elastic_bib_field;
 
     for my $bib_id (@$bib_ids) {
         my ($rec) = grep {$_->{id} == $bib_id} @$records;
 
+        # TODO: pull existing headings from ES and augment where necessary.
+
         my $body = {
+            bibs => $bib_id,
+
             bib_source => $rec->{bib_source},
             metarecord => $rec->{metarecord},
             marc => []
