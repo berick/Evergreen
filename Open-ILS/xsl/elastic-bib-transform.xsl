@@ -640,25 +640,28 @@
 
     <!-- title sort is the 245a non-filing -->
     <xsl:for-each select="marc:datafield[@tag='245']">
-      <xsl:variable name="full_title">
-        <xsl:call-template name="subfieldSelect">
-          <xsl:with-param name="codes">a</xsl:with-param>
+      <!-- 245 is non-repeating but it happens.  just take the first value -->
+      <xsl:if test="position() = 1">
+        <xsl:variable name="full_title">
+          <xsl:call-template name="subfieldSelect">
+            <xsl:with-param name="codes">a</xsl:with-param>
+          </xsl:call-template>
+        </xsl:variable>
+        <xsl:variable name="offset">
+          <xsl:choose>
+            <xsl:when test="number(@ind2) = @ind2">
+              <xsl:value-of select="@ind2" />
+            </xsl:when>
+            <xsl:otherwise>
+              <xsl:text>0</xsl:text>
+            </xsl:otherwise>
+          </xsl:choose>
+        </xsl:variable>
+        <xsl:call-template name="add_sorter_entry">
+          <xsl:with-param name="name">titlesort</xsl:with-param>
+          <xsl:with-param name="value" select="substring($full_title, $offset + 1)" />
         </xsl:call-template>
-      </xsl:variable>
-      <xsl:variable name="offset">
-        <xsl:choose>
-          <xsl:when test="number(@ind2) = @ind2">
-            <xsl:value-of select="@ind2" />
-          </xsl:when>
-          <xsl:otherwise>
-            <xsl:text>0</xsl:text>
-          </xsl:otherwise>
-        </xsl:choose>
-      </xsl:variable>
-      <xsl:call-template name="add_sorter_entry">
-        <xsl:with-param name="name">titlesort</xsl:with-param>
-        <xsl:with-param name="value" select="substring($full_title, $offset + 1)" />
-      </xsl:call-template>
+      </xsl:if>
     </xsl:for-each>
 
     <!-- pubdate is the same as the date1 filter -->
