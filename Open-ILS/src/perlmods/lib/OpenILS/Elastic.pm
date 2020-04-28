@@ -371,6 +371,30 @@ sub delete_documents {
     return $result;
 }
 
+# Returns true if a document with the requested ID exists.
+sub document_exists {
+    my ($self, $id) = @_;
+
+    my $result;
+
+    eval {
+        $result = $self->es->index(
+            index => $self->index_name,
+            type => 'record',
+            id => $id,
+        );
+    };
+
+
+    if ($@) {
+        $logger->error("ES document_exists failed with $@");
+        return undef;
+    } 
+
+    return $result ? 1 : 0;
+}
+
+# Create or replace a document.
 sub index_document {
     my ($self, $id, $body) = @_;
 
@@ -399,7 +423,39 @@ sub index_document {
     return $result;
 }
 
+# Index a new document
+# This will fail if the document already exists.
+sub create_document {
+    my ($self, $id, $body) = @_;
+
+    my $result;
+
+    eval {
+        $result = $self->es->create(
+            index => $self->index_name,
+            type => 'record',
+            id => $id,
+            body => $body
+        );
+    };
+
+    if ($@) {
+        $logger->error("ES create_document failed with $@");
+        return undef;
+    } 
+
+    if ($result->{failed}) {
+        $logger->error("ES create document $id failed " . Dumper($result));
+        return undef;
+    }
+
+    $logger->debug("ES create => $id succeeded");
+    return $result;
+}
+
+
 # Partial document update
+# This will fail if the document does not exist.
 sub update_document {
     my ($self, $id, $body) = @_;
 

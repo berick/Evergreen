@@ -626,9 +626,14 @@ sub populate_bib_index_batch {
         }
 
         if ($self->skip_holdings) {
-            # In skip mode, assume we are updating documents instead
-            # of creating new ones.  
-            return 0 unless $self->update_document($bib_id, $body);
+            # Skip-Holdings mode performs an update for existing
+            # documents, so the attached holdings will remain, but 
+            # performs a create for documents that don't yet exist.
+            if ($self->document_exists($bib_id)) {
+                return 0 unless $self->update_document($bib_id, $body);
+            } else {
+                return 0 unless $self->create_document($bib_id, $body);
+            }
         } else {
             return 0 unless $self->index_document($bib_id, $body);
         }
