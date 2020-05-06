@@ -245,6 +245,7 @@
       <xsl:with-param name="index_name">sudoc</xsl:with-param>
       <xsl:with-param name="index_subfields">z</xsl:with-param>
     </xsl:call-template>
+    <!-- NOTE bibcn depends on local values for asset.call_number_class -->
     <xsl:call-template name="add_search_entry">
       <xsl:with-param name="tag">092</xsl:with-param>
       <xsl:with-param name="field_class">identifier</xsl:with-param>
@@ -255,13 +256,13 @@
       <xsl:with-param name="tag">099</xsl:with-param>
       <xsl:with-param name="field_class">identifier</xsl:with-param>
       <xsl:with-param name="index_name">bibcn</xsl:with-param>
-      <xsl:with-param name="index_subfields">a</xsl:with-param>
+      <xsl:with-param name="index_subfields">ab</xsl:with-param>
     </xsl:call-template>
     <xsl:call-template name="add_search_entry">
-      <xsl:with-param name="tag">099</xsl:with-param>
+      <xsl:with-param name="tag">086</xsl:with-param>
       <xsl:with-param name="field_class">identifier</xsl:with-param>
       <xsl:with-param name="index_name">bibcn</xsl:with-param>
-      <xsl:with-param name="index_subfields">a</xsl:with-param>
+      <xsl:with-param name="index_subfields">ab</xsl:with-param>
     </xsl:call-template>
     <xsl:call-template name="add_search_entry">
       <xsl:with-param name="tag">130</xsl:with-param>
@@ -1174,7 +1175,6 @@
     <xsl:param name="field_class" />
     <xsl:param name="index_name" />
     <xsl:param name="index_subfields" />
-    <xsl:param name="weight" />
     <xsl:for-each select="marc:datafield[@tag=$tag] |
       marc:datafield[@tag='880']/marc:subfield[@code='6'][starts-with(., $tag)]/..">
       <xsl:text>search </xsl:text>
