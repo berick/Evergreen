@@ -113,7 +113,8 @@ __PACKAGE__->register_method(
     NOTES
 
 sub checkouts_by_user {
-    my($self, $client, $auth, $user_id) = @_;
+    my($self, $client, $auth, $user_id, $options) = @_;
+    $options ||= {};
 
     my $e = new_editor(authtoken=>$auth);
     return $e->event unless $e->checkauth;
@@ -128,6 +129,18 @@ sub checkouts_by_user {
         },
         {idlist => 1}
     );
+
+    if ($options->{include_lost}) {
+
+        my $lost_ids = $e->search_action_circulation(
+            {   usr => $user_id,
+                xact_finish => undef,
+                stop_fines => 'LOST',
+            }, {idlist => 1}
+        );
+
+        push(@$circ_ids, @$lost_ids);
+    }
 
     for my $id (@$circ_ids) {
         my $circ = $e->retrieve_action_circulation([
