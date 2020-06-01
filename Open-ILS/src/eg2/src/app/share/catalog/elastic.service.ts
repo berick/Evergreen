@@ -39,8 +39,9 @@ export class ElasticService {
             return true;
         }
 
-        if (ctx.identSearch.isSearchable()
-            && ctx.identSearch.queryType !== 'item_barcode') {
+        if (ctx.identSearch.isSearchable() &&
+            ctx.identSearch.queryType !== 'item_barcode' &&
+            ctx.identSearch.queryType !== 'identifier|tcn') {
             return true;
         }
 
