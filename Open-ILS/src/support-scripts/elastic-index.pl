@@ -24,7 +24,6 @@ my $modified_since;
 my $max_duration;
 my $batch_size = 500;
 my $skip_holdings;
-my $migrate_alias;
 my $from_index;
 my $to_index;
 my $list_indices;
@@ -54,7 +53,6 @@ GetOptions(
     'batch-size=s'      => \$batch_size,
     'bib-transform=s'   => \$bib_transform,
     'skip-holdings'     => \$skip_holdings,
-    'migrate-alias=s'   => \$migrate_alias,
     'from-index=s'      => \$from_index,
     'list-indices'      => \$list_indices,
     'to-index=s'        => \$to_index,
@@ -151,15 +149,6 @@ sub help {
                 List all Elasticsearch indexes represented in the 
                 Evergreen database.
 
-            --migrate-alias <alias>
-            --from-index <index>
-            --to-index <index>
-                Migrate an alias from one index to another.  This is a 
-                handy way to swap out the active index in a single
-                atomic command.  If either --from-index or --to-index
-                are not defined, then only half of the migration 
-                (remove or add) is performed.
-
 HELP
     exit(0);
 }
@@ -179,7 +168,7 @@ if ($index_class eq 'bib-search') {
     $es = OpenILS::Elastic::BibSearch->new(
         cluster => $cluster, 
         index_name => $index_name,
-        write_mode => 1,
+        maintenance_mode => 1,
         xsl_file => $bib_transform,
         skip_holdings => $skip_holdings
     );
@@ -219,15 +208,6 @@ if ($list_indices) {
             "index_class=%s index_name=%s active=%s aliases=@aliases\n",
             $index->index_class, $index->name, 
             $index->active eq 't' ? 'yes' : 'no');
-    }
-}
-
-if ($migrate_alias) {
-    unless ($from_index || $to_index) {
-        die "Alias migration requires one of --from-index or --to-index\n";
-    }
-    unless ($es->migrate_alias($migrate_alias, $from_index, $to_index)) {
-        die "Alias migration failed\n";
     }
 }
 
