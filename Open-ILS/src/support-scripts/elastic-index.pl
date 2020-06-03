@@ -207,7 +207,13 @@ if ($list_indices) {
     my $indices = $e->retrieve_all_elastic_index;
     for my $index (@$indices) {
         my $index_def = $es->get_index_def($index->name);
-        my @aliases = keys(%{$index_def->{$index->name}->{aliases}});
+
+        my @aliases;
+        if ($index_def) {
+            @aliases = keys(%{$index_def->{$index->name}->{aliases}});
+        } else {
+            warn "ES has no index named ". $index->name . "\n";
+        }
 
         print sprintf(
             "index_class=%s index_name=%s active=%s aliases=@aliases\n",
