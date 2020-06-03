@@ -63,15 +63,21 @@ sub index_name {
     return $self->{index_name};
 }
 
+# In maintenance mode we are working with specific indexes.
+# Otherwise all actions target the index alias which is index_class.
+sub index_target {
+    my ($self) = @_;
+    return $self->maintenance_mode ? $self->index_name : $self->index_class;
+}
+
 sub index_class {
     die "index_class() should be implemented by sub-classes\n";
 }
 
-# When write_mode is enable, it means we're editing indexes instead
-# of just searching them.
-sub write_mode {
+# Are we modifying indexes or just read/writing indexed data?
+sub maintenance_mode {
     my $self = shift;
-    return $self->{write_mode};
+    return $self->{maintenance_mode};
 }
 
 sub language_analyzers {
@@ -125,7 +131,7 @@ sub load_config {
     my $e = new_editor();
     my $cluster = $self->cluster;
 
-    my %active = $self->write_mode ? () : (active => 't');
+    my %active = $self->maintenance_mode ? () : (active => 't');
 
     $self->{nodes} = $e->search_elastic_node({cluster => $cluster, %active});
 
@@ -145,7 +151,7 @@ sub load_config {
         %active
     });
 
-    return if $self->write_mode;
+    return if $self->maintenance_mode;
 
     # read-only mode
 
@@ -244,6 +250,7 @@ sub connect {
 
 # Activates the currently loaded index while deactivating any active
 # index with the same cluster and index_class.
+# Applies an alias to the activated index equal to the index class.
 sub activate_index {
     my ($self) = @_;
 
@@ -292,7 +299,10 @@ sub activate_index {
 
     $e->commit;
 
-    return 1;
+    # When activating an index, point the main alias toward the
+    # newly active index.
+    return $self->migrate_alias(
+        $self->index_class, $active ? $active->name : undef, $index);
 }
 
 
@@ -301,11 +311,13 @@ sub activate_index {
 # of the migration (i.e. remove or add) is performed.
 sub migrate_alias {
     my ($self, $alias, $from_index, $to_index) = @_;
+    return undef unless $alias && ($from_index || $to_index);
+
+    my @actions;
 
     $from_index ||= '';
     $to_index ||= '';
-
-    my @actions;
+    $logger->info("ES migrating alias [$alias] from $from_index to $to_index");
 
     if ($from_index) {
         push(@actions, {remove => {alias => $alias, index => $from_index}});
@@ -314,8 +326,6 @@ sub migrate_alias {
     if ($to_index) {
         push(@actions, {add => {alias => $alias, index => $to_index}});
     }
-
-    $logger->info("ES migrating alias [$alias] from $from_index to $to_index");
 
     eval {
         $self->es->indices->update_aliases({body => {actions => \@actions}});
@@ -382,7 +392,7 @@ sub delete_documents {
     eval {
     
         $result = $self->es->delete_by_query(
-            index => $self->index_name,
+            index => $self->index_target,
             type => 'record',
             body => {query => {terms => {_id => $ids}}}
         );
@@ -405,7 +415,7 @@ sub document_exists {
 
     eval {
         $result = $self->es->index(
-            index => $self->index_name,
+            index => $self->index_target,
             type => 'record',
             id => $id,
         );
@@ -428,7 +438,7 @@ sub index_document {
 
     eval {
         $result = $self->es->index(
-            index => $self->index_name,
+            index => $self->index_target,
             type => 'record',
             id => $id,
             body => $body
@@ -458,7 +468,7 @@ sub create_document {
 
     eval {
         $result = $self->es->create(
-            index => $self->index_name,
+            index => $self->index_target,
             type => 'record',
             id => $id,
             body => $body
@@ -489,7 +499,7 @@ sub update_document {
 
     eval {
         $result = $self->es->update(
-            index => $self->index_name,
+            index => $self->index_target,
             type => 'record',
             id => $id,
             body => {doc => $body}
@@ -521,7 +531,7 @@ sub search {
     eval {
         my $start_time = time;
         $result = $self->es->search(
-            index => $self->index_name,
+            index => $self->index_target,
             body => $query
         );
         $duration = time - $start_time;
