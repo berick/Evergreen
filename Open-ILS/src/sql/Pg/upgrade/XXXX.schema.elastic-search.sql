@@ -47,6 +47,9 @@ CREATE TABLE elastic.index (
 CREATE UNIQUE INDEX active_index_once_per_cluster 
     ON elastic.index (index_class, cluster) WHERE active is TRUE;
 
+CREATE UNIQUE INDEX index_name_once_per_class
+    ON elastic.index (index_class, name);
+
 -- XXX consider storing the xsl chunk directly on the field,
 -- then stitching the chunks together for indexing.  This would
 -- require a search chunk and a facet chunk.
