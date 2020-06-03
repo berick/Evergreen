@@ -27,6 +27,7 @@ my $skip_holdings;
 my $from_index;
 my $to_index;
 my $list_indices;
+my $force;
 
 # Database settings read from ENV by default.
 my $db_host = $ENV{PGHOST} || 'localhost';
@@ -56,6 +57,7 @@ GetOptions(
     'from-index=s'      => \$from_index,
     'list-indices'      => \$list_indices,
     'to-index=s'        => \$to_index,
+    'force'             => \$force,
     'db-name=s'         => \$db_name,
     'db-host=s'         => \$db_host,
     'db-port=s'         => \$db_port,
@@ -149,6 +151,9 @@ sub help {
                 List all Elasticsearch indexes represented in the 
                 Evergreen database.
 
+            --force
+                Force various actions.
+
 HELP
     exit(0);
 }
@@ -181,6 +186,18 @@ if (!$es) {
 $es->connect;
 
 if ($delete_index) {
+
+    if (!$force) {
+        my $index = $e->search_elastic_index({
+            index_class => $index_class, 
+            name => $index_name, 
+            active => 't'
+        })->[0];
+
+        die "Index '$index_name' is active!  " . 
+            "Use --force to delete an active index.\n" if $index;
+    }
+
     $es->delete_index or die "Index delete failed.\n";
 }
 
