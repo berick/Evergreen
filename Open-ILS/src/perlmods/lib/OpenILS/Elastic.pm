@@ -94,7 +94,8 @@ sub db {
     my $db_pass = $self->{db_pass};
     my $db_appn = $self->{db_appn} || 'Elastic Indexer';
 
-    my $dsn = "dbi:Pg:db=$db_name;host=$db_host;port=$db_port;app=$db_appn";
+    my $dsn = 
+        "dbi:Pg:db=$db_name;host=$db_host;port=$db_port;application_name='$db_appn';";
 
     $logger->debug("ES connecting to DB $dsn");
 
@@ -552,7 +553,16 @@ sub truncate_value {
 sub get_index_def {
     my ($self, $name) = @_;
     $name ||= $self->index_name;
-    return $self->es->indices->get(index => $name);
+
+    my $def;
+    eval { $def = $self->es->indices->get(index => $name) };
+
+    if ($@) {
+        $logger->error("ES cannot find index def for $name");
+        return undef;
+    }
+
+    return $def;
 }
 
 
