@@ -7,13 +7,13 @@ use OpenILS::Utils::Fieldmapper;
 use OpenILS::Utils::CStoreEditor;
 use OpenILS::Elastic::BibSearch;
 
-my $help;
+my $batch_size = 500;
 my $osrf_config = '/openils/conf/opensrf_core.xml';
+my $index_class = 'bib-search';
 my $bib_transform;
 my $cluster;
 my $create_index;
 my $delete_index;
-my $index_class = 'bib-search';
 my $index_name;
 my $activate_index;
 my $populate;
@@ -22,12 +22,10 @@ my $start_record;
 my $stop_record;
 my $modified_since;
 my $max_duration;
-my $batch_size = 500;
 my $skip_holdings;
-my $from_index;
-my $to_index;
 my $list_indices;
 my $force;
+my $help;
 
 # Database settings read from ENV by default.
 my $db_host = $ENV{PGHOST} || 'localhost';
@@ -54,9 +52,7 @@ GetOptions(
     'batch-size=s'      => \$batch_size,
     'bib-transform=s'   => \$bib_transform,
     'skip-holdings'     => \$skip_holdings,
-    'from-index=s'      => \$from_index,
     'list-indices'      => \$list_indices,
-    'to-index=s'        => \$to_index,
     'force'             => \$force,
     'db-name=s'         => \$db_name,
     'db-host=s'         => \$db_host,
@@ -71,8 +67,8 @@ sub help {
     print <<HELP;
         Synopsis:
             
-            $0 --delete-index --create-index --index-class bib-search \
-                --index-name bib-search-take-2 --populate
+            $0 --index-class bib-search --index-name bib-search-take-2 \
+                --create-index --populate --activate-index
 
         Options:
 
@@ -101,8 +97,9 @@ sub help {
                 Must match a well-known index class with backing code.
 
             --index-name <name>
-                Specify an index name.  Can be any value ES index name.
-                Defaults to --index-class.
+                Specify an index name.  An index name CANNOT match its
+                index_class, since the index_class is used as an alias
+                for the active index within each class.
 
             --delete-index
                 Delete the specified index and all of its data. 
@@ -148,7 +145,7 @@ sub help {
                 applicable values will be indexed.
 
             --list-indices
-                List all Elasticsearch indexes represented in the 
+                List all Elasticsearch indices represented in the 
                 Evergreen database.
 
             --force
@@ -202,30 +199,12 @@ if ($delete_index) {
 }
 
 if ($create_index) {
-    $es->create_index or die "Index create failed.\n";
-}
 
-if ($activate_index) {
-    $es->activate_index or die "Index activation failed.\n";
-}
-
-if ($list_indices) {
-    my $indices = $e->retrieve_all_elastic_index;
-    for my $index (@$indices) {
-        my $index_def = $es->get_index_def($index->name);
-
-        my @aliases;
-        if ($index_def) {
-            @aliases = keys(%{$index_def->{$index->name}->{aliases}});
-        } else {
-            warn "ES has no index named ". $index->name . "\n";
-        }
-
-        print sprintf(
-            "index_class=%s index_name=%s active=%s aliases=@aliases\n",
-            $index->index_class, $index->name, 
-            $index->active eq 't' ? 'yes' : 'no');
+    if ($index_name eq $index_class) {
+        die "An index name cannot match its index_class [$index_class]\n";
     }
+
+    $es->create_index or die "Index create failed.\n";
 }
 
 if ($populate) {
@@ -253,5 +232,29 @@ if ($populate) {
 
     $es->populate_index($settings) or die "Index populate failed.\n";
 }
+
+if ($activate_index) {
+    $es->activate_index or die "Index activation failed.\n";
+}
+
+if ($list_indices) {
+    my $indices = $e->retrieve_all_elastic_index;
+    for my $index (@$indices) {
+        my $index_def = $es->get_index_def($index->name);
+
+        my @aliases;
+        if ($index_def) {
+            @aliases = keys(%{$index_def->{$index->name}->{aliases}});
+        } else {
+            warn "ES has no index named ". $index->name . "\n";
+        }
+
+        print sprintf(
+            "index_class=%s index_name=%s active=%s aliases=@aliases\n",
+            $index->index_class, $index->name, 
+            $index->active eq 't' ? 'yes' : 'no');
+    }
+}
+
 
 
