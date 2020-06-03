@@ -24,6 +24,10 @@ my $modified_since;
 my $max_duration;
 my $batch_size = 500;
 my $skip_holdings;
+my $migrate_alias;
+my $from_index;
+my $to_index;
+my $list_indices;
 
 # Database settings read from ENV by default.
 my $db_host = $ENV{PGHOST} || 'localhost';
@@ -50,6 +54,10 @@ GetOptions(
     'batch-size=s'      => \$batch_size,
     'bib-transform=s'   => \$bib_transform,
     'skip-holdings'     => \$skip_holdings,
+    'migrate-alias=s'   => \$migrate_alias,
+    'from-index=s'      => \$from_index,
+    'list-indices'      => \$list_indices,
+    'to-index=s'        => \$to_index,
     'db-name=s'         => \$db_name,
     'db-host=s'         => \$db_host,
     'db-port=s'         => \$db_port,
@@ -139,6 +147,19 @@ sub help {
                 are provided (e.g. --index-start-record) then all 
                 applicable values will be indexed.
 
+            --list-indices
+                List all Elasticsearch indexes represented in the 
+                Evergreen database.
+
+            --migrate-alias <alias>
+            --from-index <index>
+            --to-index <index>
+                Migrate an alias from one index to another.  This is a 
+                handy way to swap out the active index in a single
+                atomic command.  If either --from-index or --to-index
+                are not defined, then only half of the migration 
+                (remove or add) is performed.
+
 HELP
     exit(0);
 }
@@ -152,6 +173,7 @@ Fieldmapper->import(
 OpenILS::Utils::CStoreEditor::init();
 
 my $es;
+my $e = OpenILS::Utils::CStoreEditor->new;
 
 if ($index_class eq 'bib-search') {
     $es = OpenILS::Elastic::BibSearch->new(
@@ -179,6 +201,28 @@ if ($create_index) {
 
 if ($activate_index) {
     $es->activate_index or die "Index activation failed.\n";
+}
+
+if ($list_indices) {
+    my $indices = $e->retrieve_all_elastic_index;
+    for my $index (@$indices) {
+        my $index_def = $es->get_index_def($index->name);
+        my @aliases = keys(%{$index_def->{$index->name}->{aliases}});
+
+        print sprintf(
+            "index_class=%s index_name=%s active=%s aliases=@aliases\n",
+            $index->index_class, $index->name, 
+            $index->active eq 't' ? 'yes' : 'no');
+    }
+}
+
+if ($migrate_alias) {
+    unless ($from_index || $to_index) {
+        die "Alias migration requires one of --from-index or --to-index\n";
+    }
+    unless ($es->migrate_alias($migrate_alias, $from_index, $to_index)) {
+        die "Alias migration failed\n";
+    }
 }
 
 if ($populate) {

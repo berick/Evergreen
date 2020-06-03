@@ -94,9 +94,8 @@ sub db {
     my $db_pass = $self->{db_pass};
     my $db_appn = $self->{db_appn} || 'Elastic Indexer';
 
-    # TODO Add application_name to dsn
+    my $dsn = "dbi:Pg:db=$db_name;host=$db_host;port=$db_port;app=$db_appn";
 
-    my $dsn = "dbi:Pg:db=$db_name;host=$db_host;port=$db_port";
     $logger->debug("ES connecting to DB $dsn");
 
     $self->{db} = DBI->connect(
@@ -145,15 +144,7 @@ sub load_config {
         %active
     });
 
-    if ($self->write_mode) {
-
-        if (!$self->index_name) {
-            $logger->error("ES index_name required for write mode");
-            return;
-        }
-
-        return;
-    }
+    return if $self->write_mode;
 
     # read-only mode
 
@@ -299,6 +290,40 @@ sub activate_index {
     }
 
     $e->commit;
+
+    return 1;
+}
+
+
+# Migrate an alias from one index to another.
+# If either from_index or to_index are not defined, then only half
+# of the migration (i.e. remove or add) is performed.
+sub migrate_alias {
+    my ($self, $alias, $from_index, $to_index) = @_;
+
+    $from_index ||= '';
+    $to_index ||= '';
+
+    my @actions;
+
+    if ($from_index) {
+        push(@actions, {remove => {alias => $alias, index => $from_index}});
+    }
+
+    if ($to_index) {
+        push(@actions, {add => {alias => $alias, index => $to_index}});
+    }
+
+    $logger->info("ES migrating alias [$alias] from $from_index to $to_index");
+
+    eval {
+        $self->es->indices->update_aliases({body => {actions => \@actions}});
+    };
+
+    if ($@) {
+        $logger->error("ES alias migration [$alias] failed $@");
+        return undef;
+    } 
 
     return 1;
 }
@@ -525,8 +550,9 @@ sub truncate_value {
 }
 
 sub get_index_def {
-    my ($self) = @_;
-    return $self->es->indices->get(index => $self->index_name);
+    my ($self, $name) = @_;
+    $name ||= $self->index_name;
+    return $self->es->indices->get(index => $name);
 }
 
 
