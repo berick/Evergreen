@@ -663,6 +663,8 @@ sub index_pubdate {
 
     $value = substr($value . '0' x 4, 0, 4);
 
+    return if $value eq '0000'; # treat as no date.
+
     append_field_value($body, 'pubdate', $value) if $value;
 }
 
