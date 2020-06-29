@@ -620,6 +620,9 @@ sub populate_bib_index_batch {
             } elsif ($fname eq 'identifier|issn') {
                 index_issns($body, $value);
 
+            } elsif ($fname eq 'pubdate') {
+                index_pubdate($body, $value);
+
             } else {
                 append_field_value($body, $fname, $value);
             }
@@ -646,6 +649,21 @@ sub populate_bib_index_batch {
         $bib_ids->[0] . '...' . $bib_ids->[-1]);
 
     return $index_count;
+}
+
+
+# Normalize the pubdate (used for sorting) to a single 4-digit year.
+# Pad with zeroes where the year fall short of 4 digits.
+sub index_pubdate {
+    my ($body, $value) = @_;
+
+    $value =~ s/\D//g;
+
+    return unless $value; # no numbers
+
+    $value = substr($value . '0' x 4, 0, 4);
+
+    append_field_value($body, 'pubdate', $value) if $value;
 }
 
 
