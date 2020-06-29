@@ -226,7 +226,7 @@ UPDATE config.global_flag SET enabled = TRUE WHERE name ~ '^elastic.*';
 
 -- Bill's elastic VM for testing.
 UPDATE elastic.node
-    SET host = 'elastic.gamma', port = 80, path = '/elastic/node1'
+    SET host = 'elastic.gamma', port = 80, path = '/elastic'
     WHERE id = 1;
 
 */
