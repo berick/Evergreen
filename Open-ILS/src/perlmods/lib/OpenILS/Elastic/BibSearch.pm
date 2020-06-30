@@ -659,6 +659,8 @@ sub index_sorter {
 
     $value = OpenILS::Utils::Normalize::search_normalize($value);
 
+    $value =~ s/^ +//g;
+
     append_field_value($body, $fname, $value) if $value;
 }
 
