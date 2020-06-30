@@ -623,6 +623,9 @@ sub populate_bib_index_batch {
             } elsif ($fname eq 'pubdate') {
                 index_pubdate($body, $value);
 
+            } elsif ($fname =~ /sort/) {
+                index_sorter($body, $fname, $value);
+
             } else {
                 append_field_value($body, $fname, $value);
             }
@@ -651,6 +654,13 @@ sub populate_bib_index_batch {
     return $index_count;
 }
 
+sub index_sorter {
+    my ($body, $fname, $value) = @_;
+
+    $value = OpenILS::Utils::Normalize::search_normalize($value);
+
+    append_field_value($body, $fname, $value) if $value;
+}
 
 # Normalize the pubdate (used for sorting) to a single 4-digit year.
 # Pad with zeroes where the year fall short of 4 digits.
