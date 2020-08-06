@@ -31,7 +31,8 @@
             "allowedCommonJsDependencies": [
               "file-saver",
               "moment",
-              "moment-timezone"
+              "moment-timezone",
+              "elastic-builder"
             ]
           },
           "configurations": {

@@ -386,7 +386,6 @@ sub delete_documents {
     
         $result = $self->es->delete_by_query(
             index => $self->index_target,
-            type => 'record',
             body => {query => {terms => {_id => $ids}}}
         );
     };
@@ -409,7 +408,6 @@ sub document_exists {
     eval {
         $result = $self->es->index(
             index => $self->index_target,
-            type => 'record',
             id => $id,
         );
     };
@@ -432,7 +430,6 @@ sub index_document {
     eval {
         $result = $self->es->index(
             index => $self->index_target,
-            type => 'record',
             id => $id,
             body => $body
         );
@@ -462,7 +459,6 @@ sub create_document {
     eval {
         $result = $self->es->create(
             index => $self->index_target,
-            type => 'record',
             id => $id,
             body => $body
         );
@@ -493,7 +489,6 @@ sub update_document {
     eval {
         $result = $self->es->update(
             index => $self->index_target,
-            type => 'record',
             id => $id,
             body => {doc => $body}
         );

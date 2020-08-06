@@ -493,7 +493,6 @@ sub create_one_field_index {
     eval { 
         $self->es->indices->put_mapping({
             index => $index_name,
-            type  => 'record',
             body  => {
                 dynamic => 'strict', 
                 properties => {$field => $properties}
