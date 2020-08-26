@@ -108,18 +108,8 @@ export class HoldsGridComponent implements OnInit {
         return this._patronId;
     }
 
-    // Include holds canceled on or after the provided date.
-    // If no value is passed, canceled holds are not displayed.
-    _showCanceledSince: Date;
-    @Input() set showCanceledSince(show: Date) {
-        this._showCanceledSince = show;
-        if (this.initDone) { // reload on update
-            this.holdsGrid.reload();
-        }
-    }
-    get showCanceledSince(): Date {
-        return this._showCanceledSince;
-    }
+    // If true, show recently canceled holds only.
+    @Input() showRecentlyCanceled: boolean = false;
 
     // Include holds fulfilled on or after hte provided date.
     // If no value is passed, fulfilled holds are not displayed.
@@ -176,6 +166,8 @@ export class HoldsGridComponent implements OnInit {
             this.store.getItem(this.preFetchSetting).then(
                 applied => this.enablePreFetch = Boolean(applied)
             );
+        } else {
+            this.enablePreFetch = false;
         }
 
         if (!this.defaultSort) {
@@ -234,8 +226,6 @@ export class HoldsGridComponent implements OnInit {
             is_staff_request: true,
             fulfillment_time: this.showFulfilledSince ?
                 this.showFulfilledSince.toISOString() : null,
-            cancel_time: this.showCanceledSince ?
-                this.showCanceledSince.toISOString() : null,
         };
 
         if (this.hopeless) {
@@ -295,6 +285,7 @@ export class HoldsGridComponent implements OnInit {
 
         const limit = this.enablePreFetch ? null : pager.limit;
         const offset = this.enablePreFetch ? 0 : pager.offset;
+        const options = this.showRecentlyCanceled ? {recently_canceled: true} : {};
 
         let observer: Observer<any>;
         const observable = new Observable(obs => observer = obs);
@@ -306,7 +297,7 @@ export class HoldsGridComponent implements OnInit {
         this.net.request(
             'open-ils.circ',
             'open-ils.circ.hold.wide_hash.stream',
-            this.auth.token(), filters, orderBy, limit, offset
+            this.auth.token(), filters, orderBy, limit, offset, options
         ).subscribe(
             holdData => {
 
