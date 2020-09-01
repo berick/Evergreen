@@ -5,6 +5,7 @@ BEGIN;
 
 CREATE TABLE config.sip_account (
     id              SERIAL PRIMARY KEY,
+    enabled         BOOLEAN NOT NULL DEFAULT TRUE,
     institution     TEXT NOT NULL,
     sip_username    TEXT NOT NULL,
     sip_password    BIGINT NOT NULL REFERENCES actor.passwd 

@@ -13441,6 +13441,7 @@ SELECT  usr,
 		reporter:label="SIP AccountS">
 		<fields oils_persist:primary="id" oils_persist:sequence="config.sip_account_id_seq">
 			<field name="id" reporter:datatype="id" reporter:label="ID" reporter:selector="sip_username"/>
+			<field name="enabled" reporter:datatype="bool" reporter:label="Enabled"/>
 			<field name="institution" reporter:datatype="text" reporter:label="Institution" oils_obj:required="true"/>
 			<field name="sip_username" reporter:datatype="text" reporter:label="SIP Username" oils_obj:required="true"/>
 			<field name="usr" reporter:datatype="link" reporter:label="ILS User" oils_obj:required="true"/>

@@ -179,12 +179,8 @@ sub init {
     my $e = new_editor();
 
     my $settings = $e->retrieve_all_config_sip_setting;
-    my $accounts = $e->search_config_sip_account([
-        {id => {'!=' => undef}},
-        {flesh => 1, flesh_fields => {csa => ['workstation']}}
-    ]);
 
-    $config = {institutions => [], accounts => $accounts};
+    $config = {institutions => []};
 
     # Institution specific settings.
     # In addition to the settings, this tells us what institutions we support.
@@ -333,9 +329,10 @@ sub handle_login {
 
     my $sip_username = get_field_value($message, 'CN');
     my $sip_password = get_field_value($message, 'CO');
-
-    my ($sip_account) = 
-        grep {$_->sip_username eq $sip_username} @{$config->{accounts}};
+    my $sip_account = new_editor()->search_config_sip_account([
+        {sip_username => $sip_username, enabled => 't'}, 
+        {flesh => 1, flesh_fields => {csa => ['workstation']}}
+    ])->[0];
 
     if (!$sip_account) {
         $logger->warn("SIP2: No such SIP account: $sip_username");
