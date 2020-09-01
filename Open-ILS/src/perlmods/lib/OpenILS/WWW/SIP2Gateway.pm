@@ -39,10 +39,15 @@ sub new {
 sub from_cache {
     my ($class, $seskey) = @_;
 
-    my $account = cache()->get_cache("sip2_$seskey");
+    my $ses = cache()->get_cache("sip2_$seskey");
 
-    if ($account) {
-        return $class->new(seskey => $seskey, account => $account);
+    if ($ses) {
+        return $class->new(
+            seskey => $seskey, 
+            sip_account => $ses->{sip_account},
+            ils_login => $ses->{ils_login},
+            ils_authtoken => $ses->{ils_authtoken}
+        );
 
     } else {
 
@@ -56,47 +61,57 @@ sub seskey {
     return $self->{seskey};
 }
 
-# Login account
-sub account {
+# SIP account
+sub sip_account {
     my $self = shift;
-    return $self->{account};
+    return $self->{sip_account};
+}
+
+sub ils_login {
+    my $self = shift;
+    return $self->{ils_login};
+}
+
+sub ils_authtoken {
+    my $self = shift;
+    return $self->{ils_authtoken};
 }
 
 # Logs in to Evergreen and caches the auth token/login with the SIP
 # account data.
 # Returns true on success, false on failure to authenticate.
 sub authenticate {
-    my ($self, $account) = @_;
+    my ($self, $sip_account) = @_;
 
     my $seskey = $self->seskey;
 
     my $auth = $U->simplereq(
         'open-ils.auth_internal',
         'open-ils.auth_internal.session.create', {
-        user_id => $account->usr,
-        workstation => $account->workstation->name,
+        user_id => $sip_account->usr,
+        workstation => $sip_account->workstation->name,
         login_type => 'staff'
     });
 
     if ($auth->{textcode} ne 'SUCCESS') {
         $logger->warn(
-            "SIP2 login failed for ILS user: ".$account->usr);
+            "SIP2 login failed for ILS user: ".$sip_account->usr);
         return 0;
     }
 
-    my $session = {
-        account => $account, 
-        authtoken => $auth->{payload}->{authtoken}
+    my $ses = {
+        sip_account => $sip_account, 
+        ils_authtoken => $auth->{payload}->{authtoken}
     };
 
     # cache the login user as well
-    $session->{login} = $U->simplereq(
+    $ses->{ils_login} = $U->simplereq(
         'open-ils.auth',
         'open-ils.auth.session.retrieve',
-        $session->{authtoken}
+        $ses->{ils_authtoken}
     );
 
-    cache()->put_cache("sip2_$seskey", $session);
+    cache()->put_cache("sip2_$seskey", $ses);
     return 1;
 }
 
@@ -124,47 +139,28 @@ $json->allow_nonref(1);
 
 use constant SIP_DATE_FORMAT => "%Y%m%d    %H%M%S";
 
- # TODO: move to config / database
-my $_config = {
-    options => {
-        # Allow 99 (sc status) message before successful 93 (login) message
-        allow_sc_status_before_login => 1
-    },
-    accounts => [{
-        sip_username => 'sip',
-        sip_password => 'sip',
-        ils_usr => 1,
-        ils_workstation => 'BR1-gamma'
-    }],
-    institutions => [{
-        id => 'example',
-        currency => 'USD',
-        supports => [ # Supported Messages (BX)
-			'Y', # patron status request,
-			'Y', # checkout,
-			'Y', # checkin,
-			'N', # block patron,
-			'Y', # acs status,
-			'N', # request sc/acs resend,
-			'Y', # login,
-			'Y', # patron information,
-			'N', # end patron session,
-			'Y', # fee paid,
-			'Y', # item information,
-			'N', # item status update,
-			'N', # patron enable,
-			'N', # hold,
-			'Y', # renew,
-			'N', # renew all,
-        ],
-        options => {
-            due_date_use_sip_date_format => 0,
-            patron_status_permit_loans => 0,
-            patron_status_permit_all => 0,
-            msg64_hold_items_available => 0
-        }
-    }]
-};
+# Supported Messages (BX)
+# Currently hard-coded, since it's based on availabilty of functionality
+# in the code, but it could be moved into the database to limit access for 
+# specific institutions.
+use constant INSTITUTION_SUPPORTS => [ 
+    'Y', # patron status request,
+    'Y', # checkout,
+    'Y', # checkin,
+    'N', # block patron,
+    'Y', # acs status,
+    'N', # request sc/acs resend,
+    'Y', # login,
+    'Y', # patron information,
+    'N', # end patron session,
+    'Y', # fee paid,
+    'Y', # item information,
+    'N', # item status update,
+    'N', # patron enable,
+    'N', # hold,
+    'Y', # renew,
+    'N', # renew all,
+];
 
 my $osrf_config;
 sub import {
@@ -191,32 +187,36 @@ sub init {
     $config = {institutions => [], accounts => $accounts};
 
     # Institution specific settings.
-    # In addition to the options, this tells us what institutions we support.
+    # In addition to the settings, this tells us what institutions we support.
     for my $set (grep {$_->institution ne '*'} @$settings) {
         my $inst = $set->institution;
         my $value = $json->decode($set->value);
         my $name = $set->name;
 
-        my ($inst_conf) = 
-            grep {$_->{id} eq $inst} @{$config->{institutions}} ||
-            {   id => $inst,
-                currency => 'USD', # default
-                supports => [],
-                options => {}
+        my ($inst_conf) = grep {$_->{id} eq $inst} @{$config->{institutions}};
+
+        if (!$inst_conf) {
+            $inst_conf = {   
+                id => $inst,
+                settings => {},
+                supports => INSTITUTION_SUPPORTS
             };
 
-        $inst_conf->{options}->{$name} = $value;
+            push(@{$config->{institutions}}, $inst_conf);
+        }
+
+        $inst_conf->{settings}->{$name} = $value;
     }
 
-    # Apply values for global options without replacing 
+    # Apply values for global settings without replacing 
     # institution-specific values.
     for my $set (grep {$_->institution eq '*'} @$settings) {
         my $name = $set->name;
         my $value = $json->decode($set->value);
 
         for my $inst_conf (@{$config->{institutions}}) {
-            $inst_conf->{options}->{$name} = $value
-                unless exists $inst_conf->{options}->{$name};
+            $inst_conf->{settings}->{$name} = $value
+                unless exists $inst_conf->{settings}->{$name};
         }
     }
 }
@@ -334,20 +334,20 @@ sub handle_login {
     my $sip_username = get_field_value($message, 'CN');
     my $sip_password = get_field_value($message, 'CO');
 
-    my ($account) = 
+    my ($sip_account) = 
         grep {$_->sip_username eq $sip_username} @{$config->{accounts}};
 
-    if (!$account) {
+    if (!$sip_account) {
         $logger->warn("SIP2: No such SIP account: $sip_username");
         return $response;
     }
 
     if ($U->verify_user_password(
-        new_editor(), $account->usr, $sip_password, 'sip2')) {
+        new_editor(), $sip_account->usr, $sip_password, 'sip2')) {
     
         my $session = OpenILS::WWW::SIPSession->new(seskey => $seskey);
         $response->{fixed_fields}->[0] = '1' 
-            if $session->authenticate($account);
+            if $session->authenticate($sip_account);
 
     } else {
         $logger->info("SIP2: login failed for user=$sip_username")
@@ -363,13 +363,13 @@ sub handle_sc_status {
 
     my $instname;
     if ($session) {
-        $instname = $session->{account}->institution;
+        $instname = $session->sip_account->institution;
 
     } else {
 
         # SC Status requires login?
         return undef unless 
-            $config->{options}->{allow_sc_status_before_login};
+            $config->{settings}->{allow_sc_status_before_login};
     
         # The SC Status message does not include an institution, but expects
         # one in return.  Use the configuration for the first institution.
@@ -411,7 +411,7 @@ sub handle_sc_status {
 sub handle_item_info {
     my ($session, $message) = @_;
 
-    my $account = $session->account;
+    my $sip_account = $session->sip_account;
     my $institution = get_field_value($message, 'AO');
     my $instconf = get_inst_config($institution) || return undef;
     my $barcode = get_field_value($message, 'AB');
@@ -462,7 +462,7 @@ sub handle_item_info {
 
 sub handle_patron_info {
     my ($session, $message) = @_;
-    my $account = $session->account;
+    my $sip_account = $session->sip_account;
 
     my $institution = get_field_value($message, 'AO');
     my $barcode = get_field_value($message, 'AA');

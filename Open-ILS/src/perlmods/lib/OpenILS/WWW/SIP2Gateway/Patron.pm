@@ -113,20 +113,23 @@ sub set_patron_summary_items {
     });
 
     $details->{holds_count} = scalar(@$hold_ids);
+    $details->{overdue_count} = 0;
+    $details->{out_count} = 0;
 
-    my $circ_ids = $e->retrieve_action_open_circ_list($patron->id);
-    my $overdue_ids = [ grep {$_ > 0} split(',', $circ_ids->overdue) ];
-    my $out_ids = [ grep {$_ > 0} split(',', $circ_ids->out) ];
-
-    $details->{overdue_count} = scalar(@$overdue_ids);
-    $details->{out_count} = scalar(@$out_ids) + scalar(@$overdue_ids);
+    my $circ_summary = $e->retrieve_action_open_circ_list($patron->id);
+    if ($circ_summary) { # undef if no circs for user
+        my $overdue_ids = [ grep {$_ > 0} split(',', $circ_summary->overdue) ];
+        my $out_ids = [ grep {$_ > 0} split(',', $circ_summary->out) ];
+        $details->{overdue_count} = scalar(@$overdue_ids);
+        $details->{out_count} = scalar(@$out_ids) + scalar(@$overdue_ids);
+    }
 
     $details->{recall_count} = undef; # not supported
 
     my $xacts = $U->simplereq(
         'open-ils.actor',                                
         'open-ils.actor.user.transactions.history.have_balance',               
-        $session->{authtoken},
+        $session->ils_authtoken,
         $patron->id
     );
 
@@ -197,7 +200,7 @@ sub get_patron_penalties {
                     {stop_date => {'>' => 'now'}}
                 ],
                 org_unit => 
-                    $U->get_org_full_path($session->{login}->ws_ou)
+                    $U->get_org_full_path($session->ils_login->ws_ou)
             }
         }
     });
