@@ -276,10 +276,12 @@ sub handler {
 
         return Apache2::Const::FORBIDDEN unless $session;
 
-        if ($msg_code eq '63') {
-            $response = handle_patron_info($session, $message);
-        } elsif ($msg_code eq '17') {
+        if ($msg_code eq '17') {
             $response = handle_item_info($session, $message);
+        } elsif ($msg_code eq '23') {
+            $response = handle_patron_status($session, $message);
+        } elsif ($msg_code eq '63') {
+            $response = handle_patron_info($session, $message);
         }
     }
 
@@ -293,6 +295,7 @@ sub handler {
 
     return Apache2::Const::OK;
 }
+
 
 # Returns the value of the first occurrence of the requested SIP code.
 sub get_field_value {
@@ -477,9 +480,76 @@ sub handle_patron_info {
         summary_list_items => patron_summary_list_items($summary)
     );
 
+    my $response = patron_response_common_data(
+        $session, $institution, $barcode, $password, $pdetails);
+
+    $response->{code} = '64';
+
+    return $response unless $pdetails;
+
+    push(
+        @{$response->{fixed_fields}}, 
+        count4($pdetails->{holds_count}),
+        count4($pdetails->{overdue_count}),
+        count4($pdetails->{out_count}),
+        count4($pdetails->{fine_count}),
+        count4($pdetails->{recall_count}),
+        count4($pdetails->{unavail_holds_count})
+    );
+
+    # TODO: Add 
+    # overdue items AT variable-length optional field (this field should be sent for each overdue item).
+    # charged items AU variable-length optional field (this field should be sent for each charged item).
+    # fine items AV variable-length optional field (this field should be sent for each fine item).
+    # recall items BU variable-length optional field (this field should be sent for each recall item).
+    # unavailable hold items CD variable-length optional field (this field should be sent for each unavailable hold item).
+
+    my $list_items = patron_summary_list_items($summary) || '';
+
+    if ($list_items eq 'hold_items') {
+        for my $hold (@{$pdetails->{hold_items}}) {
+            push(@{$response->{fields}}, {AS => $hold});
+        }
+    }
+
+    return $response;
+}
+
+sub handle_patron_status {
+    my ($session, $message) = @_;
+    my $sip_account = $session->sip_account;
+
+    my $institution = get_field_value($message, 'AO');
+    my $barcode = get_field_value($message, 'AA');
+    my $password = get_field_value($message, 'AD');
+    my $instconf = get_inst_config($institution) || return undef;
+
+    my $pdetails = OpenILS::WWW::SIP2Gateway::Patron->get_patron_details(
+        session => $session,
+        instconf => $instconf,
+        barcode => $barcode,
+        password => $password
+    );
+
+    my $response = patron_response_common_data(
+        $session, $institution, $barcode, $password, $pdetails);
+
+    $response->{code} = '24';
+
+    return $response;
+}
+
+# Patron Info and Patron Status responses share mostly the same data.
+# This returns the base data which can be augmented as needed.
+# Note we don't call Patron->get_patron_details here since different
+# messages collect different amounts of data.
+sub patron_response_common_data {
+    my ($session, $institution, $barcode, $password, $pdetails) = @_;
+
     if (!$pdetails) {
+        # No such user.  Return a stub response with all things denied.
+
         return {
-            code => '64',
             fixed_fields => [
                 spacebool(1), # charge denied
                 spacebool(1), # renew denied
@@ -497,9 +567,8 @@ sub handle_patron_info {
             ]
         };
     }
-
+ 
     return {
-        code => '64',
         fixed_fields => [
             spacebool($pdetails->{charge_denied}),
             spacebool($pdetails->{renew_denied}),
@@ -516,23 +585,17 @@ sub handle_patron_info {
             spacebool(0), # recall overdue
             spacebool($pdetails->{too_many_fines}),
             '000', # language
-            sipdate(),
-            count4($pdetails->{holds_count}),
-            count4($pdetails->{overdue_count}),
-            count4($pdetails->{out_count}),
-            count4($pdetails->{fine_count}),
-            count4($pdetails->{recall_count}),
-            count4($pdetails->{unavail_holds_count}),
+            sipdate()
         ],
         fields => [
             {AO => $institution},
             {AA => $barcode},
-            {BL => sipbool(1)},         # valid patron
-            {CQ => sipbool($password)}  # password verified if exists
+            {BL => sipbool(1)},                 # valid patron
+            {BV => $pdetails->{balance_owed}},  # fee amount
+            {CQ => sipbool($password)}          # password verified if exists
         ]
     };
 }
-
 
 # Determines which class of data the SIP client wants detailed
 # information on in the patron info request.

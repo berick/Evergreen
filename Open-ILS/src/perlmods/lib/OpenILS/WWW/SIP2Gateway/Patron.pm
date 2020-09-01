@@ -74,7 +74,11 @@ sub get_patron_details {
         grep {$_->{id} == OILS_PENALTY_PATRON_EXCEEDS_FINES}
         @$penalties;
 
+    my $summary = $e->retrieve_money_open_user_summary($patron->id);
+    $details->{balance_owed} = ($summary) ? $summary->balance_owed : 0;
+
     set_patron_summary_items($session, $instconf, $details, %params);
+    set_patron_summary_list_items($session, $instconf, $details, %params);
 
     return $details;
 }
@@ -91,28 +95,16 @@ sub set_patron_summary_items {
     my ($session, $instconf, $details, %params) = @_;
 
     my $patron = $details->{patron};
-    my $start_item = $params{summary_start_item} || 0;
-    my $end_item = $params{summary_end_item} || 10;
-    my $list_items = $params{summary_list_items};
-
     my $e = new_editor();
 
-    my $holds_where = {
-        usr => $patron->id,
-        fulfillment_time => undef,
-        cancel_time => undef
-    };
+    $details->{recall_count} = 0; # not supported
 
-    $holds_where->{current_shelf_lib} = {'=' => {'+ahr' => 'pickup_lib'}} 
-        if $instconf->{msg64_hold_items_available};
-
-    my $hold_ids = $e->json_query({
-        select => {ahr => ['id']},
-        from => 'ahr',
-        where => {'+ahr' => $holds_where}
-    });
-
+    my $hold_ids = get_hold_ids($e, $instconf, $patron);
     $details->{holds_count} = scalar(@$hold_ids);
+
+    my $unavail_hold_ids = get_hold_ids($e, $instconf, $patron, 1);
+    $details->{unavail_holds_count} = scalar(@$unavail_hold_ids);
+
     $details->{overdue_count} = 0;
     $details->{out_count} = 0;
 
@@ -124,8 +116,6 @@ sub set_patron_summary_items {
         $details->{out_count} = scalar(@$out_ids) + scalar(@$overdue_ids);
     }
 
-    $details->{recall_count} = undef; # not supported
-
     my $xacts = $U->simplereq(
         'open-ils.actor',                                
         'open-ils.actor.user.transactions.history.have_balance',               
@@ -134,9 +124,128 @@ sub set_patron_summary_items {
     );
 
     $details->{fine_count} = scalar(@$xacts);
-
-    # TODO: unavail holds count; summary details request
 }
+
+sub get_hold_ids {
+    my ($e, $instconf, $patron, $unavail, $offset, $limit) = @_;
+
+    my $holds_where = {
+        usr => $patron->id,
+        fulfillment_time => undef,
+        cancel_time => undef
+    };
+
+    if ($unavail) {
+        $holds_where->{'-or'} = [
+            {current_shelf_lib => undef},
+            {current_shelf_lib => {'!=' => {'+ahr' => 'pickup_lib'}}}
+        ];
+
+    } else {
+
+        $holds_where->{current_shelf_lib} = {'=' => {'+ahr' => 'pickup_lib'}} 
+            if $instconf->{msg64_hold_items_available};
+    }
+
+    my $query = {
+        select => {ahr => ['id']},
+        from => 'ahr',
+        where => {'+ahr' => $holds_where}
+    };
+
+    $query->{offset} = $offset if $offset;
+    $query->{limit} = $limit if $limit;
+
+    my $id_hashes = $e->json_query($query);
+
+    return [map {$_->{id}} @$id_hashes];
+}
+
+sub set_patron_summary_list_items {
+    my ($session, $instconf, $details, %params) = @_;
+    my $e = new_editor();
+
+    my $list_items = $params{summary_list_items};
+    my $offset = $params{summary_start_item} || 0;
+    my $end_item = $params{summary_end_item} || 10;
+    my $limit = $end_item - $offset;
+
+    add_hold_items($e, $session, $instconf, $details, $offset, $limit)
+        if $list_items eq 'hold_items';
+}
+
+sub add_hold_items {
+    my ($e, $session, $instconf, $details, $offset, $limit) = @_;
+
+    my $patron = $details->{patron};
+    my $format = $instconf->{msg64_hold_datatype} || '';
+    my $hold_ids = get_hold_ids($e, $instconf, $patron, 0, $offset, $limit);
+
+    my @hold_items;
+    for my $hold_id (@$hold_ids) {
+        my $hold = $e->retrieve_action_hold_request($hold_id);
+
+        if ($format eq 'barcode') {
+            my $copy = find_copy_for_hold($e, $hold);
+            push(@hold_items, $copy->barcode) if $copy;
+        } else {
+            my $title = find_title_for_hold($e, $hold);
+            push(@hold_items, $title) if $title;
+        }
+    }
+
+    $details->{hold_items} = \@hold_items;
+}
+
+# Hold -> reporter.hold_request_record -> display field for title.
+sub find_title_for_hold {
+    my ($e, $hold) = @_;
+
+    my $bib_link = $e->retrieve_reporter_hold_request_record($hold->id);
+
+    my $title_field = $e->search_metabib_flat_display_entry({
+        source => $bib_link->bib_record, name => 'title'})->[0];
+
+    return $title_field ? $title_field->value : '';
+}
+
+# Finds a representative copy for the given hold.  If no copy exists at
+# all, undef is returned.  The only limit placed on what constitutes a
+# "representative" copy is that it cannot be deleted.  Otherwise, any
+# copy that allows us to find the hold later is good enough.
+sub find_copy_for_hold {
+    my ($e, $hold) = @_;
+
+    return $e->retrieve_asset_copy($hold->current_copy)
+        if $hold->current_copy; 
+
+    return $e->retrieve_asset_copy($hold->target)
+        if $hold->hold_type =~ /C|R|F/;
+
+    return $e->search_asset_copy([
+        {call_number => $hold->target, deleted => 'f'}, 
+        {limit => 1}])->[0] if $hold->hold_type eq 'V';
+
+    my $bre_ids = [$hold->target];
+
+    if ($hold->hold_type eq 'M') {
+        # find all of the bibs that link to the target metarecord
+        my $maps = $e->search_metabib_metarecord_source_map(
+            {metarecord => $hold->target});
+        $bre_ids = [map {$_->record} @$maps];
+    }
+
+    my $vol_ids = $e->search_asset_call_number( 
+        {record => $bre_ids, deleted => 'f'}, 
+        {idlist => 1}
+    );
+
+    return $e->search_asset_copy([
+        {call_number => $vol_ids, deleted => 'f'}, 
+        {limit => 1}
+    ])->[0];
+}
+
 
 sub set_patron_privileges {
     my ($session, $instconf, $details, $penalties) = @_;
@@ -146,8 +255,7 @@ sub set_patron_privileges {
         ->parse_datetime(clean_ISO8601($patron->expire_date));
 
     if ($expire < DateTime->now) {
-        $logger->info(
-            "SIP2 Patron account is expired; all privileges blocked");
+        $logger->info("SIP2 Patron account is expired; all privileges blocked");
         $details->{charge_denied} = 1;
         $details->{recall_denied} = 1;
         $details->{renew_denied} = 1;
