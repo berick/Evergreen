@@ -126,7 +126,7 @@ sub set_patron_summary_items {
     my $xacts = $U->simplereq(
         'open-ils.actor',                                
         'open-ils.actor.user.transactions.history.have_balance',               
-        $session->account->{authtoken},
+        $session->{authtoken},
         $patron->id
     );
 
@@ -197,7 +197,7 @@ sub get_patron_penalties {
                     {stop_date => {'>' => 'now'}}
                 ],
                 org_unit => 
-                    $U->get_org_full_path($session->account->{login}->ws_ou)
+                    $U->get_org_full_path($session->{login}->ws_ou)
             }
         }
     });

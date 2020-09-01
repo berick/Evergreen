@@ -73,27 +73,30 @@ sub authenticate {
     my $auth = $U->simplereq(
         'open-ils.auth_internal',
         'open-ils.auth_internal.session.create', {
-        user_id => $account->{ils_usr},
-        workstation => $account->{ils_workstation},
+        user_id => $account->usr,
+        workstation => $account->workstation->name,
         login_type => 'staff'
     });
 
     if ($auth->{textcode} ne 'SUCCESS') {
         $logger->warn(
-            "SIP2 login failed for ils_usr".$account->{ils_usr});
+            "SIP2 login failed for ILS user: ".$account->usr);
         return 0;
     }
 
-    $account->{authtoken} = $auth->{payload}->{authtoken};
+    my $session = {
+        account => $account, 
+        authtoken => $auth->{payload}->{authtoken}
+    };
 
-    # cache the login user account as well
-    $account->{login} = $U->simplereq(
+    # cache the login user as well
+    $session->{login} = $U->simplereq(
         'open-ils.auth',
         'open-ils.auth.session.retrieve',
-        $account->{authtoken}
+        $session->{authtoken}
     );
 
-    cache()->put_cache("sip2_$seskey", $account);
+    cache()->put_cache("sip2_$seskey", $session);
     return 1;
 }
 
@@ -180,8 +183,12 @@ sub init {
     my $e = new_editor();
 
     my $settings = $e->retrieve_all_config_sip_setting;
+    my $accounts = $e->search_config_sip_account([
+        {id => {'!=' => undef}},
+        {flesh => 1, flesh_fields => {csa => ['workstation']}}
+    ]);
 
-    $config = {institutions => []};
+    $config = {institutions => [], accounts => $accounts};
 
     # Institution specific settings.
     # In addition to the options, this tells us what institutions we support.
@@ -191,9 +198,9 @@ sub init {
         my $name = $set->name;
 
         my ($inst_conf) = 
-            grep {$_->id eq $inst} @{$config->{institutions}} ||
+            grep {$_->{id} eq $inst} @{$config->{institutions}} ||
             {   id => $inst,
-                currency => 'USD', # TODO
+                currency => 'USD', # default
                 supports => [],
                 options => {}
             };
@@ -327,12 +334,17 @@ sub handle_login {
     my $sip_username = get_field_value($message, 'CN');
     my $sip_password = get_field_value($message, 'CO');
 
-    my ($account) = grep {
-        $_->{sip_username} eq $sip_username &&
-        $_->{sip_password} eq $sip_password
-    } @{$config->{accounts}};
+    my ($account) = 
+        grep {$_->sip_username eq $sip_username} @{$config->{accounts}};
 
-    if ($account) {
+    if (!$account) {
+        $logger->warn("SIP2: No such SIP account: $sip_username");
+        return $response;
+    }
+
+    if ($U->verify_user_password(
+        new_editor(), $account->usr, $sip_password, 'sip2')) {
+    
         my $session = OpenILS::WWW::SIPSession->new(seskey => $seskey);
         $response->{fixed_fields}->[0] = '1' 
             if $session->authenticate($account);
@@ -347,18 +359,33 @@ sub handle_login {
 sub handle_sc_status {
     my ($seskey, $message) = @_;
 
-    return undef unless (
-        $config->{options}->{allow_sc_status_before_login} ||
-        OpenILS::WWW::SIPSession->from_cache($seskey)
-    );
+    my $session = OpenILS::WWW::SIPSession->from_cache($seskey);
 
-    # The SC Status message does not include an institution, but expects
-    # one in return.  Use the configuration for the first institution.
-    # Maybe the SIP server itself should track which institutoin its
-    # instance is configured to use?  That may multiple servers could
-    # run, one per institution.
-    my $instconf = $config->{institutions}->[0];
-    my $instname = $instconf->{id};
+    my $instname;
+    if ($session) {
+        $instname = $session->{account}->institution;
+
+    } else {
+
+        # SC Status requires login?
+        return undef unless 
+            $config->{options}->{allow_sc_status_before_login};
+    
+        # The SC Status message does not include an institution, but expects
+        # one in return.  Use the configuration for the first institution.
+        # Maybe the SIP server itself should track which institutoin its
+        # instance is configured to use?  That may multiple servers could
+        # run, one per institution.
+        $instname = $config->{institutions}->[0]->{id};
+    }
+
+    my ($instconf) = 
+        grep {$_->{id} eq $instname} @{$config->{institutions}};
+
+    if (!$instconf) {
+        $logger->warn("SIP2: No config for institution '$instname'");
+        $instconf = {supports => []};
+    }
 
     my $response = {
         code => '98',

@@ -12,7 +12,6 @@ CREATE TABLE config.sip_account (
     usr             BIGINT NOT NULL REFERENCES actor.usr(id)
                     DEFERRABLE INITIALLY DEFERRED,
     workstation     INTEGER REFERENCES actor.workstation(id),
-    activity_type   INTEGER REFERENCES config.usr_activity_type(id),
     av_format       TEXT -- e.g. '3m'
 );
 
@@ -35,10 +34,22 @@ INSERT INTO actor.passwd_type (code, name, login, crypt_algo, iter_count)
 -- Example linking a SIP password to the 'admin' account.
 SELECT actor.set_passwd(1, 'sip2', 'sip_password');
 
+INSERT INTO actor.workstation (name, owning_lib) VALUES ('BR1-SIP2-Gateway', 4);
+
+INSERT INTO config.sip_account(
+    institution, sip_username, sip_password, usr, workstation, av_format
+) VALUES (
+    'example', 'admin', 
+    (SELECT id FROM actor.passwd WHERE usr = 1 AND passwd_type = 'sip2'),
+    1, 
+    (SELECT id FROM actor.workstation WHERE name = 'BR1-SIP2-Gateway'), 
+    '3m'
+);
+
 INSERT INTO config.sip_setting (institution, name, value)
 VALUES 
     ('*',       'allow_sc_status_before_login', 'true'),
-    ('*',       'currency', 'USD'),
+    ('*',       'currency', '"USD"'),
     ('example', 'due_date_use_sip_date_format', 'false'),
     ('example', 'patron_status_permit_loans', 'false'),
     ('example', 'patron_status_permit_all', 'false'), 
