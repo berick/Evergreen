@@ -308,7 +308,7 @@ sub get_patron_penalties {
                     {stop_date => {'>' => 'now'}}
                 ],
                 org_unit => 
-                    $U->get_org_full_path($session->ils_login->ws_ou)
+                    $U->get_org_full_path($session->editor->requestor->ws_ou)
             }
         }
     });

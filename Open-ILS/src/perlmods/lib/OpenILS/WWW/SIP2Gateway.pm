@@ -21,6 +21,7 @@ use strict; use warnings;
 use OpenSRF::Utils::Cache;
 use OpenSRF::Utils::Logger q/$logger/;
 use OpenILS::Application::AppUtils;
+use OpenILS::Utils::CStoreEditor q/:funcs/;
 my $U = 'OpenILS::Application::AppUtils';
 
 # Cache instances cannot be created until opensrf is connected.
@@ -42,18 +43,30 @@ sub from_cache {
     my $ses = cache()->get_cache("sip2_$seskey");
 
     if ($ses) {
-        return $class->new(
+
+        my $session = $class->new(
             seskey => $seskey, 
-            sip_account => $ses->{sip_account},
-            ils_login => $ses->{ils_login},
-            ils_authtoken => $ses->{ils_authtoken}
+            sip_account => $ses->{sip_account}
         );
+
+        $session->editor->authtoken($ses->{ils_authtoken});
+
+        return $session if $session->set_ils_account;
+
+        return undef;
 
     } else {
 
         $logger->warn("SIP2: No session found in cache for key $seskey");
         return undef;
     }
+}
+
+# The editor contains the authtoken and ILS user account (requestor).
+sub editor {
+    my $self = shift;
+    $self->{editor} = new_editor() unless $self->{editor};
+    return $self->{editor};
 }
 
 sub seskey {
@@ -67,49 +80,39 @@ sub sip_account {
     return $self->{sip_account};
 }
 
-sub ils_login {
-    my $self = shift;
-    return $self->{ils_login};
-}
-
-sub ils_authtoken {
-    my $self = shift;
-    return $self->{ils_authtoken};
-}
-
 # Logs in to Evergreen and caches the auth token/login with the SIP
 # account data.
 # Returns true on success, false on failure to authenticate.
-sub authenticate {
-    my ($self, $sip_account) = @_;
+sub set_ils_account {
+    my $self = shift;
+
+    # Verify previously applied authtoken is still valid.
+    return 1 if $self->editor->authtoken && $self->editor->checkauth;
 
     my $seskey = $self->seskey;
 
     my $auth = $U->simplereq(
         'open-ils.auth_internal',
         'open-ils.auth_internal.session.create', {
-        user_id => $sip_account->usr,
-        workstation => $sip_account->workstation->name,
+        user_id => $self->sip_account->usr,
+        workstation => $self->sip_account->workstation->name,
         login_type => 'staff'
     });
 
     if ($auth->{textcode} ne 'SUCCESS') {
         $logger->warn(
-            "SIP2 login failed for ILS user: ".$sip_account->usr);
+            "SIP2 failed to create an internal login session for ILS user: ".
+            $self->sip_account->usr);
         return 0;
     }
 
     my $ses = {
-        sip_account => $sip_account, 
+        sip_account => $self->sip_account, 
         ils_authtoken => $auth->{payload}->{authtoken}
     };
 
-    # cache the login user as well
-    $ses->{ils_login} = $U->simplereq(
-        'open-ils.auth',
-        'open-ils.auth.session.retrieve',
-        $ses->{ils_authtoken}
-    );
+    $self->editor->authtoken($ses->{ils_authtoken});
+    $self->editor->checkauth;
 
     cache()->put_cache("sip2_$seskey", $ses);
     return 1;
@@ -167,6 +170,9 @@ sub import {
     $osrf_config = shift;
 }
 
+# We need a global pcrud editor for pre-auth activities.
+# Each SIPSession will have its own post-auth pcrud editor.
+my $editor;
 my $config;
 my $init_complete = 0;
 sub init {
@@ -176,9 +182,9 @@ sub init {
     OpenSRF::System->bootstrap_client(config_file => $osrf_config);
     OpenILS::Utils::CStoreEditor->init;
 
-    my $e = new_editor();
+    $editor = new_editor();
 
-    my $settings = $e->retrieve_all_config_sip_setting;
+    my $settings = $editor->retrieve_all_config_sip_setting;
 
     $config = {institutions => []};
 
@@ -332,7 +338,7 @@ sub handle_login {
 
     my $sip_username = get_field_value($message, 'CN');
     my $sip_password = get_field_value($message, 'CO');
-    my $sip_account = new_editor()->search_config_sip_account([
+    my $sip_account = $editor->search_config_sip_account([
         {sip_username => $sip_username, enabled => 't'}, 
         {flesh => 1, flesh_fields => {csa => ['workstation']}}
     ])->[0];
@@ -343,11 +349,13 @@ sub handle_login {
     }
 
     if ($U->verify_user_password(
-        new_editor(), $sip_account->usr, $sip_password, 'sip2')) {
+        $editor, $sip_account->usr, $sip_password, 'sip2')) {
     
-        my $session = OpenILS::WWW::SIPSession->new(seskey => $seskey);
-        $response->{fixed_fields}->[0] = '1' 
-            if $session->authenticate($sip_account);
+        my $session = OpenILS::WWW::SIPSession->new(
+            seskey => $seskey,
+            sip_account => $sip_account
+        );
+        $response->{fixed_fields}->[0] = '1' if $session->set_ils_account;
 
     } else {
         $logger->info("SIP2: login failed for user=$sip_username")
