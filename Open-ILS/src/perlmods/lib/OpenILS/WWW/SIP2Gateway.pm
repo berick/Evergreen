@@ -315,18 +315,6 @@ sub get_field_value {
     return undef;
 }
 
-# Returns the configuation chunk mapped to the requested institution.
-sub get_inst_config {
-    my $institution = shift;
-    my ($instconf) = grep {$_->{id} eq $institution} @{$config->{institutions}};
-
-    $logger->error(
-        "SIP2: has no configuration for institution: $institution")
-        unless $instconf;
-
-    return $instconf;
-}
-
 # Login to Evergreen and cache the login data.
 sub handle_login {
     my ($seskey, $message) = @_;
