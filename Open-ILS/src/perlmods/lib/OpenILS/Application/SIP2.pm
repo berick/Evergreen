@@ -210,8 +210,8 @@ sub handle_patron_info {
     my ($session, $message) = @_;
     my $sip_account = $session->sip_account;
 
-    my $barcode = get_field_value($message, 'AA');
-    my $password = get_field_value($message, 'AD');
+    my $barcode = $SC->get_field_value($message, 'AA');
+    my $password = $SC->get_field_value($message, 'AD');
 
     my $summary = 
         ref $message->{fixed_fields} ? $message->{fixed_fields}->[2] : '';
@@ -236,12 +236,12 @@ sub handle_patron_info {
 
     push(
         @{$response->{fixed_fields}}, 
-        count4($pdetails->{holds_count}),
-        count4($pdetails->{overdue_count}),
-        count4($pdetails->{out_count}),
-        count4($pdetails->{fine_count}),
-        count4($pdetails->{recall_count}),
-        count4($pdetails->{unavail_holds_count})
+        $SC->count4($pdetails->{holds_count}),
+        $SC->count4($pdetails->{overdue_count}),
+        $SC->count4($pdetails->{out_count}),
+        $SC->count4($pdetails->{fine_count}),
+        $SC->count4($pdetails->{recall_count}),
+        $SC->count4($pdetails->{unavail_holds_count})
     );
 
     # TODO: Add 

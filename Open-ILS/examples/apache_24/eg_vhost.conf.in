@@ -612,7 +612,7 @@ RewriteRule ^/conify/([a-z]{2}-[A-Z]{2})/global/(.*)$ /conify/global/$2 [E=local
 
 <Location /sip2-mediator>
     SetHandler perl-script
-    PerlHandler OpenILS::WWW::SIP2Gateway
+    PerlHandler OpenILS::WWW::SIP2Mediator
     Options +ExecCGI
     Require all granted
 </Location>
