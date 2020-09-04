@@ -30,6 +30,18 @@ CREATE TABLE config.sip_setting (
 INSERT INTO actor.passwd_type (code, name, login, crypt_algo, iter_count)
     VALUES ('sip2', 'SIP2 Client Password', FALSE, 'bf', 5);
 
+INSERT INTO config.sip_setting (institution, name, value)
+VALUES 
+    ('*', 'allow_sc_status_before_login', 'true'),
+    ('*', 'currency', '"USD"'),
+    ('*', 'due_date_use_sip_date_format', 'false'),
+    ('*', 'patron_status_permit_loans', 'false'),
+    ('*', 'patron_status_permit_all', 'false'), 
+    ('*', 'msg64_summary_datatype', '"title"'),
+    ('*', 'msg64_hold_items_available', '"title"')
+;
+
+
 /* EXAMPLE SETTINGS
 
 -- Example linking a SIP password to the 'admin' account.
@@ -47,15 +59,6 @@ INSERT INTO config.sip_account(
     '3m'
 );
 
-INSERT INTO config.sip_setting (institution, name, value)
-VALUES 
-    ('*',       'allow_sc_status_before_login', 'true'),
-    ('*',       'currency', '"USD"'),
-    ('example', 'due_date_use_sip_date_format', 'false'),
-    ('example', 'patron_status_permit_loans', 'false'),
-    ('example', 'patron_status_permit_all', 'false'), 
-    ('example', 'msg64_hold_items_available', 'false')
-;
 
 */
 

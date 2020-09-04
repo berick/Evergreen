@@ -209,8 +209,8 @@ sub handle_patron_info {
         summary_list_items => $list_items
     );
 
-    my $response = patron_response_common_data(
-        $session, $barcode, $password, $pdetails);
+    my $response = 
+        patron_response_common_data($session, $barcode, $password, $pdetails);
 
     $response->{code} = '64';
 
@@ -236,6 +236,10 @@ sub handle_patron_info {
     if ($list_items eq 'hold_items') {
         for my $hold (@{$pdetails->{hold_items}}) {
             push(@{$response->{fields}}, {AS => $hold});
+        }
+    } elsif ($list_items eq 'charged_items') {
+        for my $item (@{$pdetails->{items_out}}) {
+            push(@{$response->{fields}}, {AU => $item});
         }
     }
 

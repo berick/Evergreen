@@ -97,6 +97,8 @@ sub set_patron_summary_items {
         my $out_ids = [ grep {$_ > 0} split(',', $circ_summary->out) ];
         $details->{overdue_count} = scalar(@$overdue_ids);
         $details->{out_count} = scalar(@$out_ids) + scalar(@$overdue_ids);
+        $details->{items_overdue_ids} = $overdue_ids;
+        $details->{items_out_ids} = $out_ids;
     }
 
     my $xacts = $U->simplereq(
@@ -151,16 +153,21 @@ sub set_patron_summary_list_items {
     my $e = $session->editor;
 
     my $list_items = $params{summary_list_items};
-    my $offset = $params{summary_start_item} || 0;
-    my $end_item = $params{summary_end_item} || 10;
-    my $limit = $end_item - $offset;
 
-    add_hold_items($e, $session, $details, $offset, $limit)
+    # Start and end are 1-based.  Translate to zero-based for internal use.
+    my $offset = $params{summary_start_item} ? $params{summary_start_item} - 1 : 0;
+    my $end = $params{summary_end_item} ? $params{summary_end_item} - 1 : 10;
+    my $limit = $end - $offset;
+
+    add_hold_items($session, $details, $offset, $limit)
         if $list_items eq 'hold_items';
+
+    add_items_out($session, $details, $offset, $limit)
+        if $list_items eq 'charged_items';
 }
 
 sub add_hold_items {
-    my ($e, $session, $details, $offset, $limit) = @_;
+    my ($session, $details, $offset, $limit) = @_;
 
     my $patron = $details->{patron};
     my $format = $session->config->{msg64_hold_datatype} || '';
@@ -168,13 +175,13 @@ sub add_hold_items {
 
     my @hold_items;
     for my $hold_id (@$hold_ids) {
-        my $hold = $e->retrieve_action_hold_request($hold_id);
+        my $hold = $session->editor->retrieve_action_hold_request($hold_id);
 
         if ($format eq 'barcode') {
-            my $copy = find_copy_for_hold($e, $hold);
+            my $copy = find_copy_for_hold($session, $hold);
             push(@hold_items, $copy->barcode) if $copy;
         } else {
-            my $title = find_title_for_hold($e, $hold);
+            my $title = find_title_for_hold($session, $hold);
             push(@hold_items, $title) if $title;
         }
     }
@@ -182,9 +189,58 @@ sub add_hold_items {
     $details->{hold_items} = \@hold_items;
 }
 
+sub add_items_out {
+    my ($session, $details, $offset, $limit) = @_;
+    my $patron = $details->{patron};
+
+    my $format = $session->config->{settings}->{msg64_summary_datatype} || '';
+
+    my @circ_ids = (@{$details->{items_out_ids}}, @{$details->{items_overdue_ids}});
+
+    @circ_ids = grep { $_ } @circ_ids[$offset .. ($offset + $limit - 1)];
+
+    $details->{items_out} = [];
+    for my $circ_id (@circ_ids) {
+        my $value;
+
+        if ($format eq 'barcode') {
+            my $circ = $session->editor->retrieve_action_circulation([
+                $circ_id, {
+                flesh => 1,
+                flesh_fields => {circ => ['target_copy']}
+            }]);
+
+            $value = $circ->target_copy->barcode;
+            
+        } else { # title
+
+            my $circ = $session->editor->retrieve_action_circulation([
+                $circ_id, {
+                flesh => 4,
+                flesh_fields => {
+                    circ => ['target_copy'],
+                    acp => ['call_number'],
+                    acn => ['record'],
+                    bre => ['simple_record']
+                }
+            }]);
+
+            if ($circ->target_copy->call_number == -1) {
+                $value = $circ->target_copy->dummy_title;
+            } else {
+                $value = 
+                    $circ->target_copy->call_number->record->simple_record->title;
+            }
+        }
+
+        push(@{$details->{items_out}}, $value);
+    }
+}
+
 # Hold -> reporter.hold_request_record -> display field for title.
 sub find_title_for_hold {
-    my ($e, $hold) = @_;
+    my ($session, $hold) = @_;
+    my $e = $session->editor;
 
     my $bib_link = $e->retrieve_reporter_hold_request_record($hold->id);
 
@@ -199,7 +255,8 @@ sub find_title_for_hold {
 # "representative" copy is that it cannot be deleted.  Otherwise, any
 # copy that allows us to find the hold later is good enough.
 sub find_copy_for_hold {
-    my ($e, $hold) = @_;
+    my ($session, $hold) = @_;
+    my $e = $session->editor;
 
     return $e->retrieve_asset_copy($hold->current_copy)
         if $hold->current_copy; 
@@ -298,5 +355,6 @@ sub get_patron_penalties {
         }
     });
 }
+
 
 1;
