@@ -39,4 +39,20 @@ sub get_field_value {
     return undef;
 }
 
+# Determines which class of data the SIP client wants detailed
+# information on in the patron info request.
+sub patron_summary_list_items {
+    my ($class, $summary) = @_;
+
+    my $idx = index($summary, 'Y');
+
+    return 'hold_items'        if $idx == 0;
+    return 'overdue_items'     if $idx == 1;
+    return 'charged_items'     if $idx == 2;
+    return 'fine_items'        if $idx == 3;
+    return 'recall_items'      if $idx == 4;
+    return 'unavailable_holds' if $idx == 5;
+    return '';
+}
+
 1;

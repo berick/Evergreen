@@ -198,7 +198,7 @@ sub handle_patron_info {
     my $summary = 
         ref $message->{fixed_fields} ? $message->{fixed_fields}->[2] : '';
 
-    my $list_items = patron_summary_list_items($summary);
+    my $list_items = $SC->patron_summary_list_items($summary);
 
     my $pdetails = OpenILS::Application::SIP2::Patron->get_patron_details(
         $session,
@@ -227,8 +227,6 @@ sub handle_patron_info {
     );
 
     # TODO: Add 
-    # overdue items AT variable-length optional field (this field should be sent for each overdue item).
-    # charged items AU variable-length optional field (this field should be sent for each charged item).
     # fine items AV variable-length optional field (this field should be sent for each fine item).
     # recall items BU variable-length optional field (this field should be sent for each recall item).
     # unavailable hold items CD variable-length optional field (this field should be sent for each unavailable hold item).
@@ -240,6 +238,10 @@ sub handle_patron_info {
     } elsif ($list_items eq 'charged_items') {
         for my $item (@{$pdetails->{items_out}}) {
             push(@{$response->{fields}}, {AU => $item});
+        }
+    } elsif ($list_items eq 'overdue_items') {
+        for my $item (@{$pdetails->{overdue_items}}) {
+            push(@{$response->{fields}}, {AT => $item});
         }
     }
 
@@ -323,22 +325,6 @@ sub patron_response_common_data {
             {CQ => $SC->sipbool($password)}     # password verified if exists
         ]
     };
-}
-
-# Determines which class of data the SIP client wants detailed
-# information on in the patron info request.
-sub patron_summary_list_items {
-    my $summary = shift;
-
-    my $idx = index($summary, 'Y');
-
-    return 'hold_items'        if $idx == 0;
-    return 'overdue_items'     if $idx == 1;
-    return 'charged_items'     if $idx == 2;
-    return 'fine_items'        if $idx == 3;
-    return 'recall_items'      if $idx == 4;
-    return 'unavailable_holds' if $idx == 5;
-    return '';
 }
 
 1;

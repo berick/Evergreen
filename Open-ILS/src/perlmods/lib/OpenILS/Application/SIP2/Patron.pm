@@ -164,6 +164,13 @@ sub set_patron_summary_list_items {
 
     add_items_out($session, $details, $offset, $limit)
         if $list_items eq 'charged_items';
+
+    add_items_out($session, $details, $offset, $limit)
+        if $list_items eq 'charged_items';
+
+    add_fine_items($session, $details, $offset, $limit)
+        if $list_items eq 'fine_items';
+
 }
 
 sub add_hold_items {
@@ -193,48 +200,69 @@ sub add_items_out {
     my ($session, $details, $offset, $limit) = @_;
     my $patron = $details->{patron};
 
-    my $format = $session->config->{settings}->{msg64_summary_datatype} || '';
-
     my @circ_ids = (@{$details->{items_out_ids}}, @{$details->{items_overdue_ids}});
 
     @circ_ids = grep { $_ } @circ_ids[$offset .. ($offset + $limit - 1)];
 
     $details->{items_out} = [];
     for my $circ_id (@circ_ids) {
-        my $value;
-
-        if ($format eq 'barcode') {
-            my $circ = $session->editor->retrieve_action_circulation([
-                $circ_id, {
-                flesh => 1,
-                flesh_fields => {circ => ['target_copy']}
-            }]);
-
-            $value = $circ->target_copy->barcode;
-            
-        } else { # title
-
-            my $circ = $session->editor->retrieve_action_circulation([
-                $circ_id, {
-                flesh => 4,
-                flesh_fields => {
-                    circ => ['target_copy'],
-                    acp => ['call_number'],
-                    acn => ['record'],
-                    bre => ['simple_record']
-                }
-            }]);
-
-            if ($circ->target_copy->call_number == -1) {
-                $value = $circ->target_copy->dummy_title;
-            } else {
-                $value = 
-                    $circ->target_copy->call_number->record->simple_record->title;
-            }
-        }
-
+        my $value = circ_id_to_value($session, $circ_id);
         push(@{$details->{items_out}}, $value);
     }
+}
+
+sub add_overdue_items {
+    my ($session, $details, $offset, $limit) = @_;
+    my $patron = $details->{patron};
+
+    my @circ_ids = @{$details->{items_overdue_ids}};
+
+    @circ_ids = grep { $_ } @circ_ids[$offset .. ($offset + $limit - 1)];
+
+    $details->{overdue_items} = [];
+    for my $circ_id (@circ_ids) {
+        my $value = circ_id_to_value($session, $circ_id);
+        push(@{$details->{items_out}}, $value);
+    }
+}
+
+sub circ_id_to_value {
+    my ($session, $circ_id) = @_;
+
+    my $value = '';
+    my $format = $session->config->{settings}->{msg64_summary_datatype} || '';
+
+    if ($format eq 'barcode') {
+        my $circ = $session->editor->retrieve_action_circulation([
+            $circ_id, {
+            flesh => 1,
+            flesh_fields => {circ => ['target_copy']}
+        }]);
+
+        $value = $circ->target_copy->barcode;
+        
+    } else { # title
+
+        my $circ = $session->editor->retrieve_action_circulation([
+            $circ_id, {
+            flesh => 4,
+            flesh_fields => {
+                circ => ['target_copy'],
+                acp => ['call_number'],
+                acn => ['record'],
+                bre => ['simple_record']
+            }
+        }]);
+
+        if ($circ->target_copy->call_number == -1) {
+            $value = $circ->target_copy->dummy_title;
+        } else {
+            $value = 
+                $circ->target_copy->call_number->record->simple_record->title;
+        }
+    }
+
+    return $value;
 }
 
 # Hold -> reporter.hold_request_record -> display field for title.
@@ -354,6 +382,114 @@ sub get_patron_penalties {
             }
         }
     });
+}
+
+sub add_fine_items {
+    my ($session, $details, $offset, $limit) = @_;
+    my $patron = $details->{patron};
+    my $e = $session->editor;
+
+    my @fines;
+    my $AV_format = lc($session->sip_account->av_format) || 'eg_legacy';
+
+    # Do a prescan for validity and default to eg_legacy
+    if ($AV_format ne "swyer_a" &&
+        $AV_format ne "swyer_b" &&
+        $AV_format ne "eg_legacy" &&
+        $AV_format ne "3m") {
+
+        syslog(LOG_WARNING => "SIP2 Unknown value for AV_format: $AV_format");
+        $AV_format = "eg_legacy";
+    }
+
+    my $xacts = $U->simplereq(
+        'open-ils.actor',
+        'open-ils.actor.user.transactions.history.have_balance',
+        $e->authtoken, $patron->id
+    );
+
+    foreach my $xact (@{$xacts}) {
+        my ($title, $author, $line, $fee_type);
+
+        if ($xact->last_billing_type =~ /^Lost/) {
+            $fee_type = 'LOST';
+        } elsif ($xact->last_billing_type =~ /^Overdue/) {
+            $fee_type = 'FINE';
+        } else {
+            $fee_type = 'FEE';
+        }
+
+        if ($xact->xact_type eq 'circulation') {
+            my $circ = $e->retrieve_action_circulation([
+                $xact->id, {
+                    flesh => 2,
+                    flesh_fields => {
+                        circ => ['target_copy'],
+                        acp => ['call_number']
+                    }
+                }
+            ]);
+
+            my $displays = $e->search_metabib_flat_display_entry({
+                source => $circ->target_copy->call_number->record,
+                name => ['title', 'author']
+            });
+
+            ($title) = map {$_->value} grep {$_->name eq 'title'} @$displays;
+            ($author) = map {$_->value} grep {$_->name eq 'author'} @$displays;
+
+            # Scrub "/" chars since they are used in some cases 
+            # to delineate title/author.
+            if ($title) {
+                $title =~ s/\///g;
+            } else {
+                $title = '';
+            }
+
+            if ($author) {
+                $author =~ s/\///g;
+            } else {
+                $author = '';
+            }
+        }
+
+        if ($AV_format eq "eg_legacy") {
+
+            $line = $xact->balance_owed . " " . $xact->last_billing_type . " ";
+
+            if ($xact->xact_type eq 'circulation') {
+                $line .= "$title / $author";
+            } else {
+                $line .= $xact->last_billing_note;
+            }
+
+        } elsif ($AV_format eq "3m" or $AV_format eq "swyer_a") {
+
+            $line = $xact->id . ' $' . $xact->balance_owed . " \"$fee_type\" ";
+
+            if ($xact->xact_type eq 'circulation') {
+                $line .= "$title";
+            } else {
+                $line .= $xact->last_billing_note;
+            }
+
+        } elsif ($AV_format eq "swyer_b") {
+
+            $line =   "Charge-Number: " . $xact->id;
+            $line .=  ", Amount-Due: "  . $xact->balance_owed;
+            $line .=  ", Fine-Type: $fee_type";
+
+            if ($xact->xact_type eq 'circulation') {
+                $line .= ", Title: $title";
+            } else {
+                $line .= ", Title: " . $xact->last_billing_note;
+            }
+        }
+
+        push @fines, $line;
+    }
+
+    $details->{fine_items} = \@fines;
 }
 
 
