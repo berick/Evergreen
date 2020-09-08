@@ -54,6 +54,8 @@ sub handler {
     my $seskey = $cgi->param('session');
     my $msg_json = $cgi->param('message');
 
+    # sip2-mediator generates a unique key for each client session.
+    # This key is required even if the client has not yet authenticated.
     return Apache2::Const::FORBIDDEN unless $seskey;
 
     if ($msg_json) {
@@ -71,10 +73,17 @@ sub handler {
         'open-ils.sip2',
         'open-ils.sip2.request', $seskey, $message);
 
-    if (my $textcode = $response->{textcode}) {
-        # we got an event instead of a SIP response
-        $logger->error("SIP2: Request returned $textcode: $msg_json");
-        # TODO: Could return more context-specific responses.
+    if (!$response) {
+        $logger->error("SIP2: API Request returned no value for: $msg_json");
+        return Apache2::Const::HTTP_INTERNAL_SERVER_ERROR;
+
+    } elsif (my $textcode = $response->{textcode}) {
+
+        # SIP API returned a failure event
+        $logger->error("SIP2: API request returned $textcode: $msg_json");
+
+        return Apache2::Const::FORBIDDEN if $textcode eq 'PERM_FAILURE';
+
         return Apache2::Const::HTTP_BAD_REQUEST;
     }
 
