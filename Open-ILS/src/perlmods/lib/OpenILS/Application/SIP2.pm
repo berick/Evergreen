@@ -226,11 +226,6 @@ sub handle_patron_info {
         $SC->count4($pdetails->{unavail_holds_count})
     );
 
-    # TODO: Add 
-    # fine items AV variable-length optional field (this field should be sent for each fine item).
-    # recall items BU variable-length optional field (this field should be sent for each recall item).
-    # unavailable hold items CD variable-length optional field (this field should be sent for each unavailable hold item).
-
     if ($list_items eq 'hold_items') {
         for my $hold (@{$pdetails->{hold_items}}) {
             push(@{$response->{fields}}, {AS => $hold});
@@ -243,7 +238,17 @@ sub handle_patron_info {
         for my $item (@{$pdetails->{overdue_items}}) {
             push(@{$response->{fields}}, {AT => $item});
         }
+    } elsif ($list_items eq 'fine_items') {
+        for my $item (@{$pdetails->{fine_items}}) {
+            push(@{$response->{fields}}, {AV => $item});
+        }
+    } elsif ($list_items eq 'unavailable_holds') {
+        for my $item (@{$pdetails->{unavailable_holds}}) {
+            push(@{$response->{fields}}, {CD => $item});
+        }
     }
+
+    # NOTE: Recall Items (BU) is not supported.
 
     return $response;
 }

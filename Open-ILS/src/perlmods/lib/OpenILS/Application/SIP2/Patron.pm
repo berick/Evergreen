@@ -82,11 +82,11 @@ sub set_patron_summary_items {
 
     $details->{recall_count} = 0; # not supported
 
-    my $hold_ids = get_hold_ids($session, $patron);
-    $details->{holds_count} = scalar(@$hold_ids);
+    $details->{hold_ids} = get_hold_ids($session, $patron);
+    $details->{holds_count} = scalar(@{$details->{hold_ids}});
 
-    my $unavail_hold_ids = get_hold_ids($session, $patron, 1);
-    $details->{unavail_holds_count} = scalar(@$unavail_hold_ids);
+    $details->{unavailable_hold_ids} = get_hold_ids($session, $patron, 1);
+    $details->{unavail_holds_count} = scalar(@{$details->{unavailable_hold_ids}});
 
     $details->{overdue_count} = 0;
     $details->{out_count} = 0;
@@ -162,6 +162,9 @@ sub set_patron_summary_list_items {
     add_hold_items($session, $details, $offset, $limit)
         if $list_items eq 'hold_items';
 
+    add_hold_items($session, $details, $offset, $limit, 1)
+        if $list_items eq 'unavailable_holds';
+
     add_items_out($session, $details, $offset, $limit)
         if $list_items eq 'charged_items';
 
@@ -174,11 +177,12 @@ sub set_patron_summary_list_items {
 }
 
 sub add_hold_items {
-    my ($session, $details, $offset, $limit) = @_;
+    my ($session, $details, $offset, $limit, $unavailable) = @_;
 
     my $patron = $details->{patron};
     my $format = $session->config->{msg64_hold_datatype} || '';
-    my $hold_ids = get_hold_ids($session, $patron, 0, $offset, $limit);
+    my $hold_ids = $unavailable ? 
+        $details->{unavailable_hold_ids} : $details->{hold_ids};
 
     my @hold_items;
     for my $hold_id (@$hold_ids) {
@@ -430,13 +434,20 @@ sub add_fine_items {
                 }
             ]);
 
-            my $displays = $e->search_metabib_flat_display_entry({
-                source => $circ->target_copy->call_number->record,
-                name => ['title', 'author']
-            });
+            if ($circ->target_copy->call_number->id == -1) {
+                $title = $circ->target_copy->dummy_title;
+                $author = $circ->target_copy->dummy_author;
 
-            ($title) = map {$_->value} grep {$_->name eq 'title'} @$displays;
-            ($author) = map {$_->value} grep {$_->name eq 'author'} @$displays;
+            } else {
+
+                my $displays = $e->search_metabib_flat_display_entry({
+                    source => $circ->target_copy->call_number->record,
+                    name => ['title', 'author']
+                });
+
+                ($title) = map {$_->value} grep {$_->name eq 'title'} @$displays;
+                ($author) = map {$_->value} grep {$_->name eq 'author'} @$displays;
+            }
 
             # Scrub "/" chars since they are used in some cases 
             # to delineate title/author.
