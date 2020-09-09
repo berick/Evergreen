@@ -215,6 +215,7 @@ sub handle_patron_info {
     $response->{code} = '64';
 
     return $response unless $pdetails;
+    my $patron = $pdetails->{patron};
 
     push(
         @{$response->{fixed_fields}}, 
@@ -224,6 +225,15 @@ sub handle_patron_info {
         $SC->count4($pdetails->{fine_count}),
         $SC->count4($pdetails->{recall_count}),
         $SC->count4($pdetails->{unavail_holds_count})
+    );
+
+    push(
+        @{$response->{fields}}, 
+        {BE => $patron->email},
+        {PA => $SC->sipymd($patron->expire_date)},
+        {PB => $SC->sipymd($patron->dob, 1)},
+        {PC => $patron->profile->name},
+        {XI => $patron->id}
     );
 
     if ($list_items eq 'hold_items') {
@@ -327,13 +337,9 @@ sub patron_response_common_data {
         fields => [
             {AO => $session->config->{institution}},
             {AA => $barcode},
-            {BL => $SC->sipbool(1)},            # valid patron
-            {BV => $pdetails->{balance_owed}},  # fee amount
-            {CQ => $SC->sipbool($password)},    # password verified if exists
-            {PA => $SC->format_date($session, $patron->expire_date)},
-            ($patron->dob ? 
-                {PB => $SC->format_date($session, $patron->dob, 'dob')} : ()),
-            {PC => $patron->profile->name}
+            {BL => $SC->sipbool(1)},           # valid patron
+            {BV => $pdetails->{balance_owed}}, # fee amount
+            {CQ => $SC->sipbool($password)}    # password verified if exists
         ]
     };
 }
