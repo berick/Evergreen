@@ -302,6 +302,8 @@ sub patron_response_common_data {
             ]
         };
     }
+
+    my $patron = $pdetails->{patron};
  
     return {
         fixed_fields => [
@@ -309,7 +311,7 @@ sub patron_response_common_data {
             $SC->spacebool($pdetails->{renew_denied}),
             $SC->spacebool($pdetails->{recall_denied}),
             $SC->spacebool($pdetails->{holds_denied}),
-            $SC->spacebool($pdetails->{patron}->card->active eq 'f'),
+            $SC->spacebool($patron->card->active eq 'f'),
             $SC->spacebool(0), # too many charged
             $SC->spacebool($pdetails->{too_may_overdue}),
             $SC->spacebool(0), # too many renewals
@@ -327,7 +329,11 @@ sub patron_response_common_data {
             {AA => $barcode},
             {BL => $SC->sipbool(1)},            # valid patron
             {BV => $pdetails->{balance_owed}},  # fee amount
-            {CQ => $SC->sipbool($password)}     # password verified if exists
+            {CQ => $SC->sipbool($password)},    # password verified if exists
+            {PA => $SC->format_date($session, $patron->expire_date)},
+            ($patron->dob ? 
+                {PB => $SC->format_date($session, $patron->dob, 'dob')} : ()),
+            {PC => $patron->profile->name}
         ]
     };
 }

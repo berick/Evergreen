@@ -1,5 +1,6 @@
 package OpenILS::Application::SIP2::Common;
 use strict; use warnings;
+use OpenILS::Utils::DateTime qw/:datetime/;
 
 use constant SIP_DATE_FORMAT => "%Y%m%d    %H%M%S";
 
@@ -7,6 +8,46 @@ sub sipdate {
     my ($class, $date) = @_;
     $date ||= DateTime->now;
     return $date->strftime(SIP_DATE_FORMAT);
+}
+
+sub format_date {
+    my ($class, $session, $date, $type) = @_;
+    $type ||= '';
+
+    return "" unless $date;
+
+    my $dt = DateTime::Format::ISO8601->new-> parse_datetime(clean_ISO8601($date));
+
+    # actor.usr.dob stores dates without time/timezone, which causes
+    # DateTime to assume the date is stored as UTC.  Tell DateTime
+    # to use the local time zone, instead.
+    # Other dates will have time zones and should be parsed as-is.
+    $dt->set_time_zone('local') if $type eq 'dob';
+
+    my @time = localtime($dt->epoch);
+
+    my $year   = $time[5]+1900;
+    my $mon    = $time[4]+1;
+    my $day    = $time[3];
+    my $hour   = $time[2];
+    my $minute = $time[1];
+    my $second = $time[0];
+  
+    $date = sprintf("%04d%02d%02d", $year, $mon, $day);
+
+    # Due dates need hyphen separators and time of day as well
+    if ($type eq 'due') {
+
+        if ($session->config->{due_date_use_sip_date_format}) {
+            $date = $class->sipdate($dt);
+
+        } else {
+            $date = sprintf("%04d-%02d-%02d %02d:%02d:%02d", 
+                $year, $mon, $day, $hour, $minute, $second);
+        }
+    }
+
+    return $date;
 }
 
 # False == 'N'

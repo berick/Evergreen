@@ -328,6 +328,8 @@ sub set_patron_privileges {
     my $expire = DateTime::Format::ISO8601->new
         ->parse_datetime(clean_ISO8601($patron->expire_date));
 
+    $details->{expire_date} = $SC->format_date($patron->expire_date);
+
     if ($expire < DateTime->now) {
         $logger->info("SIP2 Patron account is expired; all privileges blocked");
         $details->{charge_denied} = 1;
