@@ -13,7 +13,7 @@ $json->allow_nonref(1);
 # Supported Messages (BX)
 # Currently hard-coded, since it's based on availabilty of functionality
 # in the code, but it could be moved into the database to limit access for 
-# specific institutions.
+# specific setting groups.
 use constant INSTITUTION_SUPPORTS => [ 
     'Y', # patron status request,
     'Y', # checkout,
@@ -49,35 +49,21 @@ sub config {
     my $self = shift;
     return $self->{config} if $self->{config};
 
-    my $inst = $self->sip_account->institution;
+    my $group = $self->editor->retrieve_config_sip_setting_group([
+        $self->sip_account->setting_group,
+        {flesh => 1, flesh_fields => {cssg => ['settings']}}
+    ]);
 
     my $config = {
-        institution => $inst,
-        settings => {
-            currency => 'USD' # TODO add db setting
-        },
+        institution => $group->institution,
         supports => INSTITUTION_SUPPORTS
     };
 
-    # Institution "*" provides default values for all institution configs.
-    my $settings = 
-        $self->editor->search_config_sip_setting({institution => ['*', $inst]});
+    # Decode and hashify settings for easy access
+    $config->{settings} = 
+        {map {$_->name => $json->decode($_->value)} @{$group->settings}};
 
-    # Institution specific settings.
-    for my $set (grep {$_->institution eq $inst} @$settings) {
-        $config->{settings}->{$set->name} = $json->decode($set->value);
-    }
-
-    # Apply values for global settings without replacing 
-    # institution-specific values.
-    for my $set (grep {$_->institution eq '*'} @$settings) {
-        my $name = $set->name;
-        my $value = $json->decode($set->value);
-
-        $config->{settings}->{$name} = $value 
-            unless exists $config->{settings}->{$name};
-    }
-
+    $logger->info("SIP settings " . $json->encode($config->{settings}));
     return $self->{config} = $config;
 }
 

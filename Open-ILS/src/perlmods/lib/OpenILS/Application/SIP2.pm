@@ -146,11 +146,11 @@ sub handle_item_info {
     my $barcode = $SC->get_field_value($message, 'AB');
     my $config = $session->config;
 
-    my $idetails = OpenILS::Application::SIP2::Item->get_item_details(
+    my $details = OpenILS::Application::SIP2::Item->get_item_details(
         $session, barcode => $barcode
     );
 
-    if (!$idetails) {
+    if (!$details) {
         # No matching item found, return a minimal response.
         return {
             code => '18',
@@ -167,23 +167,24 @@ sub handle_item_info {
     return {
         code => '18',
         fixed_fields => [
-            $idetails->{circ_status},
+            $details->{circ_status},
             '02', # Security Marker, consistent with ../SIP*
-            $idetails->{fee_type},
+            $details->{fee_type},
             $SC->sipdate
         ],
         fields => [
             {AB => $barcode},
-            {AH => $idetails->{due_date}},
-            {AJ => $idetails->{title}},
-            {AP => $idetails->{item}->circ_lib->shortname},
-            {AQ => $idetails->{item}->circ_lib->shortname},
-            {BG => $idetails->{item}->circ_lib->shortname},
+            {AH => $details->{due_date}},
+            {AJ => $details->{title}},
+            {AP => $details->{item}->circ_lib->shortname},
+            {AQ => $details->{item}->circ_lib->shortname},
+            {BG => $details->{item}->circ_lib->shortname},
             {BH => $config->{settings}->{currency}},
-            {BV => $idetails->{item}->deposit_amount},
-            {CF => $idetails->{hold_queue_length}},
-            {CK => $idetails->{media_type}},
-            {CM => $idetails->{hold_pickup_date}}
+            {BV => $details->{item}->deposit_amount},
+            {CF => $details->{hold_queue_length}},
+            {CK => $details->{media_type}},
+            {CM => $details->{hold_pickup_date}},
+            {CY => $details->{hold_patron_barcode}}
         ]
     };
 }
@@ -200,7 +201,7 @@ sub handle_patron_info {
 
     my $list_items = $SC->patron_summary_list_items($summary);
 
-    my $pdetails = OpenILS::Application::SIP2::Patron->get_patron_details(
+    my $details = OpenILS::Application::SIP2::Patron->get_patron_details(
         $session,
         barcode => $barcode,
         password => $password,
@@ -210,21 +211,21 @@ sub handle_patron_info {
     );
 
     my $response = 
-        patron_response_common_data($session, $barcode, $password, $pdetails);
+        patron_response_common_data($session, $barcode, $password, $details);
 
     $response->{code} = '64';
 
-    return $response unless $pdetails;
-    my $patron = $pdetails->{patron};
+    return $response unless $details;
+    my $patron = $details->{patron};
 
     push(
         @{$response->{fixed_fields}}, 
-        $SC->count4($pdetails->{holds_count}),
-        $SC->count4($pdetails->{overdue_count}),
-        $SC->count4($pdetails->{out_count}),
-        $SC->count4($pdetails->{fine_count}),
-        $SC->count4($pdetails->{recall_count}),
-        $SC->count4($pdetails->{unavail_holds_count})
+        $SC->count4($details->{holds_count}),
+        $SC->count4($details->{overdue_count}),
+        $SC->count4($details->{out_count}),
+        $SC->count4($details->{fine_count}),
+        $SC->count4($details->{recall_count}),
+        $SC->count4($details->{unavail_holds_count})
     );
 
     push(
@@ -237,23 +238,23 @@ sub handle_patron_info {
     );
 
     if ($list_items eq 'hold_items') {
-        for my $hold (@{$pdetails->{hold_items}}) {
+        for my $hold (@{$details->{hold_items}}) {
             push(@{$response->{fields}}, {AS => $hold});
         }
     } elsif ($list_items eq 'charged_items') {
-        for my $item (@{$pdetails->{items_out}}) {
+        for my $item (@{$details->{items_out}}) {
             push(@{$response->{fields}}, {AU => $item});
         }
     } elsif ($list_items eq 'overdue_items') {
-        for my $item (@{$pdetails->{overdue_items}}) {
+        for my $item (@{$details->{overdue_items}}) {
             push(@{$response->{fields}}, {AT => $item});
         }
     } elsif ($list_items eq 'fine_items') {
-        for my $item (@{$pdetails->{fine_items}}) {
+        for my $item (@{$details->{fine_items}}) {
             push(@{$response->{fields}}, {AV => $item});
         }
     } elsif ($list_items eq 'unavailable_holds') {
-        for my $item (@{$pdetails->{unavailable_holds}}) {
+        for my $item (@{$details->{unavailable_holds}}) {
             push(@{$response->{fields}}, {CD => $item});
         }
     }
@@ -270,14 +271,14 @@ sub handle_patron_status {
     my $barcode = $SC->get_field_value($message, 'AA');
     my $password = $SC->get_field_value($message, 'AD');
 
-    my $pdetails = OpenILS::Application::SIP2::Patron->get_patron_details(
+    my $details = OpenILS::Application::SIP2::Patron->get_patron_details(
         $session,
         barcode => $barcode,
         password => $password
     );
 
     my $response = patron_response_common_data(
-        $session, $barcode, $password, $pdetails);
+        $session, $barcode, $password, $details);
 
     $response->{code} = '24';
 
@@ -289,9 +290,9 @@ sub handle_patron_status {
 # Note we don't call Patron->get_patron_details here since different
 # messages collect different amounts of data.
 sub patron_response_common_data {
-    my ($session, $barcode, $password, $pdetails) = @_;
+    my ($session, $barcode, $password, $details) = @_;
 
-    if (!$pdetails) {
+    if (!$details) {
         # No such user.  Return a stub response with all things denied.
 
         return {
@@ -313,33 +314,34 @@ sub patron_response_common_data {
         };
     }
 
-    my $patron = $pdetails->{patron};
+    my $patron = $details->{patron};
  
     return {
         fixed_fields => [
-            $SC->spacebool($pdetails->{charge_denied}),
-            $SC->spacebool($pdetails->{renew_denied}),
-            $SC->spacebool($pdetails->{recall_denied}),
-            $SC->spacebool($pdetails->{holds_denied}),
+            $SC->spacebool($details->{charge_denied}),
+            $SC->spacebool($details->{renew_denied}),
+            $SC->spacebool($details->{recall_denied}),
+            $SC->spacebool($details->{holds_denied}),
             $SC->spacebool($patron->card->active eq 'f'),
             $SC->spacebool(0), # too many charged
-            $SC->spacebool($pdetails->{too_may_overdue}),
+            $SC->spacebool($details->{too_may_overdue}),
             $SC->spacebool(0), # too many renewals
             $SC->spacebool(0), # too many claims retruned
             $SC->spacebool(0), # too many lost
-            $SC->spacebool($pdetails->{too_many_fines}),
-            $SC->spacebool($pdetails->{too_many_fines}),
+            $SC->spacebool($details->{too_many_fines}),
+            $SC->spacebool($details->{too_many_fines}),
             $SC->spacebool(0), # recall overdue
-            $SC->spacebool($pdetails->{too_many_fines}),
+            $SC->spacebool($details->{too_many_fines}),
             '000', # language
             $SC->sipdate
         ],
         fields => [
-            {AO => $session->config->{institution}},
             {AA => $barcode},
-            {BL => $SC->sipbool(1)},           # valid patron
-            {BV => $pdetails->{balance_owed}}, # fee amount
-            {CQ => $SC->sipbool($password)}    # password verified if exists
+            {AO => $session->config->{institution}},
+            {BH => $session->config->{settings}->{currency}},
+            {BL => $SC->sipbool(1)},          # valid patron
+            {BV => $details->{balance_owed}}, # fee amount
+            {CQ => $SC->sipbool($password)}   # password verified if exists
         ]
     };
 }

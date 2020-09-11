@@ -90,10 +90,13 @@ sub get_item_details {
     }
 
 
-    if ($details->{hold}) {
-        my $pickup_date = $details->{hold}->shelf_expire_time;
+    if (my $hold = $details->{hold}) {
+        my $pickup_date = $hold->shelf_expire_time;
         $details->{hold_pickup_date} =
             $pickup_date ? $SC->sipdate($pickup_date) : undef;
+
+        my $card = $e->search_actor_card({usr => $hold->usr})->[0];
+        $details->{hold_patron_barcode} = $card->barcode if $card;
     }
 
     my ($title_entry) = grep {$_->name eq 'title'}
