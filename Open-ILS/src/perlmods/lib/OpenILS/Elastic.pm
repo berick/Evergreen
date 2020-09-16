@@ -532,7 +532,7 @@ sub search {
 
     $logger->info(
         sprintf("ES search found %d results in %0.3f seconds.",
-            $result->{hits}->{total}, $duration
+            $result->{hits}->{total}->{value}, $duration
         )
     );
 
