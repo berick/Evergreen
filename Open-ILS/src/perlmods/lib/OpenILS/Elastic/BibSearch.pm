@@ -205,7 +205,7 @@ my %SEARCH_CLASS_ALIAS_MAP = (
     su => 'subject.text',
     se => 'series.text',
     kw => 'keyword.text',
-    pu => 'keyword|publisher.text',
+    pb => 'keyword|publisher.text',
     id => 'identifier'
 );
 
