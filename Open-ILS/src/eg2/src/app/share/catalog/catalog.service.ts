@@ -329,7 +329,16 @@ export class CatalogService {
         }
 
         if (this.elastic.enabled && ctx.result.facets) {
-            ctx.result.facetData = this.elastic.formatFacets(ctx.result.facets);
+            // MARC searches also return facets, but we don't yet support
+            // using facets as filters for MARC searches.  It's certainly
+            // possible with ES, but it would require quite a few changes
+            // to stock files, which I'm hoping to avoid as much as possible.
+            // Only collect facets on 'term' searches for now so they
+            // otherwise remain hidden.
+            if (ctx.termSearch.isSearchable()) {
+                ctx.result.facetData =
+                    this.elastic.formatFacets(ctx.result.facets);
+            }
             return Promise.resolve();
         }
 
