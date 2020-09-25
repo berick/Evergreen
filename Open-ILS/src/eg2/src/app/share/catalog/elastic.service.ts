@@ -24,7 +24,7 @@ export class ElasticService {
 
     init(): Promise<any> {
         return this.pcrud.retrieveAll('ebf',
-            {select: {ebf: ["id", "name", "field_class", "label"]}}
+            {select: {ebf: ['id', 'name', 'field_class', 'label']}}
         ).pipe(tap(field => this.ebfMap[field.id()] = field)).toPromise();
     }
 
@@ -56,7 +56,7 @@ export class ElasticService {
 
         let method = ctx.termSearch.isMetarecordSearch() ?
             'open-ils.search.elastic.bib_search.metabib' :
-            'open-ils.search.elastic.bib_search'
+            'open-ils.search.elastic.bib_search';
 
         if (ctx.isStaff) { method += '.staff'; }
 

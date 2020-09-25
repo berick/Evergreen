@@ -388,7 +388,7 @@ export class CatalogService {
     checkSearchEngine(): Promise<any> {
         return this.pcrud.retrieve('cgf', 'elastic.bib_search.enabled')
         .toPromise().then(flag => {
-            if (flag && flag.enabled() == 't') {
+            if (flag && flag.enabled() === 't') {
                 this.elastic.enabled = true;
                 return this.elastic.init();
             }
