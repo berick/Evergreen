@@ -227,25 +227,14 @@ export class CatalogService {
 
         const isMeta = ctx.termSearch.isMetarecordSearch();
 
-        // When fetching batches of search results, fetch the first
-        // few records first so results lists can start rendering
-        // before the full data set has arrived and been processed.
-        let ids1 = ctx.currentResultIds();
-        let ids2 = [];
-        if (ids1.length > INITIAL_REC_BATCH_SIZE) {
-            ids1 = ctx.currentResultIds().slice(0, INITIAL_REC_BATCH_SIZE);
-            ids2 = ctx.currentResultIds().slice(INITIAL_REC_BATCH_SIZE);
-        }
-
         let observable: Observable<BibRecordSummary>;
-        const bibFunc = isMeta ? 'getMetabibSummary' : 'getBibSummary';
 
-        observable = this.bibService[bibFunc](ids1, ctx.searchOrg.id(), ctx.isStaff);
-
-        if (ids2.length > 0) {
-            observable = observable.pipe(merge(
-                this.bibService.getBibSummary(ids2, ctx.searchOrg.id(), ctx.isStaff)
-            ));
+        if (isMeta) {
+            observable = this.bibService.getMetabibSummaries(
+                ctx.currentResultIds(), ctx.searchOrg.id(), ctx.isStaff);
+        } else {
+            observable = this.bibService.getBibSummaries(
+                ctx.currentResultIds(), ctx.searchOrg.id(), ctx.isStaff);
         }
 
         return observable.pipe(map(summary => {
