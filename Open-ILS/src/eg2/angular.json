@@ -29,6 +29,7 @@
               "src/assets/js/marcrecord.js"
             ],
             "allowedCommonJsDependencies": [
+              "elastic-builder",
               "file-saver",
               "moment",
               "moment-timezone"
