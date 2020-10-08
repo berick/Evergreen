@@ -1,0 +1,50 @@
+<!-- Flex values are set to align with lineitem copies UI 
+    and the batch copy editor component -->
+
+<div class="div d-flex">
+  <div class="flex-1 p-1" i18n>
+    <eg-org-select #owningLibSelect placeholder="Owning Branch..." i18n-placeholder
+      (onChange)="copy.owning_lib($event ? $event.id() : null)">
+    </eg-org-select>
+  </div>  
+  <div class="flex-1 p-1" i18n>
+    <eg-item-location-select 
+      [startId]="copy.location()"
+      (valueChange)="copy.location($event ? $event.id() : null)"
+      permFilter="CREATE_PICKLIST">                         
+    </eg-item-location-select>
+  </div>
+  <div class="flex-1 p-1" i18n>
+    <input type="text" class="form-control" 
+      placeholder="Collection Code..." i18n-placeholder 
+      (ngModelChange)="copy.collection_code($event)"
+      [ngModel]="copy.collection_code()"/>
+  </div>
+  <div class="flex-1 p-1" i18n>
+    <eg-combobox idlClass="acqf" placeholder="Fund..." i18n-placeholder
+      [startId]="copy.fund()"
+      (onChange)="copy.fund($event ? $event.id : null)"
+      [idlQueryAnd]="{active: 't'}">
+    </eg-combobox>
+  </div>
+  <div class="flex-1 p-1" i18n>
+    <eg-combobox idlClass="ccm" placeholder="Circ Modifier..." i18n-placeholder
+      [startId]="copy.circ_modifier()"
+      (onChange)="copy.circ_modifier($event ? $event.id : null)">
+    </eg-combobox>
+  </div>
+  <div class="flex-1 p-1" i18n>
+    <input type="text" class="form-control" 
+      placeholder="Call Number..." i18n-placeholder
+      [ngModel]="copy.cn_label()" (ngModelChange)="copy.cn_label($event)">
+  </div>
+  <div class="flex-1 p-1">
+    <ng-container *ngIf="showBatchUpdate">
+      <button class="btn btn-outline-dark" 
+        (click)="saveRequested.emit(copy)" i18n>Batch Update</button>
+    </ng-container>
+  </div>
+  <div class="flex-1 p-1">
+  </div>
+</div>
+

@@ -1,0 +1,15 @@
+
+.jacket {
+  max-width: 40px;
+  max-height: 65px;
+}
+
+input[type="text"].form-control-sm { border-width: 1px; }
+
+.toolbar {
+  font-size: 115%;
+}
+
+
+
+
