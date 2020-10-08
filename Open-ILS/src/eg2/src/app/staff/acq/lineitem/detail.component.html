@@ -1,0 +1,15 @@
+<button class="btn btn-sm btn-outline-primary mt-2" (click)="closeRequested.emit()" i18n>
+  Return
+</button>
+
+<hr class="p-1"/>
+
+<div class="row" *ngFor="let attr of lineitem.attributes()">
+  <div class="col-lg-2">{{attrLabel(attr)}}</div>
+  <div class="col-lg-10 border-left">{{attr.attr_value()}}</div>
+</div>
+
+<hr class="p-1"/>
+
+<eg-marc-html recordType="bib" [recordId]="lineitem.eg_bib_id()" 
+  [recordXml]="lineitem.marc()"> </eg-marc-html>

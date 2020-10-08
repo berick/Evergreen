@@ -1,0 +1,34 @@
+
+<!-- Note the flex values are set so they also match the layout
+     of the list of copies in the copies component. -->
+
+<ng-template #copyAttrsHeader let-moreCss="moreCss">
+  <div class="div d-flex font-weight-bold {{moreCss}}">
+    <div class="flex-1 p-1" i18n>Owning Branch</div>  
+    <div class="flex-1 p-1" i18n>Copy Location</div>
+    <div class="flex-1 p-1" i18n>Collection Code</div>
+    <div class="flex-1 p-1" i18n>Fund</div>
+    <div class="flex-1 p-1" i18n>Circ Modifier</div>
+    <div class="flex-1 p-1" i18n>Callnumber</div>
+    <div class="flex-1 p-1"></div>
+    <div class="flex-1 p-1"></div>
+  </div>
+</ng-template>
+
+<!-- move to copy attrs component -->
+<ng-container
+  *ngTemplateOutlet="copyAttrsHeader;context:{moreCss:'mt-3 bg-light border border-secondary'}">
+</ng-container>
+
+<div class="pt-2 bg-light border border-secondary border-top-0 rounded-bottom">
+  <eg-lineitem-copy-attrs (saveRequested)="attrsSaveRequested($event)"
+    [showBatchUpdate]="true"> </eg-lineitem-copy-attrs>
+</div>
+
+<div class="mt-2 border-bottom border-secondary" *ngFor="let copy of copies">
+  <eg-lineitem-copy-attrs [copy]="copy"></eg-lineitem-copy-attrs>
+</div>
+
+
+
+

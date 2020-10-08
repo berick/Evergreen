@@ -1,0 +1,19 @@
+
+<eg-staff-banner i18n-bannerText
+  bannerText="#{{id}} - Lineitem Worksheet"></eg-staff-banner>
+
+<div class="row">
+  <div class="p-2 m-2 ml-4">
+    <button class="btn btn-outline-dark" (click)="printWorksheet()" i18n>
+      Print Worksheet
+    </button>
+  </div>
+  <div class="p-2 m-2 ml-4">
+    <button class="btn btn-outline-dark" (click)="printWorksheet(true)" i18n>
+      Print and Close
+    </button>
+  </div>
+</div>
+
+<div id="worksheet-outlet" class="m-3 p-3 w-90 border border-dark"></div>
+
