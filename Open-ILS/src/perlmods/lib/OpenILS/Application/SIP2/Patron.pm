@@ -62,12 +62,17 @@ sub get_patron_details {
 
     set_patron_summary_items($session, $details, %params);
     set_patron_summary_list_items($session, $details, %params);
-
-    $U->log_user_activity($patron->id, 
-        $session->sip_account->activity_who || $session->config->{default_activity_who}, 
-        'verify');
+    log_activity($session, $patron);
 
     return $details;
+}
+
+sub log_activity {
+    my ($session, $patron) = @_;
+
+    my $ewho = $session->sip_account->activity_who 
+        || $session->config->{default_activity_who};
+    $U->log_user_activity($patron->id, $ewho, 'verify');
 }
 
 

@@ -12,9 +12,9 @@ use OpenILS::Application::SIP2::Common;
 use OpenILS::Application::SIP2::Session;
 use OpenILS::Application::SIP2::Item;
 use OpenILS::Application::SIP2::Patron;
+
 my $U = 'OpenILS::Application::AppUtils';
 my $SC = 'OpenILS::Application::SIP2::Common';
-
 
 __PACKAGE__->register_method(
     method    => 'dispatch_sip2_request',
@@ -42,6 +42,8 @@ __PACKAGE__->register_method(
 
 sub dispatch_sip2_request {
     my ($self, $client, $seskey, $message) = @_;
+
+    OpenSRF::AppSession->ingress('sip2');
 
     return OpenILS::Event->new('SIP2_SESSION_REQUIRED') unless $seskey;
     my $msg_code = $message->{code};
