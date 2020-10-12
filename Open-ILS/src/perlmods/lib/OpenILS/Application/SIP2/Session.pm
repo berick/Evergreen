@@ -1,10 +1,10 @@
 package OpenILS::Application::SIPSession;
 use strict; use warnings;
 use JSON::XS;
-use OpenSRF::Utils::Cache;
 use OpenSRF::Utils::Logger q/$logger/;
 use OpenILS::Application::AppUtils;
 use OpenILS::Utils::CStoreEditor q/:funcs/;
+use OpenILS::Utils::Fieldmapper;
 my $U = 'OpenILS::Application::AppUtils';
 my $json = JSON::XS->new;
 $json->ascii(1);
@@ -33,13 +33,6 @@ use constant INSTITUTION_SUPPORTS => [
     'N', # renew all,
 ];
 
-# Cache instances cannot be created until opensrf is connected.
-my $_cache;
-sub cache {
-    $_cache = OpenSRF::Utils::Cache->new unless $_cache;
-    return $_cache;
-}
-
 sub new {
     my ($class, %args) = @_;
     return bless(\%args, $class);
@@ -49,9 +42,9 @@ sub config {
     my $self = shift;
     return $self->{config} if $self->{config};
 
-    my $group = $self->editor->retrieve_config_sip_setting_group([
+    my $group = $self->editor->retrieve_sip_setting_group([
         $self->sip_account->setting_group,
-        {flesh => 1, flesh_fields => {cssg => ['settings']}}
+        {flesh => 1, flesh_fields => {sipsetg => ['settings']}}
     ]);
 
     my $config = {
@@ -67,20 +60,20 @@ sub config {
     return $self->{config} = $config;
 }
 
-# Create a new sessesion from cached data.
-sub from_cache {
+# Retrieve an existing SIP session via SIP session token
+sub find {
     my ($class, $seskey) = @_;
 
-    my $ses = cache()->get_cache("sip2_$seskey");
+    my $session = $class->new(seskey => $seskey);
+    my $e = $session->editor;
+
+    my $ses = $e->retrieve_sip_session([
+        $seskey, {flesh => 1, flesh_fields => {sipses => ['account']}}]);
 
     if ($ses) {
+        $session->sip_account($ses->account);
 
-        my $session = $class->new(
-            seskey => $seskey, 
-            sip_account => $ses->{sip_account}
-        );
-
-        $session->editor->authtoken($ses->{ils_authtoken});
+        $e->authtoken($ses->ils_token);
 
         return $session if $session->set_ils_account;
 
@@ -88,7 +81,7 @@ sub from_cache {
 
     } else {
 
-        $logger->warn("SIP2: No session found in cache for key $seskey");
+        $logger->warn("SIP2: No session found for key $seskey");
         return undef;
     }
 }
@@ -116,9 +109,10 @@ sub sip_account {
 # Returns true on success, false on failure to authenticate.
 sub set_ils_account {
     my $self = shift;
+    my $e = $self->editor;
 
     # Verify previously applied authtoken is still valid.
-    return 1 if $self->editor->authtoken && $self->editor->checkauth;
+    return 1 if $e->authtoken && $e->checkauth;
 
     my $seskey = $self->seskey;
 
@@ -137,15 +131,22 @@ sub set_ils_account {
         return 0;
     }
 
-    my $ses = {
-        sip_account => $self->sip_account, 
-        ils_authtoken => $auth->{payload}->{authtoken}
-    };
+    # Ephemeral account sessions are not tracked in the database
+    return 1 if $U->is_true($self->sip_account->ephemeral);
 
-    $self->editor->authtoken($ses->{ils_authtoken});
-    $self->editor->checkauth;
+    my $ses = Fieldmapper::sip::account->new;
+    $ses->key($seskey);
+    $ses->ils_token($auth->{payload}->{authtoken});
+    $ses->account($self->sip_account->id);
 
-    cache()->put_cache("sip2_$seskey", $ses);
+    $e->xact_begin;
+    unless ($e->create_sip_session($ses)) {
+        $e->rolllback;
+        return 0;
+    }
+
+    $e->xact_commit;
+
     return 1;
 }
 

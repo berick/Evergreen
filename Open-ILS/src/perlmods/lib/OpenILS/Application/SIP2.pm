@@ -77,9 +77,9 @@ sub handle_login {
 
     my $sip_username = $SC->get_field_value($message, 'CN');
     my $sip_password = $SC->get_field_value($message, 'CO');
-    my $sip_account = $e->search_config_sip_account([
+    my $sip_account = $e->search_sip_account([
         {sip_username => $sip_username, enabled => 't'}, 
-        {flesh => 1, flesh_fields => {csa => ['workstation']}}
+        {flesh => 1, flesh_fields => {sipacc => ['workstation']}}
     ])->[0];
 
     if (!$sip_account) {
@@ -105,7 +105,7 @@ sub handle_login {
 sub handle_sc_status {
     my ($seskey, $message) = @_;
 
-    my $session = OpenILS::Application::SIPSession->from_cache($seskey);
+    my $session = OpenILS::Application::SIPSession->find($seskey);
 
     my $config;
 

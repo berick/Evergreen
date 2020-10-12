@@ -3,17 +3,21 @@ BEGIN;
 
 -- SELECT evergreen.upgrade_deps_block_check('TODO', :eg_version);
 
+DROP SCHEMA IF EXISTS sip CASCADE;
+
+CREATE SCHEMA sip;
+
 -- Collections of settings that can be linked to one or more SIP accounts.
-CREATE TABLE config.sip_setting_group (
-    id SERIAL   PRIMARY KEY,
+CREATE TABLE sip.setting_group (
+    id          SERIAL PRIMARY KEY,
     label       TEXT UNIQUE NOT NULL,
     institution TEXT NOT NULL -- Duplicates OK
 );
 
 -- Key/value setting pairs
-CREATE TABLE config.sip_setting (
+CREATE TABLE sip.setting (
     id SERIAL       PRIMARY KEY,
-    setting_group   INTEGER NOT NULL REFERENCES config.sip_setting_group (id)
+    setting_group   INTEGER NOT NULL REFERENCES sip.setting_group (id)
                     ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED,
     name            TEXT NOT NULL,
     description     TEXT NOT NULL,
@@ -21,10 +25,10 @@ CREATE TABLE config.sip_setting (
     CONSTRAINT      name_once_per_inst UNIQUE (setting_group, name)
 );
 
-CREATE TABLE config.sip_account (
+CREATE TABLE sip.account (
     id              SERIAL PRIMARY KEY,
     enabled         BOOLEAN NOT NULL DEFAULT TRUE,
-    setting_group   INTEGER NOT NULL REFERENCES config.sip_setting_group (id)
+    setting_group   INTEGER NOT NULL REFERENCES sip.setting_group (id)
                     DEFERRABLE INITIALLY DEFERRED,
     sip_username    TEXT NOT NULL,
     sip_password    BIGINT NOT NULL REFERENCES actor.passwd 
@@ -32,7 +36,16 @@ CREATE TABLE config.sip_account (
     usr             BIGINT NOT NULL REFERENCES actor.usr(id)
                     DEFERRABLE INITIALLY DEFERRED,
     workstation     INTEGER REFERENCES actor.workstation(id),
-    av_format       TEXT -- e.g. '3m'
+    -- sessions for ephemeral accounts are not tracked in sip.session
+    ephemeral       BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+CREATE TABLE sip.session (
+    key         TEXT PRIMARY KEY,
+    ils_token   TEXT NOT NULL UNIQUE,
+    account     INTEGER NOT NULL REFERENCES sip.account(id)
+                ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    create_time TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- SEED DATA
@@ -40,14 +53,18 @@ CREATE TABLE config.sip_account (
 INSERT INTO actor.passwd_type (code, name, login, crypt_algo, iter_count)
     VALUES ('sip2', 'SIP2 Client Password', FALSE, 'bf', 5);
 
-INSERT INTO config.sip_setting_group (label, institution) 
+INSERT INTO sip.setting_group (label, institution) 
     VALUES ('Example Setting Group', 'example');
 
-INSERT INTO config.sip_setting (setting_group, description, name, value)
+INSERT INTO sip.setting (setting_group, description, name, value)
 VALUES (
     (SELECT id FROM config.sip_setting_group WHERE institution = 'example'), 
     'Monetary amounts are reported in this currency',
     'currency', '"USD"'
+), (
+    (SELECT id FROM config.sip_setting_group WHERE institution = 'example'), 
+    'AV Format. Options: eg_legacy, 3m, swyer_a, swyer_b',
+    'av_format', '"eg_legacy"'
 ), (
     (SELECT id FROM config.sip_setting_group WHERE institution = 'example'), 
     'Allow clients to request the SIP server status before login (message 99)',
@@ -83,15 +100,14 @@ SELECT actor.set_passwd(1, 'sip2', 'sip_password');
 
 INSERT INTO actor.workstation (name, owning_lib) VALUES ('BR1-SIP2-Gateway', 4);
 
-INSERT INTO config.sip_account(
-    setting_group, sip_username, sip_password, usr, workstation, av_format
+INSERT INTO sip.account(
+    setting_group, sip_username, sip_password, usr, workstation
 ) VALUES (
     (SELECT id FROM config.sip_setting_group WHERE institution = 'example'), 
     'admin', 
     (SELECT id FROM actor.passwd WHERE usr = 1 AND passwd_type = 'sip2'),
     1, 
-    (SELECT id FROM actor.workstation WHERE name = 'BR1-SIP2-Gateway'), 
-    '3m'
+    (SELECT id FROM actor.workstation WHERE name = 'BR1-SIP2-Gateway')
 );
 
 

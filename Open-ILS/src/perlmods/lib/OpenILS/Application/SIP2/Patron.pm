@@ -394,7 +394,7 @@ sub add_fine_items {
     my $e = $session->editor;
 
     my @fines;
-    my $AV_format = lc($session->sip_account->av_format) || 'eg_legacy';
+    my $AV_format = lc($session->config->{settings}->{av_format} || 'eg_legacy');
 
     # Do a prescan for validity and default to eg_legacy
     if ($AV_format ne "swyer_a" &&
