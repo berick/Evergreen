@@ -5,8 +5,10 @@ use OpenSRF::Utils::Logger q/$logger/;
 use OpenILS::Application::AppUtils;
 use OpenILS::Utils::CStoreEditor q/:funcs/;
 use OpenILS::Utils::Fieldmapper;
-my $U = 'OpenILS::Application::AppUtils';
+use OpenILS::Application::SIP2::Common;
 my $json = JSON::XS->new;
+my $U = 'OpenILS::Application::AppUtils';
+my $SC = 'OpenILS::Application::SIP2::Common';
 $json->ascii(1);
 $json->allow_nonref(1);
 
@@ -67,23 +69,27 @@ sub find {
     my $session = $class->new(seskey => $seskey);
     my $e = $session->editor;
 
+    my $cache_ses = $SC->cache->get_cache("sip2_$seskey");
+
+    if ($cache_ses) {
+        $session->{sip_account} = $cache_ses->{sip_account};
+        $e->authtoken($cache_ses->{ils_token});
+        return $session if $session->set_ils_account;
+    }
+
+    # Nothing in the cache, check the DB.
+
     my $ses = $e->retrieve_sip_session([
         $seskey, {flesh => 1, flesh_fields => {sipses => ['account']}}]);
 
     if ($ses) {
         $session->{sip_account} = $ses->account;
-
         $e->authtoken($ses->ils_token);
-
-        return $session if $session->set_ils_account;
-
-        return undef;
-
-    } else {
-
-        $logger->warn("SIP2: No session found for key $seskey");
-        return undef;
+        return $session if $session->set_ils_account($ses);
     }
+
+    $logger->warn("SIP2: No session found for key $seskey");
+    return undef;
 }
 
 # The editor contains the authtoken and ILS user account (requestor).
@@ -109,12 +115,10 @@ sub sip_account {
 # Returns true on success, false on failure to authenticate.
 sub set_ils_account {
     my $self = shift;
+    my $ses = shift;
     my $e = $self->editor;
 
-    # Verify previously applied authtoken is still valid.
     return 1 if $e->authtoken && $e->checkauth;
-
-    my $seskey = $self->seskey;
 
     my $auth = $U->simplereq(
         'open-ils.auth_internal',
@@ -131,18 +135,44 @@ sub set_ils_account {
         return 0;
     }
 
-    # Ephemeral account sessions are not tracked in the database
-    return 1 if $U->is_true($self->sip_account->ephemeral);
+    my $seskey = $self->seskey;
+    my $ils_token = $auth->{payload}->{authtoken};
+    $e->authtoken($ils_token);
 
-    my $ses = Fieldmapper::sip::session->new;
-    $ses->key($seskey);
-    $ses->ils_token($auth->{payload}->{authtoken});
-    $ses->account($self->sip_account->id);
+    my $cache_ses = {
+        sip_account => $self->sip_account,
+        ils_token => $ils_token
+    };
+
+    $SC->cache->put_cache("sip2_$seskey", $cache_ses);
+
+    # transient account sessions are not tracked in the database
+    return 1 if $U->is_true($self->sip_account->transient);
 
     $e->xact_begin;
-    unless ($e->create_sip_session($ses)) {
-        $e->rollback;
-        return 0;
+
+    if ($ses) {
+        # ILS token expired on an existing SIP session.
+        # Update the session to use the new token.
+
+        $ses->ils_token($ils_token);
+        unless ($e->udpate_sip_session($ses)) {
+            $e->rollback;
+            return 0;
+        }
+            
+    } else {
+        # New session
+
+        my $ses = Fieldmapper::sip::session->new;
+        $ses->key($seskey);
+        $ses->ils_token($ils_token);
+        $ses->account($self->sip_account->id);
+
+        unless ($e->create_sip_session($ses)) {
+            $e->rollback;
+            return 0;
+        }
     }
 
     $e->xact_commit;

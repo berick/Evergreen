@@ -74,6 +74,10 @@ sub handler {
         'open-ils.sip2.request', $seskey, $message);
 
     if (!$response) {
+
+        # It's OK not receive a response after an End Session message
+        return Apache2::Const::OK if $msg_code eq 'XS';
+
         $logger->error("SIP2: API Request returned no value for: $msg_json");
         return Apache2::Const::HTTP_INTERNAL_SERVER_ERROR;
 

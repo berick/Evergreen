@@ -1,8 +1,15 @@
 package OpenILS::Application::SIP2::Common;
 use strict; use warnings;
 use OpenILS::Utils::DateTime qw/:datetime/;
+use OpenSRF::Utils::Cache;
 
 use constant SIP_DATE_FORMAT => "%Y%m%d    %H%M%S";
+
+my $_cache;
+sub cache {
+    $_cache = OpenSRF::Utils::Cache->new unless $_cache;
+    return $_cache;
+}
 
 sub sipdate {
     my ($class, $date) = @_;

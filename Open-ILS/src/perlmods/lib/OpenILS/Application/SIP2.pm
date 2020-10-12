@@ -1,7 +1,6 @@
 package OpenILS::Application::SIP2;
 use strict; use warnings;
 use base 'OpenILS::Application';
-use OpenSRF::Utils::Cache;
 use OpenILS::Application;
 use OpenILS::Event;
 use OpenILS::Utils::Fieldmapper;
@@ -62,10 +61,10 @@ sub dispatch_sip2_request {
     }
 
     my $MESSAGE_MAP = {
-        'XS' => \&handle_end_session,
         '17' => \&handle_item_info,
         '23' => \&handle_patron_status,
-        '63' => \&handle_patron_info
+        '63' => \&handle_patron_info,
+        'XS' => \&handle_end_session
     };
 
     return OpenILS::Event->new('SIP2_NOT_IMPLEMENTED', {payload => $message})
@@ -77,15 +76,23 @@ sub dispatch_sip2_request {
 sub handle_end_session {
     my ($session, $message) = @_;
     my $e = $session->editor;
+    my $seskey = $session->seskey;
 
-    my $ses = $e->retrieve_sip_session($session->seskey) || return;
-
-    $e->xact_begin;
-    $e->delete_sip_session($ses);
-    $e->commit;
+    $SC->cache->delete_cache("sip2_$seskey");
 
     $U->simplereq('open-ils.auth', 
-        'open-ils.auth.session.delete', $ses->ils_token);
+        'open-ils.auth.session.delete', $e->authtoken);
+
+    return undef if $U->is_true($session->sip_account->transient);
+
+    $e->xact_begin;
+    my $ses = $e->retrieve_sip_session($seskey);
+    if ($ses) {
+        $e->delete_sip_session($ses);
+        $e->commit;
+    } else {
+        $e->rollback;
+    }
 
     return undef;
 }

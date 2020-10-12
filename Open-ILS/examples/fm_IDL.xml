@@ -13491,7 +13491,7 @@ SELECT  usr,
 			<field name="sip_username" reporter:datatype="text" reporter:label="SIP Username" oils_obj:required="true"/>
 			<field name="usr" reporter:datatype="link" reporter:label="ILS User" oils_obj:required="true"/>
 			<field name="workstation" reporter:datatype="link" reporter:label="Workstation"/>
-			<field name="ephemeral" reporter:datatype="bool" reporter:label="Ephemeral"/>
+			<field name="transient" reporter:datatype="bool" reporter:label="Transient"/>
 			<field name="activity_who" reporter:datatype="text" reporter:label="Activity Who"/>
 		</fields>
 		<links>

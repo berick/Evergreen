@@ -163,6 +163,8 @@ sub set_patron_summary_list_items {
 
     my $list_items = $params{summary_list_items};
 
+    return unless $list_items;
+
     # Start and end are 1-based.  Translate to zero-based for internal use.
     my $offset = $params{summary_start_item} ? $params{summary_start_item} - 1 : 0;
     my $end = $params{summary_end_item} ? $params{summary_end_item} - 1 : 10;

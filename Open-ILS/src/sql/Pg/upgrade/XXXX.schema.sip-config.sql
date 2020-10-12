@@ -36,8 +36,8 @@ CREATE TABLE sip.account (
     usr             BIGINT NOT NULL REFERENCES actor.usr(id)
                     DEFERRABLE INITIALLY DEFERRED,
     workstation     INTEGER REFERENCES actor.workstation(id),
-    -- sessions for ephemeral accounts are not tracked in sip.session
-    ephemeral       BOOLEAN NOT NULL DEFAULT FALSE,
+    -- sessions for transient accounts are not tracked in sip.session
+    transient       BOOLEAN NOT NULL DEFAULT FALSE,
     activity_who    TEXT -- config.usr_activity_type.ewho
 );
 
