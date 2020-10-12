@@ -37,7 +37,8 @@ CREATE TABLE sip.account (
                     DEFERRABLE INITIALLY DEFERRED,
     workstation     INTEGER REFERENCES actor.workstation(id),
     -- sessions for ephemeral accounts are not tracked in sip.session
-    ephemeral       BOOLEAN NOT NULL DEFAULT FALSE
+    ephemeral       BOOLEAN NOT NULL DEFAULT FALSE,
+    activity_who    TEXT -- config.usr_activity_type.ewho
 );
 
 CREATE TABLE sip.session (
@@ -81,6 +82,10 @@ VALUES (
     (SELECT id FROM config.sip_setting_group WHERE institution = 'example'), 
     'Holds, checkouts, and renewals allowed regardless of blocking penalties',
     'patron_status_permit_all', 'false'
+), (
+    (SELECT id FROM config.sip_setting_group WHERE institution = 'example'), 
+    'Patron holds data may be returned as either "title" or "barcode"',
+    'default_activity_who', 'null'
 ), (
     (SELECT id FROM config.sip_setting_group WHERE institution = 'example'), 
     'Patron circulation data may be returned as either "title" or "barcode"',

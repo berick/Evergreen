@@ -63,6 +63,10 @@ sub get_patron_details {
     set_patron_summary_items($session, $details, %params);
     set_patron_summary_list_items($session, $details, %params);
 
+    $U->log_user_activity($patron->id, 
+        $session->sip_account->activity_who || $session->config->{default_activity_who}, 
+        'verify');
+
     return $details;
 }
 

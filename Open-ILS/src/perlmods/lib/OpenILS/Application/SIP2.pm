@@ -52,7 +52,7 @@ sub dispatch_sip2_request {
     # A cached session means we have successfully logged in with
     # the SIP credentials provided during a login request.  All
     # message types following require authentication.
-    my $session = OpenILS::Application::SIPSession->from_cache($seskey);
+    my $session = OpenILS::Application::SIPSession->find($seskey);
     return OpenILS::Event->new('SIP2_SESSION_REQUIRED') unless $session;
 
     my $MESSAGE_MAP = {

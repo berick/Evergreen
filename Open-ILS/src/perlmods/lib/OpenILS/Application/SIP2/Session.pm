@@ -71,7 +71,7 @@ sub find {
         $seskey, {flesh => 1, flesh_fields => {sipses => ['account']}}]);
 
     if ($ses) {
-        $session->sip_account($ses->account);
+        $session->{sip_account} = $ses->account;
 
         $e->authtoken($ses->ils_token);
 
@@ -134,14 +134,14 @@ sub set_ils_account {
     # Ephemeral account sessions are not tracked in the database
     return 1 if $U->is_true($self->sip_account->ephemeral);
 
-    my $ses = Fieldmapper::sip::account->new;
+    my $ses = Fieldmapper::sip::session->new;
     $ses->key($seskey);
     $ses->ils_token($auth->{payload}->{authtoken});
     $ses->account($self->sip_account->id);
 
     $e->xact_begin;
     unless ($e->create_sip_session($ses)) {
-        $e->rolllback;
+        $e->rollback;
         return 0;
     }
 
