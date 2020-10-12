@@ -13437,7 +13437,7 @@ SELECT  usr,
 
 	<class id="sipsetg" controller="open-ils.cstore open-ils.pcrud"
 		oils_obj:fieldmapper="sip::setting_group" 
-		oils_persis:tablename="sip.setting_group" 
+		oils_persist:tablename="sip.setting_group" 
 		reporter:label="SIP Settings Group">
 		<fields oils_persist:primary="id" oils_persist:sequence="sip.setting_id_seq">
 			<field name="id" reporter:datatype="id" reporter:label="ID" reporter:selector="label"/>
