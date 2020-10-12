@@ -55,9 +55,14 @@ sub dispatch_sip2_request {
     # the SIP credentials provided during a login request.  All
     # message types following require authentication.
     my $session = OpenILS::Application::SIPSession->find($seskey);
-    return OpenILS::Event->new('SIP2_SESSION_REQUIRED') unless $session;
+
+    if (!$session) {
+        return undef if $msg_code eq 'XS'; # end session signal
+        return OpenILS::Event->new('SIP2_SESSION_REQUIRED');
+    }
 
     my $MESSAGE_MAP = {
+        'XS' => \&handle_end_session,
         '17' => \&handle_item_info,
         '23' => \&handle_patron_status,
         '63' => \&handle_patron_info
@@ -67,6 +72,22 @@ sub dispatch_sip2_request {
         unless exists $MESSAGE_MAP->{$msg_code};
 
     return $MESSAGE_MAP->{$msg_code}->($session, $message);
+}
+
+sub handle_end_session {
+    my ($session, $message) = @_;
+    my $e = $session->editor;
+
+    my $ses = $e->retrieve_sip_session($session->seskey) || return;
+
+    $e->xact_begin;
+    $e->delete_sip_session($ses);
+    $e->commit;
+
+    $U->simplereq('open-ils.auth', 
+        'open-ils.auth.session.delete', $ses->ils_token);
+
+    return undef;
 }
 
 # Login to Evergreen and cache the login data.
