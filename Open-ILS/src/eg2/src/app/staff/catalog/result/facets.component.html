@@ -11,8 +11,7 @@
   <div *ngFor="let facetConf of facetConfig.display">
     <div *ngIf="searchContext.result.facetData[facetConf.facetClass]">
       <div *ngFor="let name of facetConf.facetOrder">
-        <div class="row"
-          *ngIf="searchContext.result.facetData[facetConf.facetClass][name]">
+        <div class="row" *ngIf="facetHasData(facetConf.facetClass, name)">
           <div class="card mb-2">
             <h4 class="card-header">
               {{searchContext.result.facetData[facetConf.facetClass][name].cmfLabel}}

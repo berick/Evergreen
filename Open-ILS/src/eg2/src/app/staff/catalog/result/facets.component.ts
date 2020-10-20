@@ -6,11 +6,10 @@ import {StaffCatalogService} from '../catalog.service';
 
 export const FACET_CONFIG = {
     display: [
-        {facetClass : 'author',  facetOrder : ['personal', 'corporate']},
-        {facetClass : 'subject', facetOrder : ['topic']},
-        {facetClass : 'identifier', facetOrder : ['genre']},
+        {facetClass : 'author',  facetOrder : ['combined']},
+        {facetClass : 'subject', facetOrder : ['combined']},
         {facetClass : 'series',  facetOrder : ['seriestitle']},
-        {facetClass : 'subject', facetOrder : ['name', 'geographic']}
+        {facetClass : 'subject', facetOrder : ['combined']}
     ],
     displayCount : 5
 };
@@ -45,6 +44,15 @@ export class ResultFacetsComponent implements OnInit {
         context.termSearch.toggleFacet(new FacetFilter(cls, name, value));
         context.pager.offset = 0;
         return this.catUrl.toUrlParams(context);
+    }
+
+    facetHasData(facetClass: string, name: string): boolean {
+        return (
+           this.searchContext.result.facetData[facetClass] &&
+           this.searchContext.result.facetData[facetClass][name] &&
+           this.searchContext.result.facetData[facetClass][name].valueList &&
+           this.searchContext.result.facetData[facetClass][name].valueList.length > 0
+        );
     }
 }
 
