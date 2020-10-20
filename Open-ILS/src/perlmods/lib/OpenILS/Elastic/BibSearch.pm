@@ -113,12 +113,12 @@ my $BASE_PROPERTIES = {
                 normalizer => 'custom_lowercase'
             },
             value => {
-                type => 'text',
+                type => 'keyword',
+                ignore_above => $IGNORE_ABOVE,
+                normalizer => 'custom_lowercase',
                 fields => {
-                    text_folded => {
-                        type => 'text',
-                        analyzer => 'folding'
-                    }
+                    text => {type => 'text'},
+                    text_folded => {type => 'text', analyzer => 'folding'}
                 }
             }
         }

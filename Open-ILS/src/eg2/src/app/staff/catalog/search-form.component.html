@@ -62,6 +62,8 @@
                 <option i18n value='nocontains'>Does not contain</option>
                 <option i18n value='phrase'>Contains phrase</option>
                 <option [disabled]="context.termSearch.fieldClass[idx]=='keyword'"
+                  i18n value='containsexact'>Contains exact</option>
+                <option [disabled]="context.termSearch.fieldClass[idx]=='keyword'"
                   i18n value='exact'>Matches exactly</option>
                 <option [disabled]="context.termSearch.fieldClass[idx]=='keyword'"
                   i18n value='starts'>Starts with</option>
@@ -291,6 +293,15 @@
                   name="marc-subfield-{{idx}}"
                   [(ngModel)]="context.marcSearch.subfields[idx]"
                   (keyup.enter)="searchByForm()"/>
+                <select class="form-control ml-2" 
+                  [(ngModel)]="context.marcSearch.matchOp[idx]">
+                  <option i18n value='contains'>Contains</option>
+                  <option i18n value='nocontains'>Does not contain</option>
+                  <option i18n value='phrase'>Contains phrase</option>
+                  <option i18n value='containsexact'>Contains exact</option>
+                  <option i18n value='exact'>Matches exactly</option>
+                  <option i18n value='starts'>Starts with</option>
+                </select>
                 <label for="marc-value-{{idx}}" class="ml-2" i18n>Value</label>
                 <input class="form-control ml-2" type="text" name="marc-value-{{idx}}"
                   [(ngModel)]="context.marcSearch.values[idx]" 

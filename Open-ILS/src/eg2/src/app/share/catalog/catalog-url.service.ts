@@ -49,12 +49,14 @@ export class CatalogUrlService {
             params.marcTag = [];
             params.marcSubfield = [];
             params.marcValue = [];
+            params.matchOp = [];
 
             ms.values.forEach((val, idx) => {
                 if (val !== '') {
                     params.marcTag.push(ms.tags[idx]);
                     params.marcSubfield.push(ms.subfields[idx]);
                     params.marcValue.push(ms.values[idx]);
+                    params.matchOp.push(ms.matchOp[idx]);
                 }
             });
         }
@@ -185,6 +187,7 @@ export class CatalogUrlService {
             context.marcSearch.tags = params.getAll('marcTag');
             context.marcSearch.subfields = params.getAll('marcSubfield');
             context.marcSearch.values = params.getAll('marcValue');
+            context.marcSearch.matchOp = params.getAll('matchOp');
         }
 
         if (params.has('identQuery')) {

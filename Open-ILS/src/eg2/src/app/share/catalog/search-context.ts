@@ -95,11 +95,13 @@ export class CatalogMarcContext {
     tags: string[];
     subfields: string[];
     values: string[];
+    matchOp: string[];
 
     reset() {
         this.tags = [''];
         this.values = [''];
         this.subfields = [''];
+        this.matchOp = ['contains']
     }
 
     isSearchable() {
@@ -114,12 +116,14 @@ export class CatalogMarcContext {
         ctx.tags = [].concat(this.tags);
         ctx.values = [].concat(this.values);
         ctx.subfields = [].concat(this.subfields);
+        ctx.matchOp = [].concat(this.matchOp);
         return ctx;
     }
 
     equals(ctx: CatalogMarcContext): boolean {
         return ArrayUtil.equals(ctx.tags, this.tags)
             && ArrayUtil.equals(ctx.values, this.values)
+            && ArrayUtil.equals(ctx.matchOp, this.matchOp)
             && ArrayUtil.equals(ctx.subfields, this.subfields);
     }
 }

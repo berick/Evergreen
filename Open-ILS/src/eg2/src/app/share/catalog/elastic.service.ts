@@ -194,12 +194,11 @@ export class ElasticService {
             const marcQuery = new BoolQuery();
             const tag = ms.tags[idx];
             const subfield = ms.subfields[idx];
+            const matchOp = ms.matchOp[idx];
 
-            // Full-text search on the values
-            const valMatch = new MultiMatchQuery(['marc.value*'], value);
-            valMatch.operator('and');
-            valMatch.type('most_fields');
-            marcQuery.must(valMatch);
+            console.log('MATCH OP IS', matchOp, 'value is', value);
+            this.appendMatchOp(
+                marcQuery, matchOp, 'marc.value.text*', 'marc.value', value);
 
             if (tag) {
                 marcQuery.must(new TermQuery('marc.tag', tag));
@@ -278,7 +277,16 @@ export class ElasticService {
             return;
         }
 
-        const textIndex = `${fieldClass}.text*`;
+        // Identifier indices don't have text variations
+        const textIndex = fieldClass.match('identifier') ?
+            fieldClass : `${fieldClass}.text*`;
+
+        this.appendMatchOp(boolNode, matchOp, textIndex, fieldClass, value);
+    }
+
+    appendMatchOp(boolNode: BoolQuery, matchOp: string,
+        textIndex: string, termIndex: string, value: string) {
+
         let query;
 
         switch (matchOp) {
@@ -305,19 +313,25 @@ export class ElasticService {
                 boolNode.mustNot(query);
                 return;
 
-            // "exact" and "starts" searches use term searches instead
-            // of full-text searches.
+            // "containsexact", "exact", "starts" searches use term
+            // searches instead of full-text searches.
+            case 'containsexact':
+                query = new WildcardQuery(termIndex, `*${value}*`);
+                boolNode.must(query);
+                return;
+
             case 'exact':
-                query = new TermQuery(fieldClass, value);
+                query = new TermQuery(termIndex, value);
                 boolNode.must(query);
                 return;
 
             case 'starts':
-                query = new PrefixQuery(fieldClass, value);
+                query = new PrefixQuery(termIndex, value);
                 boolNode.must(query);
                 return;
         }
     }
+
 
     // Elastic facets are grouped by elastic.bib_field entries.
     formatFacets(facets: any) {
