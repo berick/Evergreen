@@ -75,7 +75,7 @@ See https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl-qu
 Some examples:
 
 harry potter
-title|proper.text\\*:piano
+title|maintitle.text\\*:piano
 author.text\\*:GrandPré
 au:((johann brahms) OR (wolfgang mozart))
 su:history
@@ -92,7 +92,7 @@ while (1) {
     next unless $query_string;
 
     my $query = {
-        _source => ['id', 'title|proper', 'author|first_author'] , # return only a few fields
+        _source => ['id', 'title|maintitle', 'author|personal'] , # return only a few fields
         from => 0,
         size => 10,
         sort => [{'_score' => 'desc'}],
@@ -135,7 +135,7 @@ while (1) {
     for my $hit (@{$results->{hits}->{hits}}) {
         printf("Record: %-8d | Score: %-11f | Title: %s\n", 
             $hit->{_id}, $hit->{_score}, 
-            ($hit->{_source}->{'title|proper'} || '')
+            ($hit->{_source}->{'title|maintitle'} || '')
         );
 
 # Uncomment to log highlighted field data.
