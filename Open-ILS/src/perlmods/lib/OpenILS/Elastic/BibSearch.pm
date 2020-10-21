@@ -543,7 +543,10 @@ sub get_bib_field_for_data {
     } @matches;
 
     if (!$match) {
-        $logger->warn("ES No elastic.bib_field matches extracted data ".
+        # Warning on mismatched fields can lead to a lot of logs
+        # while trying different field groups.  Consider a
+        # 'warn-on-field-mismatch' flag.
+        $logger->debug("ES No elastic.bib_field matches extracted data ".
             OpenSRF::Utils::JSON->perl2JSON($field));
     }
 
