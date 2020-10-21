@@ -23,7 +23,8 @@ export class ElasticService {
     ) {}
 
     init(): Promise<any> {
-        return this.pcrud.retrieveAll('ebf',
+        return this.pcrud.search('ebf',
+            {field_group: null, facet_field: 't'},
             {select: {ebf: ['id', 'name', 'field_class', 'label']}}
         ).pipe(tap(field => this.ebfMap[field.id()] = field)).toPromise();
     }
