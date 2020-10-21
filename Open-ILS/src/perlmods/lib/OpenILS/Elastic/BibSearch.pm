@@ -213,6 +213,11 @@ sub index_class {
     return $INDEX_CLASS;
 }
 
+sub field_group {
+    my $self = shift;
+    return $self->{field_group};
+}
+
 # TODO: determine when/how to apply language analyzers.
 # e.g. create lang-specific index fields?
 sub language_analyzers {
@@ -357,7 +362,9 @@ sub create_index_properties {
         } foreach qw/title subject series keyword/;
     }
 
-    my $fields = new_editor()->retrieve_all_elastic_bib_field;
+    # field_group will be undef for main/active fields
+    my $fields = new_editor()->search_elastic_bib_field(
+        {field_group => $self->field_group});
 
     for my $field (@$fields) {
 
@@ -475,6 +482,10 @@ sub create_index {
     # Now that we've added the configured fields,
     # add the shortened field_class aliases.
     while (my ($alias, $field) = each %SEARCH_CLASS_ALIAS_MAP) {
+
+        # Only create aliases for fields we have definitions for.
+        next unless $properties->{$field};
+
         return 0 unless $self->create_one_field_index(
             $alias, {type => 'alias', path => $field});
     }
@@ -571,7 +582,9 @@ sub populate_bib_index_batch {
 
     my $holdings = $self->load_holdings($bib_ids) unless $self->skip_holdings;
 
-    my $bib_fields = new_editor()->retrieve_all_elastic_bib_field;
+    # field_group will be undef for main/active fields
+    my $bib_fields = new_editor()->search_elastic_bib_field(
+        {field_group => $self->field_group});
 
     for my $bib_id (@$bib_ids) {
         my ($rec) = grep {$_->{id} == $bib_id} @$records;

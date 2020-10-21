@@ -15,6 +15,7 @@ my $cluster;
 my $create_index;
 my $delete_index;
 my $index_name;
+my $field_group;
 my $activate_index;
 my $populate;
 my $index_record;
@@ -51,6 +52,7 @@ GetOptions(
     'max-duration=s'    => \$max_duration,
     'batch-size=s'      => \$batch_size,
     'bib-transform=s'   => \$bib_transform,
+    'field-group=s'   => \$field_group,
     'skip-holdings'     => \$skip_holdings,
     'list-indices'      => \$list_indices,
     'force'             => \$force,
@@ -100,6 +102,12 @@ sub help {
                 Specify an index name.  An index name CANNOT match its
                 index_class, since the index_class is used as an alias
                 for the active index within each class.
+
+            --field-group <groupname>
+                Field groups are useful for adding a collection of field
+                to an index in the database that are a) not active
+                within the main search code and b) grouped for index
+                creation and testing across a subset of index fields.
 
             --delete-index
                 Delete the specified index and all of its data. 
@@ -170,6 +178,7 @@ if ($index_class eq 'bib-search') {
     $es = OpenILS::Elastic::BibSearch->new(
         cluster => $cluster, 
         index_name => $index_name,
+        field_group => $field_group,
         maintenance_mode => 1,
         xsl_file => $bib_transform,
         skip_holdings => $skip_holdings

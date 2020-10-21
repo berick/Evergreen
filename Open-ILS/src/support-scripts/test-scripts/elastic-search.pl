@@ -14,7 +14,9 @@ binmode(STDOUT, ':utf8');
 my $help;
 my $osrf_config = '/openils/conf/opensrf_core.xml';
 my $cluster = 'main';
+my $index_class = 'bib-search';
 my $index_name;
+my $field_group;
 my $quiet = 0;
 my $query_string;
 
@@ -22,7 +24,9 @@ GetOptions(
     'help'              => \$help,
     'osrf-config=s'     => \$osrf_config,
     'cluster=s'         => \$cluster,
+    'index-class=s'     => \$index_class,
     'index-name=s'      => \$index_name,
+    'field-group=s'     => \$field_group,
     'quiet'             => \$quiet,
 ) || die "\nSee --help for more\n";
 
@@ -50,7 +54,11 @@ Fieldmapper->import(
     IDL => OpenSRF::Utils::SettingsClient->new->config_value("IDL"));
 OpenILS::Utils::CStoreEditor::init();
 
-my $es = OpenILS::Elastic::BibSearch->new(index_name => $index_name);
+my $es = OpenILS::Elastic::BibSearch->new(
+    maintenance_mode => 1, # allows access to inactive indexes
+    field_group => $field_group,
+    index_name => $index_name
+);
 $es->connect;
 
 if ($es->index_name) {
