@@ -48,7 +48,9 @@ sub init {
 
     my $e = new_editor();
 
-    $bib_fields = $e->retrieve_all_elastic_bib_field;
+    # field_group will be undef for main/active fields
+    my $bib_fields = 
+        new_editor()->search_elastic_bib_field({field_group => undef});
 
     my $stats = $e->json_query({
         select => {ccs => ['id', 'opac_visible', 'is_available']},
