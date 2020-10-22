@@ -12,12 +12,57 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR code.  See the
 # GNU General Public License for more details.
 # ---------------------------------------------------------------
+package OpenILS::Elastic::BibField;
+use strict;
+use warnings;
+
+sub new {
+    my ($class, %args) = @_;
+    my $self = {%args};
+    return bless($self, $class);
+}
+sub id {
+    my $self = shift;
+    return $self->search_group ? 
+        $self->search_group . '|' . $self->name : $self->name;
+}
+sub search_group {
+    my $self = shift;
+    return $self->{search_group};
+}
+sub name {
+    my $self = shift;
+    return $self->{name};
+}
+sub search_field {
+    my $self = shift;
+    return $self->{search_field};
+}
+sub facet_field {
+    my $self = shift;
+    return $self->{facet_field};
+}
+sub weight {
+    my $self = shift;
+    return $self->{weight};
+}
+sub filter {
+    my $self = shift;
+    return $self->{filter};
+}
+sub sorter {
+    my $self = shift;
+    return $self->{sorter};
+}
+
 package OpenILS::Elastic::BibSearch;
 use strict;
 use warnings;
 use DateTime;
 use Clone 'clone';
 use Time::HiRes qw/time/;
+use XML::LibXML;
+use XML::LibXML::XPathContext;
 use OpenSRF::Utils::Logger qw/:logger/;
 use OpenSRF::Utils::JSON;
 use OpenSRF::Utils::SettingsClient;
@@ -213,11 +258,6 @@ sub index_class {
     return $INDEX_CLASS;
 }
 
-sub field_group {
-    my $self = shift;
-    return $self->{field_group};
-}
-
 # TODO: determine when/how to apply language analyzers.
 # e.g. create lang-specific index fields?
 sub language_analyzers {
@@ -229,30 +269,39 @@ sub skip_holdings {
     return $self->{skip_holdings};
 }
 
+sub bib_fields {
+    my $self = shift;
+    return $self->{bib_fields} if $self->{bib_fields};
+
+    my @bib_fields = $self->xpath_context->findnodes(
+        '//es:fields/es:field', $self->index_config);
+
+    my @fields;
+    for my $field (@bib_fields) {
+        
+        my %struct;
+
+        for my $key (qw/search_group name/) {
+            $struct{$key} = $field->getAttribute($key) || '';
+        }
+
+        for my $key (qw/search_field facet_field filter sorter/) {
+            $struct{$key} = ($field->getAttribute($key) || '') eq 'true';
+        }
+
+        push (@fields, OpenILS::Elastic::BibField->new(%struct));
+    }
+
+    return $self->{bib_fields} = \@fields;
+}
+
 sub xsl_file {
     my ($self) = @_;
 
     if (!$self->{xsl_file}) {
-
-        my $client = OpenSRF::Utils::SettingsClient->new;
-        my $dir = $client->config_value("dirs", "xsl");
-
-        my $filename = new_editor()->search_config_global_flag({
-            name => 'elastic.bib_search.transform_file', 
-            enabled => 't'
-        })->[0];
-
-        if ($filename) {
-            $self->{xsl_file} = "$dir/" . $filename->value;
-
-        } else {
-            die <<'            TEXT';
-            No XSL file provided for Elastic::BibSearch.  Confirm
-            config.global_flag "elastic.bib_search.transform_file"
-            is enabled, contains a valid value, and the file exists 
-            in the XSL directory.
-            TEXT
-        }
+        my @nodes = $self->xpath_context->findnodes(
+            '//es:transform/text()', $self->index_config);
+        $self->{xsl_file} = $nodes[0];
     }
 
     return $self->{xsl_file};
@@ -300,15 +349,15 @@ sub get_bib_data {
 
         my @rows = split(/\n/, $output);
         for my $row (@rows) {
-            my ($purpose, $field_class, $name, @tokens) = split(/ /, $row);
+            my ($purpose, $search_group, $name, @tokens) = split(/ /, $row);
 
-            $field_class = '' if ($field_class || '') eq '_';
+            $search_group = '' if ($search_group || '') eq '_';
 
             my $value = join(' ', @tokens);
 
             my $field = {
                 purpose => $purpose,
-                field_class => $field_class,
+                search_group => $search_group,
                 name => $name,
                 value => $value
             };
@@ -363,25 +412,24 @@ sub create_index_properties {
     }
 
     # field_group will be undef for main/active fields
-    my $fields = new_editor()->search_elastic_bib_field(
-        {field_group => $self->field_group});
+    my $fields = $self->bib_fields;
 
     for my $field (@$fields) {
 
         my $field_name = $field->name;
-        my $field_class = $field->field_class;
-        $field_name = "$field_class|$field_name" if $field_class;
+        my $search_group = $field->search_group;
+        $field_name = "$search_group|$field_name" if $search_group;
 
         my $def;
 
-        if ($field_class) {
-            if ($field->search_field eq 't') {
+        if ($search_group) {
+            if ($field->search_field) {
 
                 # Use the same fields and analysis as the 'grouped' field.
-                $def = clone($properties->{$field_class});
+                $def = clone($properties->{$search_group});
 
                 # Copy grouped fields into their group parent field.
-                $def->{copy_to} = $field_class;
+                $def->{copy_to} = $search_group;
 
                 # Apply ranking boost to each analysis variation.
                 my $flds = $def->{fields};
@@ -400,7 +448,7 @@ sub create_index_properties {
 
             # Long sorter values are not necessarily unexpected,
             # e.g. long titles.
-            $def->{ignore_above} = $IGNORE_ABOVE unless $field->sorter eq 't';
+            $def->{ignore_above} = $IGNORE_ABOVE unless $field->sorter;
         }
 
         if ($def) {
@@ -413,7 +461,7 @@ sub create_index_properties {
         # Search and facet fields can have the same name/group pair,
         # but are stored as separate fields in ES since the content
         # may vary between the two.
-        if ($field->facet_field eq 't') {
+        if ($field->facet_field) {
 
             # Facet fields are stored as separate fields, because their
             # content may differ from the matching search field.
@@ -443,9 +491,6 @@ sub create_index {
         return;
     }
 
-    # Add a record of our new index to EG's DB if necessary.
-    my $eg_conf = $self->find_or_create_index_config;
-
     $logger->info(
         "ES creating index '$index_name' on cluster '".$self->cluster."'");
 
@@ -453,7 +498,7 @@ sub create_index {
 
     my $settings = $BASE_INDEX_SETTINGS;
     $settings->{number_of_replicas} = scalar(@{$self->nodes});
-    $settings->{number_of_shards} = $eg_conf->num_shards;
+    $settings->{number_of_shards} = 1; # TODO $index_config->num_shards;
 
     my $conf = {
         index => $index_name,
@@ -466,10 +511,11 @@ sub create_index {
     eval { $self->es->indices->create($conf) };
 
     if ($@) {
-        $logger->error("ES failed to create index cluster=".  
-            $self->cluster. "index=$index_name error=$@");
-        warn "$@\n\n";
-        return 0;
+        my $msg = "ES failed to create index cluster=".  
+            $self->cluster. "index=$index_name error=$@";
+
+        $logger->error($msg);
+        die "$msg\n";
     }
 
     # Create each mapping one at a time instead of en masse so we 
@@ -480,7 +526,7 @@ sub create_index {
     }
 
     # Now that we've added the configured fields,
-    # add the shortened field_class aliases.
+    # add the shortened search_group aliases.
     while (my ($alias, $field) = each %SEARCH_CLASS_ALIAS_MAP) {
 
         # Only create aliases for fields we have definitions for.
@@ -495,11 +541,10 @@ sub create_index {
 
 sub create_one_field_index {
     my ($self, $field, $properties) = @_;
+
     my $index_name = $self->index_name;
+
     $logger->info("ES Creating index mapping for field $field");
-    if ($field eq 'author') {
-        $logger->info("ES Def Is: " . OpenSRF::Utils::JSON->perl2JSON($properties));
-    }
 
     eval { 
         $self->es->indices->put_mapping({
@@ -527,26 +572,26 @@ sub create_one_field_index {
 
 
 sub get_bib_field_for_data {
-    my ($self, $bib_fields, $field) = @_;
+    my ($self, $field) = @_;
 
-    my @matches = grep {$_->name eq $field->{name}} @$bib_fields;
+    my @matches = grep {$_->name eq $field->{name}} @{$self->bib_fields};
 
     @matches = grep {
-        (($_->field_class || '') eq ($field->{field_class} || ''))
+        (($_->search_group || '') eq ($field->{search_group} || ''))
     } @matches;
 
     my ($match) = grep {
-        ($_->search_field eq 't' && $field->{purpose} eq 'search') ||
-        ($_->facet_field eq 't' && $field->{purpose} eq 'facet') ||
-        ($_->filter eq 't' && $field->{purpose} eq 'filter') ||
-        ($_->sorter eq 't' && $field->{purpose} eq 'sorter')
+        ($_->search_field && $field->{purpose} eq 'search') ||
+        ($_->facet_field && $field->{purpose} eq 'facet') ||
+        ($_->filter && $field->{purpose} eq 'filter') ||
+        ($_->sorter && $field->{purpose} eq 'sorter')
     } @matches;
 
     if (!$match) {
         # Warning on mismatched fields can lead to a lot of logs
-        # while trying different field groups.  Consider a
+        # while trying different field configs.  Consider a
         # 'warn-on-field-mismatch' flag.
-        $logger->debug("ES No elastic.bib_field matches extracted data ".
+        $logger->debug("ES No bib field matches extracted data ".
             OpenSRF::Utils::JSON->perl2JSON($field));
     }
 
@@ -585,10 +630,6 @@ sub populate_bib_index_batch {
 
     my $holdings = $self->load_holdings($bib_ids) unless $self->skip_holdings;
 
-    # field_group will be undef for main/active fields
-    my $bib_fields = new_editor()->search_elastic_bib_field(
-        {field_group => $self->field_group});
-
     for my $bib_id (@$bib_ids) {
         my ($rec) = grep {$_->{id} == $bib_id} @$records;
 
@@ -606,7 +647,7 @@ sub populate_bib_index_batch {
 
         for my $field (@{$rec->{fields}}) {
             my $purpose = $field->{purpose};
-            my $fclass = $field->{field_class};
+            my $fclass = $field->{search_group};
             my $fname = $field->{name};
             my $value = $field->{value};
 
@@ -625,7 +666,7 @@ sub populate_bib_index_batch {
 
             # Ignore any data provided by the transform we have
             # no configuration for.
-            next unless $self->get_bib_field_for_data($bib_fields, $field);
+            next unless $self->get_bib_field_for_data($field);
         
             $fname = "$fclass|$fname" if $fclass;
             $fname = "$fname|facet" if $purpose eq 'facet';

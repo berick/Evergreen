@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<elasticsearch xmlns="http://evergreen-ils.org/spec/elasticsearch/v1">
+
+  <index class="bib-search">
+
+    <transform>/openils/var/xsl/elastic-bib-transform.xsl</transform>
+    <number_of_shards>1</number_of_shards>
+
+    <fields>
+      <!-- 
+        Attributes:
+          search_group="string"   | optional; for grouped search fields (e.g. title)
+          name="string"           | required
+          search_field="boolean"  | defaults to false
+          facet_field="boolean"   | defaults to false
+          filter="boolean"        | defaults to false
+          sorter="boolean"        | defaults to false
+          weight="integer"        | defaults to 1
+      -->
+
+      <field search_group="title" name="maintitle" search_field="true" weight="10"/>
+      <field search_group="title" name="combined" search_field="true"/>
+      <field search_group="author" name="personal" search_field="true" weight="5"/>
+      <field search_group="author" name="combined" search_field="true" facet_field="true"/>
+      <field search_group="subject" name="combined" search_field="true" facet_field="true"/>
+      <field search_group="series" name="seriestitle" search_field="true" facet_field="true"/>
+      <field search_group="keyword" name="title" search_field="true" weight="10"/>
+      <field search_group="keyword" name="author" search_field="true" weight="5"/>
+      <field search_group="keyword" name="keyword" search_field="true"/>
+      <field search_group="keyword" name="publisher" search_field="true"/>
+      <field search_group="identifier" name="bibcn" search_field="true"/>
+      <field search_group="identifier" name="isbn" search_field="true"/>
+      <field search_group="identifier" name="issn" search_field="true"/>
+      <field search_group="identifier" name="lccn" search_field="true"/>
+      <field search_group="identifier" name="sudoc" search_field="true"/>
+      <field search_group="identifier" name="tech_number" search_field="true"/>
+      <field search_group="identifier" name="upc" search_field="true"/>
+      <field search_group="identifier" name="tcn" search_field="true"/>
+      <field search_group="identifier" name="bibid" search_field="true"/>
+
+      <!-- filters -->
+      <field name="mattype" filter="true"/>
+      <field name="audience" filter="true"/>
+      <field name="bib_level" filter="true"/>
+      <field name="date1" filter="true"/>
+      <field name="date2" filter="true"/>
+      <field name="item_form" filter="true"/>
+      <field name="item_lang" filter="true"/>
+      <field name="item_type" filter="true"/>
+      <field name="lit_form" filter="true"/>
+      <field name="search_format" filter="true"/>
+      <field name="sr_format" filter="true"/>
+      <field name="vr_format" filter="true"/>
+
+      <!-- sorters -->
+      <field name="authorsort" sorter="true"/>
+      <field name="titlesort" sorter="true"/>
+      <field name="pubdate" sorter="true"/>
+    </fields>
+  </index>
+</elasticsearch>
+

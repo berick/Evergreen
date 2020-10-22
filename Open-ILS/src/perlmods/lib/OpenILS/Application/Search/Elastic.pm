@@ -46,11 +46,15 @@ sub init {
     return if $init_done;
     $init_done = 1;
 
+    # NOTE: after things stabilize and maybe load balancing, etc. is
+    # tested and working, we could maintain a global $es so the 
+    # connection is cached instead of reconnecting on every search call.
+    my $es = OpenILS::Elastic::BibSearch->new;
+    $es->connect;
+
+    $bib_fields = $es->bib_fields;
+
     my $e = new_editor();
-
-    # field_group will be undef for main/active fields
-    $bib_fields = $e->search_elastic_bib_field({field_group => undef});
-
     my $stats = $e->json_query({
         select => {ccs => ['id', 'opac_visible', 'is_available']},
         from => 'ccs',
@@ -98,9 +102,6 @@ __PACKAGE__->register_method(
             Org unit based item presence and availability filtering may
             optionally be added to the query.  See search options
             below.
-
-            See [ select * from elastic.bib_field where search_field; ] 
-            for full-text search fields and classes.
         /,
         params => [
             {   type => 'object',
@@ -207,9 +208,12 @@ sub bib_search {
         $elastic_query->{size} = 1000;
     }
 
+    # NOTE: after things stabilize and maybe load balancing, etc. is
+    # tested and working, we could maintain a global $es so the 
+    # connection is cached instead of reconnecting on every search call.
     my $es = OpenILS::Elastic::BibSearch->new;
-
     $es->connect;
+
     my $results = $es->search($elastic_query);
 
     $logger->debug("ES elasticsearch returned: ".
@@ -284,10 +288,10 @@ sub format_facets {
 
     for my $fname (keys %$aggregations) {
 
-        my ($field_class, $name) = split(/\|/, $fname);
+        my ($search_group, $name) = split(/\|/, $fname);
 
         my ($bib_field) = grep {
-            $_->name eq $name && $_->field_class eq $field_class
+            $_->name eq $name && $_->search_group eq $search_group
         } @$bib_fields;
 
         my $hash = $facets->{$bib_field->id} = {};
@@ -304,14 +308,14 @@ sub format_facets {
 sub add_elastic_facet_aggregations {
     my ($elastic_query) = @_;
 
-    my @facet_fields = grep {$_->facet_field eq 't'} @$bib_fields;
+    my @facet_fields = grep {$_->facet_field} @$bib_fields;
     return unless @facet_fields;
 
     $elastic_query->{aggs} = {};
 
     for my $facet (@facet_fields) {
         my $fname = $facet->name;
-        my $fgrp = $facet->field_class;
+        my $fgrp = $facet->search_group;
         $fname = "$fgrp|$fname" if $fgrp;
 
         $elastic_query->{aggs}{$fname} = {terms => {field => "$fname|facet"}};

@@ -101,7 +101,7 @@ export class CatalogMarcContext {
         this.tags = [''];
         this.values = [''];
         this.subfields = [''];
-        this.matchOp = ['contains']
+        this.matchOp = ['contains'];
     }
 
     isSearchable() {

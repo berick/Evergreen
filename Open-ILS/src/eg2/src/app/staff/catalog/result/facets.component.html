@@ -13,9 +13,16 @@
       <div *ngFor="let name of facetConf.facetOrder">
         <div class="row" *ngIf="facetHasData(facetConf.facetClass, name)">
           <div class="card mb-2">
+            <!-- pending a facet-label-map in the DB, just map the 
+                newly collapsed facets to simple names -->
             <h4 class="card-header" i18n>
               Related 
-              {{searchContext.result.facetData[facetConf.facetClass][name].cmfLabel}}
+              <ng-container [ngSwitch]="facetConf.facetClass">
+                <span *ngSwitchCase="'title'">Titles</span>
+                <span *ngSwitchCase="'author'">Authors</span>
+                <span *ngSwitchCase="'subject'">Subjects</span>
+                <span *ngSwitchCase="'series'">Series</span>
+              </ng-container>
             </h4>
             <ul class="list-group list-group-flush">
               <li class="list-group-item" 

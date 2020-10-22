@@ -8,10 +8,9 @@ export const FACET_CONFIG = {
     display: [
         {facetClass : 'author',  facetOrder : ['combined']},
         {facetClass : 'subject', facetOrder : ['combined']},
-        {facetClass : 'series',  facetOrder : ['seriestitle']},
-        {facetClass : 'subject', facetOrder : ['combined']}
+        {facetClass : 'series',  facetOrder : ['seriestitle']}
     ],
-    displayCount : 5
+    displayCount: 10
 };
 
 @Component({

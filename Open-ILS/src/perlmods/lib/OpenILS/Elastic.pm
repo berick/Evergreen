@@ -17,6 +17,8 @@ use strict;
 use warnings;
 use DBI;
 use Time::HiRes qw/time/;
+use XML::LibXML;
+use XML::LibXML::XPathContext;
 use Search::Elasticsearch;
 use OpenSRF::Utils::JSON;
 use OpenSRF::Utils::Logger qw/:logger/;
@@ -25,13 +27,13 @@ use OpenILS::Utils::Fieldmapper;
 use Data::Dumper;
 $Data::Dumper::Indent = 0;
 
+# For parsing the Elasticsearch configuration file
+my $ES_NAMESPACE = 'http://evergreen-ils.org/spec/elasticsearch/v1';
+
 sub new {
     my ($class, %args) = @_;
 
-    my $self = {
-        %args,
-        indices => []
-    };
+    my $self = {%args};
 
     $self->{cluster} = 'main' unless $args{cluster};
 
@@ -50,7 +52,23 @@ sub nodes {
 
 sub indices {
     my $self = shift;
-    return $self->{indices};
+    return $self->{indices} if $self->{indices};
+
+    my $def;
+    eval { 
+        # All open indices
+        $def = $self->es->indices->get(
+            index => $self->index_class . '-*',
+            expand_wildcards => 'open'
+        );
+    };
+
+    if ($@) {
+        $logger->error("ES index lookup failed: $@");
+        return {};
+    }
+
+    return $self->{indices} = $def;
 }
 
 sub es {
@@ -61,6 +79,15 @@ sub es {
 sub index_name {
     my ($self) = @_;
     return $self->{index_name};
+}
+
+my $xpc;
+sub xpath_context {
+    if (!$xpc) {
+        $xpc = XML::LibXML::XPathContext->new;                                    
+        $xpc->registerNs('es', $ES_NAMESPACE);
+    }
+    return $xpc;
 }
 
 # In maintenance mode we are working with specific indexes.
@@ -131,9 +158,24 @@ sub load_config {
     my $e = new_editor();
     my $cluster = $self->cluster;
 
-    my %active = $self->maintenance_mode ? () : (active => 't');
+    my @nodes = $self->{nodes} ? @{$self->{nodes}} : ();
 
-    $self->{nodes} = $e->search_elastic_node({cluster => $cluster, %active});
+    if (@nodes) {
+
+        $logger->info("ES overriding nodes with @nodes");
+        $self->{nodes} = \@nodes;
+
+    } else {
+
+        my %active = $self->maintenance_mode ? () : (active => 't');
+        my $nodes = $e->search_elastic_node({cluster => $cluster, %active});
+
+        $self->{nodes} = [
+            map {
+                sprintf("%s://%s:%d%s", $_->proto, $_->host, $_->port, $_->path)
+            } @$nodes
+        ];
+    }
 
     unless (@{$self->nodes}) {
         $logger->error("ES no nodes defined for cluster $cluster");
@@ -144,76 +186,102 @@ sub load_config {
         $logger->error("ES index_class required to initialize");
         return;
     }
+}
 
-    $self->{indices} = $e->search_elastic_index({
-        cluster => $cluster, 
-        index_class => $self->index_class
-    });
+sub load_es_config {
+    my ($self) = @_;
 
-    if (!@{$self->indices}) {
-        $logger->warn("ES no usable indices defined for cluster $cluster");
-        return;
+    my $cluster = $self->cluster;
+
+    if (!$self->indices || !keys(%{$self->indices})) {
+        $logger->info("ES no usable indices defined for cluster $cluster");
+        return unless $self->maintenance_mode;
     }
 
     if (!$self->index_name) {
-
-        my ($index) = grep {
-            $_->index_class eq $self->index_class && $_->active eq 't'
-        } @{$self->{indices}};
-
-        if ($index) {
-            my $name = $index->name;
-            $logger->info("ES defaulting to active index $name");
-            $self->{index_name} = $name;
+        # Default to the index that has an alias matching our index_class
+        
+        for my $name (keys %{$self->indices}) {
+            if ($self->index_is_active($name)) {
+                $logger->info("ES defaulting to active index $name");
+                $self->{index_name} = $name;
+            }
         }
     }
-}
 
-sub find_index_config {
-    my $self = shift;
-
-    my ($conf) = grep {
-        $_->name eq $self->index_name &&
-        $_->index_class eq $self->index_class
-    } @{$self->indices};
-
-    return $conf;
-}
-
-sub find_or_create_index_config {
-    my $self = shift;
-
-    my $conf = $self->find_index_config;
-    return $conf if $conf;
-
-    $logger->info("ES creating new index configuration for ".
-        sprintf("cluster=%s index_class=%s name=%s",
-            $self->cluster, $self->index_class, $self->index_name));
-
-    my $e = new_editor(xact => 1);
-    $conf = Fieldmapper::elastic::index->new;
-
-    $conf->cluster($self->cluster);
-    $conf->index_class($self->index_class);
-    $conf->name($self->index_name);
+    # Load the main ES config file
     
-    # Created by default with active=false and num_shards=1
+    # TODO: 'dirs' option for 'conf'
+    #my $client = OpenSRF::Utils::SettingsClient->new;
+    #my $dir = $client->config_value("dirs", "conf");
 
-    unless ($e->create_elastic_index($conf)) {
-        $logger->error("ES failed creating index ".$self->index_name);
+    my $doc;
+    my $filename = $self->{es_config_file} 
+        || '/openils/conf/elastic-config.xml';
+
+    eval { $doc = XML::LibXML->load_xml(location => $filename) };
+
+    if ($@ || !$doc) {
+        my $msg = "ES could not parse elastic config file: $filename $@";
+        $logger->error($msg);
+        die "$msg\n";
+    }
+
+    $self->{es_config} = $doc->documentElement;
+}
+
+sub es_config {
+    my $self = shift;
+    return $self->{es_config};
+}
+
+sub active_index {
+    my $self = shift;
+    my $indices = $self->indices;
+    for my $name (keys %{$indices}) {
+        return $name if $self->index_is_active($name);
+    }
+    return undef;
+}
+
+# True if the named index has an alias matching our index class
+sub index_is_active {
+    my ($self, $name) = @_;
+
+    my $conf = $self->indices->{$name};
+    return 0 unless $conf;
+
+    my @aliases = keys %{$conf->{aliases}};
+    return 1 if grep {$_ eq $self->index_class} @aliases;
+
+    return 0;
+}
+
+
+sub index_config {
+    my $self = shift;
+    my $class = $self->index_class;
+
+    if (!$self->es_config) {
+        $logger->error("ES cannot load index config without a config file");
         return undef;
     }
 
-    $e->commit;
+    my @conf;
+    eval {
+        @conf = $xpc->findnodes(
+            "//es:elasticsearch/es:index[\@class='$class']",
+            $self->es_config
+        );
+    };
 
-    # Pull the latest data from the DB to pick up any defaults.
-    $e->xact_begin;
-    $conf = $e->retrieve_elastic_index($conf->id);
-    $e->rollback;
+    if ($@ || !@conf) {
+        my $msg = "ES failed to locate config for index class '$class' $@";
+        $logger->error($msg);
+        die "$msg\n";
+    }
 
-    push(@{$self->indices}, $conf);
-
-    return $conf;
+    return $conf[0];
 }
 
 sub connect {
@@ -221,24 +289,22 @@ sub connect {
 
     $self->load_config;
 
-    my @nodes;
-    for my $server (@{$self->nodes}) {
-        push(@nodes, {
-            scheme => $server->proto,
-            host   => $server->host,
-            port   => $server->port,
-            path   => $server->path
-        });
-    }
+    my @nodes = @{$self->nodes};
+    $logger->info("ES connecting to nods: @nodes");
 
-    $logger->debug("ES connecting to ".scalar(@nodes)." nodes");
-
-    eval { $self->{es} = Search::Elasticsearch->new(nodes => \@nodes) };
+    eval { 
+        $self->{es} = Search::Elasticsearch->new(
+            client => '6_0::Direct',
+            nodes  => \@nodes
+        );
+    };
 
     if ($@) {
         $logger->error("ES failed to connect to @nodes: $@");
         return;
     }
+
+    $self->load_es_config;
 }
 
 # Activates the currently loaded index while deactivating any active
@@ -254,48 +320,11 @@ sub activate_index {
         return;
     }
 
-    my ($active) = grep {
-        $_->index_class eq $self->index_class &&
-        $_->cluster eq $self->cluster &&
-        $_->active eq 't' &&
-        $_->name ne $index
-    } @{$self->indices};
-
-    my $e = new_editor(xact => 1);
-
-    if ($active) {
-        $logger->info(
-            "ES deactivating index ".$active->name." before activating $index");
-
-        $active->active('f');
-        unless ($e->update_elastic_index($active)) {
-            $logger->error("ES failed deactivating index ".$active->name);
-            $e->rollback;
-            return 0;
-        }
-    }
-
-    my $conf = $self->find_index_config;
-
-    if (!$conf) {
-        $logger->error("ES no such index to activate: $index");
-        $e->rollback;
-        return 0;
-    }
-
-    $conf->active('t');
-    unless ($e->update_elastic_index($conf)) {
-        $logger->error("ES failed deactivating index: $index");
-        $e->rollback;
-        return 0;
-    }
-
-    $e->commit;
+    my $from_index = $self->active_index;
 
     # When activating an index, point the main alias toward the
     # newly active index.
-    return $self->migrate_alias(
-        $self->index_class, $active ? $active->name : undef, $index);
+    return $self->migrate_alias($self->index_class, $from_index, $index);
 }
 
 
@@ -347,29 +376,7 @@ sub delete_index {
             "does not exist in cluster '".$self->cluster."'");
     }
 
-    my $e = new_editor(xact => 1);
-    my $conf = $self->find_index_config;
-
-    if (!$conf) {
-        $e->rollback;
-        return 0;
-    }
-
-    # Remove from EG database
-    unless ($e->delete_elastic_index($conf)) {
-        $e->rollback;
-        return 0;
-    }
-
-    $e->commit;
-
-    # Remove from local cache
-    $self->indices([
-        grep { 
-            $_->name ne $self->index_name ||
-            $_->index_class ne $self->index_class
-        } @{$self->indices}
-    ]);
+    delete $self->indices->{$index};
 
     return 1;
 }

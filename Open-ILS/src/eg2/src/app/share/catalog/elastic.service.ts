@@ -23,10 +23,7 @@ export class ElasticService {
     ) {}
 
     init(): Promise<any> {
-        return this.pcrud.search('ebf',
-            {field_group: null, facet_field: 't'},
-            {select: {ebf: ['id', 'name', 'field_class', 'label']}}
-        ).pipe(tap(field => this.ebfMap[field.id()] = field)).toPromise();
+        return Promise.resolve();
     }
 
     // Returns true if Elastic can provide search results.
@@ -339,7 +336,6 @@ export class ElasticService {
         const facetData = {};
         Object.keys(facets).forEach(ebfId => {
             const facetHash = facets[ebfId];
-            const ebf = this.ebfMap[ebfId];
 
             const ebfData = [];
             Object.keys(facetHash).forEach(value => {
@@ -347,13 +343,15 @@ export class ElasticService {
                 ebfData.push({value : value, count : count});
             });
 
-            if (!facetData[ebf.field_class()]) {
-                facetData[ebf.field_class()] = {};
-            }
+            const parts = ebfId.split('|');
+            const fclass = parts[0];
+            const fname = parts[1];
 
-            facetData[ebf.field_class()][ebf.name()] = {
+            if (!facetData[fclass]) { facetData[fclass] = {}; }
+
+            facetData[fclass][fname] = {
                 // 'cmfLabel' is what the higher-level code seeks
-                cmfLabel : ebf.label(),
+                cmfLabel : ebfId, // TODO
                 valueList : ebfData.sort((a, b) => {
                     if (a.count > b.count) { return -1; }
                     if (a.count < b.count) { return 1; }

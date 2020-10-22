@@ -14,6 +14,7 @@ binmode(STDOUT, ':utf8');
 my $help;
 my $osrf_config = '/openils/conf/opensrf_core.xml';
 my $cluster = 'main';
+my @nodes;
 my $index_class = 'bib-search';
 my $index_name;
 my $field_group;
@@ -24,9 +25,9 @@ GetOptions(
     'help'              => \$help,
     'osrf-config=s'     => \$osrf_config,
     'cluster=s'         => \$cluster,
+    'node=s'            => \@nodes,
     'index-class=s'     => \$index_class,
     'index-name=s'      => \$index_name,
-    'field-group=s'     => \$field_group,
     'quiet'             => \$quiet,
 ) || die "\nSee --help for more\n";
 
@@ -56,6 +57,8 @@ OpenILS::Utils::CStoreEditor::init();
 
 my $es = OpenILS::Elastic::BibSearch->new(
     maintenance_mode => 1, # allows access to inactive indexes
+    cluster => $cluster, 
+    nodes => \@nodes,
     field_group => $field_group,
     index_name => $index_name
 );

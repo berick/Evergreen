@@ -9,13 +9,14 @@ use OpenILS::Elastic::BibSearch;
 
 my $batch_size = 500;
 my $osrf_config = '/openils/conf/opensrf_core.xml';
+my $cluster = 'main';
+my @nodes;
 my $index_class = 'bib-search';
 my $bib_transform;
-my $cluster;
+my $es_config_file;
 my $create_index;
 my $delete_index;
 my $index_name;
-my $field_group;
 my $activate_index;
 my $populate;
 my $index_record;
@@ -40,6 +41,7 @@ GetOptions(
     'help'              => \$help,
     'osrf-config=s'     => \$osrf_config,
     'cluster=s'         => \$cluster,
+    'node=s'            => \@nodes,
     'create-index'      => \$create_index,
     'delete-index'      => \$delete_index,
     'index-name=s'      => \$index_name,
@@ -52,7 +54,7 @@ GetOptions(
     'max-duration=s'    => \$max_duration,
     'batch-size=s'      => \$batch_size,
     'bib-transform=s'   => \$bib_transform,
-    'field-group=s'   => \$field_group,
+    'es-config-file=s'  => \$es_config_file,
     'skip-holdings'     => \$skip_holdings,
     'list-indices'      => \$list_indices,
     'force'             => \$force,
@@ -64,6 +66,8 @@ GetOptions(
     'db-appn=s'         => \$db_appn,
     'populate'          => \$populate
 ) || die "\nSee --help for more\n";
+
+$index_name = "$index_class-$index_name" if $index_name;
 
 sub help {
     print <<HELP;
@@ -91,23 +95,23 @@ sub help {
                 Override the configured global config value for
                 'elastic.bib_search.transform_file'
 
+            --es-config-file <path_to_file>
+                Override the default ES configuration XML file.
+
             --cluster <name>
                 Specify a cluster name.  Defaults to 'main'.
+
+            --node <URL> [repeatable]
+                Override the configured ES nodes.
 
             --index-class <class>
                 Specifies which data set the current index manages (e.g. bib-search)
                 Must match a well-known index class with backing code.
 
             --index-name <name>
-                Specify an index name.  An index name CANNOT match its
-                index_class, since the index_class is used as an alias
-                for the active index within each class.
-
-            --field-group <groupname>
-                Field groups are useful for adding a collection of field
-                to an index in the database that are a) not active
-                within the main search code and b) grouped for index
-                creation and testing across a subset of index fields.
+                The index name will be automatically prepended with the
+                index class. e.g. "my-index" becomes "bib-search-my-index"
+                on the backend for the "bib-search" index class.
 
             --delete-index
                 Delete the specified index and all of its data. 
@@ -176,11 +180,18 @@ my $e = OpenILS::Utils::CStoreEditor->new;
 
 if ($index_class eq 'bib-search') {
     $es = OpenILS::Elastic::BibSearch->new(
+        db_name => $db_name,
+        db_host => $db_host,
+        db_port => $db_port,
+        db_user => $db_user,
+        db_pass => 'REDACTED',
+        db_appn => $db_appn,
         cluster => $cluster, 
-        index_name => $index_name,
-        field_group => $field_group,
-        maintenance_mode => 1,
+        nodes => \@nodes,
         xsl_file => $bib_transform,
+        index_name => $index_name,
+        maintenance_mode => 1,
+        es_config_file => $es_config_file,
         skip_holdings => $skip_holdings
     );
 }
@@ -194,14 +205,11 @@ $es->connect;
 if ($delete_index) {
 
     if (!$force) {
-        my $index = $e->search_elastic_index({
-            index_class => $index_class, 
-            name => $index_name, 
-            active => 't'
-        })->[0];
-
-        die "Index '$index_name' is active!  " . 
-            "Use --force to delete an active index.\n" if $index;
+        my $active = $es->active_index;
+        if ($active && $active eq $index_name) {
+            die "Index '$index_name' is active!  " . 
+                "Use --force to delete an active index.\n";
+        }
     }
 
     $es->delete_index or die "Index delete failed.\n";
@@ -219,12 +227,6 @@ if ($create_index) {
 if ($populate) {
 
     my $settings = {
-        db_name => $db_name,
-        db_host => $db_host,
-        db_port => $db_port,
-        db_user => $db_user,
-        db_pass => 'REDACTED',
-        db_appn => $db_appn,
         index_record   => $index_record,
         start_record   => $start_record,
         stop_record    => $stop_record,
@@ -247,21 +249,22 @@ if ($activate_index) {
 }
 
 if ($list_indices) {
-    my $indices = $e->retrieve_all_elastic_index;
-    for my $index (@$indices) {
-        my $index_def = $es->get_index_def($index->name);
+    my $indices = $es->indices;
+
+    for my $name (keys %{$indices}) {
+        my $index_def = $indices->{$name};
 
         my @aliases;
         if ($index_def) {
-            @aliases = keys(%{$index_def->{$index->name}->{aliases}});
+            @aliases = keys(%{$index_def->{$name}->{aliases}});
         } else {
-            warn "ES has no index named ". $index->name . "\n";
+            warn "ES has no index named $name\n";
         }
 
         print sprintf(
             "index_class=%s index_name=%s active=%s aliases=@aliases\n",
-            $index->index_class, $index->name, 
-            $index->active eq 't' ? 'yes' : 'no');
+            $es->index_class, $name, 
+            $es->index_is_active($name) ? 'yes' : 'no');
     }
 }
 
