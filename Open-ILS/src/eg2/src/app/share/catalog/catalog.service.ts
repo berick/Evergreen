@@ -422,9 +422,9 @@ export class CatalogService {
 
         Object.keys(this.ccvmMap).forEach(cType => {
             this.ccvmMap[cType] =
-                this.ccvmMap[cType].sort((a, b) => {
-                    return a.value() < b.value() ? -1 : 1;
-                });
+                this.ccvmMap[cType].sort((a, b) =>
+                    a.value().toLowerCase() < b.value().toLowerCase() ? -1 : 1
+                );
         });
     }
 
