@@ -14,7 +14,7 @@ functionatlity.
 == Installation ==
 
 1. Install and run a 6.8.* version of ES:
-   https://www.elastic.co/downloads/past-releases/elasticsearch-6-8-3
+   https://www.elastic.co/downloads/past-releases/elasticsearch-6-8-11
 2. Check out this Evergreen branch.
 3. Apply SQL Open-ILS/src/sql/Pg/upgrade/XXXX.schema.elastic-search.sql
 4. cd Open-ILS/src/eg2/ && npm install # new dependency
@@ -35,6 +35,14 @@ UPDATE config.global_flag SET enabled = true WHERE name ~ '^elastic.*';
 ------------------------------------------------------------------------------
 
 == Indexing Bib Records ==
+
+=== Copy ES Config ===
+TODO: add to build 
+
+[source,sh]
+------------------------------------------------------------------------------
+cp Open-ILS/examples/elastic/elastic-config.example.xml /openils/conf/elastic-config.xml
+------------------------------------------------------------------------------
 
 See Open-ILS/src/support-scripts/elastic-index.pl
 
