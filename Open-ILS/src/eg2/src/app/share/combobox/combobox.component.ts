@@ -439,12 +439,14 @@ export class ComboboxComponent implements ControlValueAccessor, OnInit, AfterVie
             return of(term);
         }
 
-        let searchTerm: string;
-        searchTerm = term;
-        if (searchTerm === '_CLICK_') {
+        let searchTerm = term;
+        if (term === '_CLICK_') {
             if (this.asyncSupportsEmptyTermClick) {
+                // Search for "all", but retain and propage the _CLICK_
+                // term so the filter knows to open the selector
                 searchTerm = '';
             } else {
+                // Skip the final filter map and display nothing.
                 return of();
             }
         }
@@ -454,7 +456,7 @@ export class ComboboxComponent implements ControlValueAccessor, OnInit, AfterVie
                 (entry: ComboboxEntry) => this.addAsyncEntry(entry),
                 err => {},
                 ()  => {
-                    observer.next(searchTerm);
+                    observer.next(term);
                     observer.complete();
                 }
             );
@@ -484,10 +486,8 @@ export class ComboboxComponent implements ControlValueAccessor, OnInit, AfterVie
                 // click action occurred.
                 if (term === '') { return []; }
 
-                // In sync-data mode, a click displays the full list.
-                if (term === '_CLICK_' && !this.asyncDataSource) {
-                    return this.entrylist;
-                }
+                // If we make it this far, _CLICK_ means show everything.
+                if (term === '_CLICK_') { term = ''; }
 
                 // Filter entrylist whose labels substring-match the
                 // text entered.
