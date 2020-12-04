@@ -454,7 +454,7 @@ export class ComboboxComponent implements ControlValueAccessor, OnInit, AfterVie
                 (entry: ComboboxEntry) => this.addAsyncEntry(entry),
                 err => {},
                 ()  => {
-                    observer.next(searchTerm);
+                    observer.next(term);
                     observer.complete();
                 }
             );
@@ -484,10 +484,8 @@ export class ComboboxComponent implements ControlValueAccessor, OnInit, AfterVie
                 // click action occurred.
                 if (term === '') { return []; }
 
-                // In sync-data mode, a click displays the full list.
-                if (term === '_CLICK_' && !this.asyncDataSource) {
-                    return this.entrylist;
-                }
+                // Clicking always displays the full list.
+                if (term === '_CLICK_') { term = ''; }
 
                 // Filter entrylist whose labels substring-match the
                 // text entered.
