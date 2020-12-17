@@ -40,8 +40,7 @@ export class LineitemService {
         }
 
         return this.net.request(
-            'open-ils.acq',
-            'open-ils.acq.lineitem.retrieve.batch.authoritative',
+            'open-ils.acq', 'open-ils.acq.lineitem.retrieve.batch',
             this.auth.token(), ids, flesh);
     }
 

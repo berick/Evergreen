@@ -13,7 +13,9 @@ use OpenILS::Application::Acq::Financials;
 use OpenILS::Application::Cat::BibCommon;
 use OpenILS::Application::Cat::AssetCommon;
 use OpenILS::Application::Acq::Lineitem::BatchUpdate;
+use OpenILS::Application::Acq::Common;
 my $U = 'OpenILS::Application::AppUtils';
+my $AC = 'OpenILS::Application::Acq::Common';
 
 
 __PACKAGE__->register_method(
@@ -233,7 +235,6 @@ __PACKAGE__->register_method(
     method    => 'retrieve_lineitem_batch',
     api_name  => 'open-ils.acq.lineitem.retrieve.batch',
     stream => 1,
-    authoritative => 1,
     max_bundle_count => 1,
     signature => {
         desc   => q/
@@ -251,22 +252,18 @@ __PACKAGE__->register_method(
 
 sub retrieve_lineitem_batch {
     my($self, $client, $auth, $li_ids, $options) = @_;
-    my $e = new_editor(authtoken => $auth);
+    my $e = new_editor(authtoken => $auth, xact => 1);
     return $e->die_event unless $e->checkauth;
 
-    my $cmethod = 'open-ils.acq.lineitem.existing_copies.count';
-    $cmethod .= '.authoritative' if ($self->api_name =~ /authoritative/);
-    $cmethod = $self->method_lookup($cmethod);
-
     for my $li_id (@$li_ids) {
-        my ($existing) = $cmethod->run($auth, $li_id);
-
         $client->respond({
             id => $li_id,
             lineitem => retrieve_lineitem_impl($e, $li_id, $options),
-            existing_copies => $existing
+            existing_copies => $AC->li_existing_copies($e, $li_id)
         });
     }
+
+    $e->rollback;
 
     return undef;
 }
