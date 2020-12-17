@@ -1,5 +1,9 @@
 <hr class="p-1"/>
 
+<a routerLink="../../../">
+  <button class="btn btn-sm btn-outline-dark" i18n>Return</button>
+</a>
+
 <ng-container *ngIf="lineitem">
 
   <div class="row" *ngFor="let attr of lineitem.attributes()">

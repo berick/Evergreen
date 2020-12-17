@@ -13,9 +13,6 @@ const routes: Routes = [{
     path: '',
     component: LineitemListComponent
   }, {
-    path: 'lineitem/:lineitemId',
-    component: LineitemDetailComponent
-  }, {
     path: 'lineitem/:lineitemId/detail',
     component: LineitemDetailComponent
   }, {
