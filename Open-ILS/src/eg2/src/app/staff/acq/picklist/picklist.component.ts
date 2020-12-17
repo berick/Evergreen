@@ -23,12 +23,7 @@ import {BroadcastService} from '@eg/share/util/broadcast.service';
 })
 export class PicklistComponent implements OnInit, AfterViewInit {
 
-    listId: number;
-    picklist: IdlObject;
-    newPlName: string;
-    editPlName = false;
-    batchNote: string;
-    noteIsPublic = false;
+    picklistId: number;
 
     constructor(
         private router: Router,
@@ -48,96 +43,10 @@ export class PicklistComponent implements OnInit, AfterViewInit {
 
     ngOnInit() {
         this.route.paramMap.subscribe((params: ParamMap) => {
-            const listId = +params.get('listId');
-
-            if (listId !== this.listId) {
-                this.listId = listId;
-                this.load();
-            }
-        });
-    }
-
-    load(): Promise<any> {
-        this.picklist = null;
-
-        return this.net.request(
-            'open-ils.acq',
-            'open-ils.acq.picklist.retrieve.authoritative',
-            this.auth.token(), this.listId,
-            {flesh_lineitem_count: true, flesh_owner: true}
-        ).toPromise().then(list => {
-
-            const evt = this.evt.parse(list);
-            if (evt) {
-                console.error('API returned ', evt);
-                return Promise.reject();
-            }
-
-            this.picklist = list;
+            this.picklistId = +params.get('picklistId');
         });
     }
 
     ngAfterViewInit() {
     }
-
-    applyAction(action: string) {
-        switch (action) {
-            case 'brief-record':
-                break;
-        }
-    }
-
-    toggleNameEdit() {
-        this.editPlName = !this.editPlName;
-
-        if (this.editPlName) {
-            this.newPlName = this.picklist.name();
-            setTimeout(() => {
-                const node =
-                    document.getElementById('pl-name-input') as HTMLInputElement;
-                if (node) { node.select(); }
-            });
-
-        } else if (this.newPlName && this.newPlName !== this.picklist.name()) {
-
-            const prevName = this.picklist.name();
-            this.picklist.name(this.newPlName);
-            this.newPlName = null;
-
-            this.net.request(
-                'open-ils.acq',
-                'open-ils.acq.picklist.update',
-                this.auth.token(), this.picklist
-            ).subscribe(resp => {
-                const evt = this.evt.parse(resp);
-                if (evt) {
-                    alert(evt);
-                    this.picklist.name(prevName);
-                }
-            });
-        }
-    }
-
-
-    /*
-    savePref(name: string) {
-        switch (name) {
-            case 'checkdigit':
-                this.serverStore.setItem(
-                    'eg.acq.update_items.use_checkdigit', this.useCheckdigit);
-                break;
-
-            case 'notes':
-                this.serverStore.setItem(
-                    'eg.acq.update_items.add_notes', this.addNotes);
-                break;
-
-            case 'labels':
-                this.serverStore.setItem(
-                    'eg.acq.update_items.print_labels', this.printLabels);
-                break;
-
-        }
-    }
-    */
 }
