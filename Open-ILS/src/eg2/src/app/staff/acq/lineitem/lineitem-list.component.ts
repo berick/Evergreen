@@ -1,4 +1,5 @@
 import {Component, OnInit, Input, Output} from '@angular/core';
+import {Router, ActivatedRoute, ParamMap} from '@angular/router';
 import {tap} from 'rxjs/operators';
 import {Pager} from '@eg/share/util/pager';
 import {IdlObject} from '@eg/core/idl.service';
@@ -14,7 +15,7 @@ import {ComboboxEntry} from '@eg/share/combobox/combobox.component';
 })
 export class LineitemListComponent implements OnInit {
 
-    @Input() fromPicklist: number;
+    picklistId: number;
 
     loading = false;
     pager: Pager = new Pager();
@@ -38,18 +39,19 @@ export class LineitemListComponent implements OnInit {
     batchSelectPage = false;
     batchSelectAll = false;
     showNotesFor: number;
-    showLiDetailFor: IdlObject;
-    showCopiesFor: IdlObject;
-
     action = '';
 
     constructor(
+        private route: ActivatedRoute,
         private net: NetService,
         private auth: AuthService,
         private liService: LineitemService
     ) {}
 
     ngOnInit() {
+        this.route.parent.paramMap.subscribe((params: ParamMap) => {
+            this.picklistId = +params.get('picklistId');
+        });
         this.load();
     }
 
@@ -72,7 +74,7 @@ export class LineitemListComponent implements OnInit {
         return this.net.request(
             'open-ils.acq',
             'open-ils.acq.lineitem.picklist.retrieve.atomic',
-            this.auth.token(), this.fromPicklist, {idlist: true, limit: 1000}
+            this.auth.token(), this.picklistId, {idlist: true, limit: 1000}
         ).toPromise().then(ids => {
 
             this.lineitemIds = ids.sort(
