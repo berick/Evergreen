@@ -1,5 +1,6 @@
 import {Component, OnInit, Input, Output} from '@angular/core';
 import {Router, ActivatedRoute, ParamMap} from '@angular/router';
+import {Observable} from 'rxjs';
 import {tap} from 'rxjs/operators';
 import {Pager} from '@eg/share/util/pager';
 import {IdlObject} from '@eg/core/idl.service';
@@ -42,6 +43,7 @@ export class LineitemListComponent implements OnInit {
     action = '';
 
     constructor(
+        private router: Router,
         private route: ActivatedRoute,
         private net: NetService,
         private auth: AuthService,
@@ -49,16 +51,25 @@ export class LineitemListComponent implements OnInit {
     ) {}
 
     ngOnInit() {
+
+        this.route.queryParamMap.subscribe((params: ParamMap) => {
+            this.pager.offset = +params.get('offset');
+            this.pager.limit = +params.get('limit');
+            if (this.picklistId) { this.load(); }
+        });
+
         this.route.parent.paramMap.subscribe((params: ParamMap) => {
             this.picklistId = +params.get('picklistId');
+            this.load();
         });
-        this.load();
     }
 
     load(): Promise<any> {
         this.pageOfLineitems = [];
 
-        this.pager.limit = 20; // TODO: setting
+        if (!this.pager.limit) {
+            this.pager.limit = 10; // TODO: setting
+        }
 
         this.loading = true;
         return this.loadIds()
@@ -84,6 +95,16 @@ export class LineitemListComponent implements OnInit {
         });
     }
 
+    goToPage() {
+        this.router.navigate([], {
+            relativeTo: this.route,
+            queryParamsHandling: 'merge',
+            queryParams: {
+                offset: this.pager.offset,
+                limit: this.pager.limit
+            }
+        });
+    }
 
     loadPage(): Promise<any> {
         return this.loadPageOfLis().then(_ => this.setBatchSelect());
@@ -113,6 +134,8 @@ export class LineitemListComponent implements OnInit {
         }
 
         this.pageOfLineitems = []; // reset
+
+        // TODO: cache in liService for faster navigation
 
         return this.liService.getFleshedLineitems(ids).pipe(tap(struct => {
             this.ingestOneLi(struct.lineitem);

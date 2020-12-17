@@ -59,15 +59,15 @@
 
       <div class="btn-toolbar">
         <button [disabled]="pager.isFirstPage()" type="button"
-          class="btn btn-outline-dark mr-1" (click)="pager.toFirst(); loadPage()">
+          class="btn btn-outline-dark mr-1" (click)="pager.toFirst(); goToPage()">
           <span title="First Page" i18n-title i18n>&#x2b70;</span>
         </button>
         <button [disabled]="pager.isFirstPage()" type="button"
-          class="btn btn-outline-dark mr-1" (click)="pager.decrement(); loadPage()">
+          class="btn btn-outline-dark mr-1" (click)="pager.decrement(); goToPage()">
           <span title="Previous Page" i18n-title i18n>&#x21e0;</span>
         </button>
         <button [disabled]="pager.isLastPage()" type="button"
-          class="btn btn-outline-dark mr-1" (click)="pager.increment(); loadPage()">
+          class="btn btn-outline-dark mr-1" (click)="pager.increment(); goToPage()">
           <span title="Next Page" i18n-title i18n>&#x21e2;</span>
         </button>
         <div ngbDropdown class="mr-1" placement="bottom-right">
@@ -78,7 +78,7 @@
           </button>
           <div class="dropdown-menu" ngbDropdownMenu>
             <a class="dropdown-item" 
-              (click)="pager.setLimit(count); pager.toFirst(); loadPage()"
+              (click)="pager.setLimit(count); pager.toFirst(); goToPage()"
               *ngFor="let count of [5, 10, 25, 50, 100, 500, 1000, 10000]">
               <span class="ml-2">{{count}}</span>
             </a>
@@ -158,7 +158,7 @@
             {{existingCopyCounts[li.id()]}}</span>
           <span class="ml-1 mr-1" i18n> | </span>
           <a class="label-with-material-icon" title="Items" i18n-title
-            routerLink="./lineitem/{{li.id()}}/items">
+            routerLink="./lineitem/{{li.id()}}/items" queryParamsHandling="merge">
             <span class="material-icons small mr-1">shopping_basket</span>
             <span i18n>Items ({{0}})</span>
           </a>
@@ -194,7 +194,7 @@
           <ng-container *ngIf="li.purchase_order()">
             <span class="ml-1 mr-1" i18n> | </span>
             <a class="label-with-material-icon"
-              title="Provider" i18n-title
+              title="Provider" i18n-title queryParamsHandling="merge"
               routerLink="/staff/acq/provider/{{li.purchase_order().provider()}}/details">
               <span class="material-icons small mr-1">adjust</span>
               <span i18n>todo</span>
