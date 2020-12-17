@@ -100,7 +100,7 @@
         </div>
         <div class="flex-1">
           <div>
-            <a routerLink="./lineitem/{{li.id()}}/detail">
+            <a routerLink="./lineitem/{{li.id()}}/detail" queryParamsHandling="merge">
               {{displayAttr(li, 'title')}}
             </a>
           </div>
@@ -194,7 +194,7 @@
           <ng-container *ngIf="li.purchase_order()">
             <span class="ml-1 mr-1" i18n> | </span>
             <a class="label-with-material-icon"
-              title="Provider" i18n-title queryParamsHandling="merge"
+              title="Provider" i18n-title
               routerLink="/staff/acq/provider/{{li.purchase_order().provider()}}/details">
               <span class="material-icons small mr-1">adjust</span>
               <span i18n>todo</span>
