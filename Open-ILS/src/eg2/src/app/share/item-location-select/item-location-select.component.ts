@@ -220,8 +220,8 @@ export class ItemLocationSelectComponent
         return promise.then(loc => {
 
             this.loc.locationCache[loc.id()] = loc;
-            const entry: ComboboxEntry =
-                {id: loc.id(), label: loc.name(), userdata: loc};
+            const entry: ComboboxEntry = {
+                id: loc.id(), label: loc.name(), userdata: loc};
 
             if (this.comboBox.entries) {
                 this.comboBox.entries.push(entry);

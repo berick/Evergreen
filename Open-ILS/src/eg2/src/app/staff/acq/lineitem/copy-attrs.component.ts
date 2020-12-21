@@ -84,7 +84,7 @@ export class LineitemCopyAttrsComponent implements OnInit {
         const announce: any = {};
         this.copy.ischanged(true);
 
-        switch(field) {
+        switch (field) {
 
             case 'cn_label':
             case 'collection_code':
