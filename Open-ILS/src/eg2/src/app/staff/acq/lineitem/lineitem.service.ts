@@ -37,6 +37,13 @@ export class LineitemService {
     preloadFunds: ComboboxEntry[];
     preloadCircMods: ComboboxEntry[];
 
+    // Emitted when our copy batch editor wants to apply a value
+    // to a set of inputs.  This allows the the copy input comboxoes, etc.
+    // to add the entry before it's forced to grab the value from the
+    // server, often in large parallel batches.
+    batchOptionWanted: EventEmitter<{[field: string]: ComboboxEntry}>
+        = new EventEmitter<{[field: string]: ComboboxEntry}> ();
+
     constructor(
         private idl: IdlService,
         private net: NetService,
