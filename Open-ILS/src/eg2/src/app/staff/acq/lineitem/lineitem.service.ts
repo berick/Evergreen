@@ -1,16 +1,19 @@
 import {Injectable, EventEmitter} from '@angular/core';
-import {Observable, empty} from 'rxjs';
-import {switchMap, map, tap} from 'rxjs/operators';
+import {Observable} from 'rxjs';
+import {switchMap, map} from 'rxjs/operators';
 import {IdlObject, IdlService} from '@eg/core/idl.service';
 import {NetService} from '@eg/core/net.service';
 import {AuthService} from '@eg/core/auth.service';
 import {PcrudService} from '@eg/core/pcrud.service';
-import {ItemLocationService} from '@eg/share/item-location-select/item-location-select.service';
+import {ComboboxEntry} from '@eg/share/combobox/combobox.component';
 
 export interface BatchLineitemStruct {
     id: number;
     lineitem: IdlObject;
     existing_copies: number;
+    all_locations: IdlObject[];
+    all_funds: IdlObject[];
+    all_circ_modifiers: IdlObject[];
 }
 
 export interface BatchLineitemUpdateStruct {
@@ -28,62 +31,40 @@ export class LineitemService {
 
     liAttrDefs: IdlObject[];
 
+    // Pre-fetch large batches of objects so our comboboxes aren't
+    // forced to fetch them all in parallel at render time.
+    preloadLocations: ComboboxEntry[];
+    preloadFunds: ComboboxEntry[];
+    preloadCircMods: ComboboxEntry[];
+
     constructor(
         private idl: IdlService,
         private net: NetService,
         private auth: AuthService,
-        private pcrud: PcrudService,
-        private loc: ItemLocationService
+        private pcrud: PcrudService
     ) {}
 
-    getFleshedLineitems(ids: number[], flesh?: any): Observable<BatchLineitemStruct> {
+    getFleshedLineitems(ids: number[]): Observable<BatchLineitemStruct> {
 
-        if (!flesh) {
-            flesh = {
-                flesh_attrs: true,
-                flesh_cancel_reason: true,
-                flesh_li_details: true,
-                flesh_notes: true,
-                flesh_fund_debit: true,
-                clear_marc: true,
-                flesh_po: true,
-                flesh_pl: true
-            };
-        }
+        const flesh: any = {
+            flesh_attrs: true,
+            flesh_cancel_reason: true,
+            flesh_li_details: true,
+            flesh_notes: true,
+            flesh_fund: true,
+            flesh_circ_modifier: true,
+            flesh_location: true,
+            flesh_fund_debit: true,
+            clear_marc: true,
+            flesh_po: true,
+            flesh_pl: true
+        };
 
-        return new Observable<BatchLineitemStruct>(observer => {
-            const locIds = {};
-            const lis = [];
-
-            this.net.request(
-                'open-ils.acq', 'open-ils.acq.lineitem.retrieve.batch',
-                this.auth.token(), ids, flesh
-
-            ).pipe(tap(struct => {
-
-                struct.lineitem.lineitem_details().forEach(copy => {
-                    if (copy.location()) { locIds[copy.location()] = true; }
-                });
-
-                lis.push(struct);
-
-            })).toPromise().then(_ => {
-                this.getLocations(Object.keys(locIds).map(id => Number(id)))
-                .toPromise().then(_ => {
-                    lis.forEach(struct => observer.next(struct));
-                    observer.complete();
-                });
-            })
-        });
+        return this.net.request(
+            'open-ils.acq', 'open-ils.acq.lineitem.retrieve.batch',
+            this.auth.token(), ids, flesh);
     }
 
-    // Pre-fetch related copy locations so our update inputs aren't
-    // required to fetch them all one a a time (sometimes in parallel)
-    getLocations(ids: number[]): Observable<any> {
-        if (ids.length === 0) { return empty(); }
-        return this.pcrud.search('acpl', {id: ids})
-        .pipe(tap(loc => this.loc.locationCache[loc.id()] = loc));
-    }
 
     // Returns all matching attributes
     // 'li' should be fleshed with attributes()
@@ -181,8 +162,6 @@ export class LineitemService {
     updateLiDetails(li: IdlObject): Observable<BatchLineitemUpdateStruct> {
         const lids = li.lineitem_details().filter(copy =>
             (copy.isnew() || copy.ischanged() || copy.isdeleted()));
-
-        if (lids.length === 0) { return empty(); }
 
         return this.net.request(
             'open-ils.acq',

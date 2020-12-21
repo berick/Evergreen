@@ -211,10 +211,14 @@ export class ItemLocationSelectComponent
     }
 
     getOneLocation(id: number) {
-        if (!id || this.loc.locationCache[id]) { return Promise.resolve(); }
+        if (!id) { return Promise.resolve(); }
 
-        return this.pcrud.retrieve('acpl', id).toPromise()
-        .then(loc => {
+        const promise = this.loc.locationCache[id] ?
+            Promise.resolve(this.loc.locationCache[id]) :
+            this.pcrud.retrieve('acpl', id).toPromise();
+
+        return promise.then(loc => {
+
             this.loc.locationCache[loc.id()] = loc;
             const entry: ComboboxEntry =
                 {id: loc.id(), label: loc.name(), userdata: loc};

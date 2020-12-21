@@ -180,6 +180,8 @@ sub retrieve_lineitem_impl {
         push(@{$fields->{acqlid}}, 'fund'         ) if $$options{flesh_fund};
         push(@{$fields->{acqlid}}, 'fund_debit'   ) if $$options{flesh_fund_debit};
         push(@{$fields->{acqlid}}, 'cancel_reason') if $$options{flesh_cancel_reason};
+        push(@{$fields->{acqlid}}, 'circ_modifier') if $$options{flesh_circ_modifier};
+        push(@{$fields->{acqlid}}, 'location')      if $$options{flesh_location};
     }
 
     if($$options{clear_marc}) { # avoid fetching marc blob
