@@ -2,7 +2,7 @@
 <!-- Note the flex values are set so they also match the layout
      of the list of copies in the copies component. -->
 
-<ng-template #copyAttrsHeader let-moreCss="moreCss">
+<ng-template #copyAttrsHeader let-hideBarcode="hideBarcode" let-moreCss="moreCss">
   <div class="div d-flex font-weight-bold {{moreCss}}">
     <div class="flex-1 p-1" i18n>Owning Branch</div>  
     <div class="flex-1 p-1" i18n>Copy Location</div>
@@ -10,13 +10,19 @@
     <div class="flex-1 p-1" i18n>Fund</div>
     <div class="flex-1 p-1" i18n>Circ Modifier</div>
     <div class="flex-1 p-1" i18n>Callnumber</div>
+    <div class="flex-1 p-1" i18n>
+      <ng-container *ngIf="!hideBarcode">Barcode</ng-container>
+    </div>
     <div class="flex-1 p-1"></div>
     <div class="flex-1 p-1"></div>
   </div>
 </ng-template>
 
 <ng-container
-  *ngTemplateOutlet="copyAttrsHeader;context:{moreCss:'mt-3 bg-light border border-secondary'}">
+  *ngTemplateOutlet="copyAttrsHeader;context:{
+    moreCss:'mt-3 bg-light border border-secondary',
+    hideBarcode: true
+  }">
 </ng-container>
 
 <div class="pt-2 bg-light border border-secondary border-top-0 rounded-bottom">

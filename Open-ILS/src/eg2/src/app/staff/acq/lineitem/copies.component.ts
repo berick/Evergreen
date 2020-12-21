@@ -48,7 +48,7 @@ export class LineitemCopiesComponent implements OnInit, AfterViewInit {
 
     load(): Promise<any> {
         this.lineitem = null;
-        this.copyCount = 0;
+        this.copyCount = 1;
         return this.liService.getFleshedLineitems([this.lineitemId])
         .pipe(tap(liStruct => this.lineitem = liStruct.lineitem))
         .toPromise().then(_ => this.applyCount());
