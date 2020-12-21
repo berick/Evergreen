@@ -10,4 +10,5 @@ import {PcrudService} from '@eg/core/pcrud.service';
 export class ItemLocationService {
 
     filterOrgsCache: {[perm: string]: number[]} = {};
+    locationCache: {[id: number]: IdlObject} = {};
 }

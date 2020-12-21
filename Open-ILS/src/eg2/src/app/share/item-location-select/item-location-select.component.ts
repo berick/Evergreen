@@ -59,7 +59,6 @@ export class ItemLocationSelectComponent
     @Input() startId: number = null;
     filterOrgs: number[] = [];
     filterOrgsApplied = false;
-    cache: {[id: number]: IdlObject} = {};
 
     initDone = false; // true after first data load
     propagateChange = (id: number) => {};
@@ -130,7 +129,7 @@ export class ItemLocationSelectComponent
 
         return this.pcrud.search('acpl', search, {order_by: {acpl: 'name'}}
         ).pipe(map(loc => {
-            this.cache[loc.id()] = loc;
+            this.loc.locationCache[loc.id()] = loc;
             entries.push({id: loc.id(), label: loc.name(), userdata: loc});
         })).toPromise().then(_ => {
             this.comboBox.entries = entries;
@@ -179,7 +178,7 @@ export class ItemLocationSelectComponent
             this.pcrud.search('acpl', search, {order_by: {acpl: 'name'}}
             ).subscribe(
                 loc => {
-                    this.cache[loc.id()] = loc;
+                    this.loc.locationCache[loc.id()] = loc;
                     observer.next({id: loc.id(), label: loc.name(), userdata: loc});
                 },
                 err => {},
@@ -200,7 +199,7 @@ export class ItemLocationSelectComponent
     cboxChanged(entry: ComboboxEntry) {
         const id = entry ? entry.id : null;
         this.propagateChange(id);
-        this.valueChange.emit(id ? this.cache[id] : null);
+        this.valueChange.emit(id ? this.loc.locationCache[id] : null);
     }
 
     writeValue(id: number) {
@@ -212,11 +211,11 @@ export class ItemLocationSelectComponent
     }
 
     getOneLocation(id: number) {
-        if (!id || this.cache[id]) { return Promise.resolve(); }
+        if (!id || this.loc.locationCache[id]) { return Promise.resolve(); }
 
         return this.pcrud.retrieve('acpl', id).toPromise()
         .then(loc => {
-            this.cache[loc.id()] = loc;
+            this.loc.locationCache[loc.id()] = loc;
             const entry: ComboboxEntry =
                 {id: loc.id(), label: loc.name(), userdata: loc};
 
