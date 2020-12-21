@@ -5,42 +5,41 @@
   <div class="flex-1 p-1" i18n>
     <eg-org-select #owningLibSelect placeholder="Owning Branch..." i18n-placeholder
       [applyOrgId]="copy.owning_lib()"
-      (onChange)="copy.ischanged(true) && copy.owning_lib($event ? $event.id() : null)">
+      (onChange)="valueChange('owning_lib', $event)">
     </eg-org-select>
   </div>  
   <div class="flex-1 p-1" i18n>
     <eg-item-location-select 
-      [ngModel]="copy.location()"
-      (valueChange)="copy.ischanged(true) && copy.location($event ? $event.id() : null)"
+      #locationSelector [ngModel]="copy.location()"
+      (valueChange)="valueChange('location', $event)"
       permFilter="CREATE_PICKLIST">                         
     </eg-item-location-select>
   </div>
   <div class="flex-1 p-1" i18n>
     <input type="text" class="form-control" 
       placeholder="Collection Code..." i18n-placeholder 
-      (ngModelChange)="copy.ischanged(true) && copy.collection_code($event)"
+      (ngModelChange)="valueChange('collection_code', $event)"
       [ngModel]="copy.collection_code()"/>
   </div>
   <div class="flex-1 p-1" i18n>
     <eg-combobox idlClass="acqf" placeholder="Fund..." i18n-placeholder
-      [entries]="fundEntries"
-      [selectedId]="copy.fund()"
-      (onChange)="copy.ischanged(true) && copy.fund($event ? $event.id : null)"
+      #fundSelector [entries]="fundEntries"
+      [selectedId]="copy.fund()" (onChange)="valueChange('fund', $event)"
       [idlQueryAnd]="{active: 't'}">
     </eg-combobox>
   </div>
   <div class="flex-1 p-1" i18n>
     <eg-combobox idlClass="ccm" placeholder="Circ Modifier..." i18n-placeholder
-      [entries]="circModEntries"
+      #circModSelector [entries]="circModEntries"
       [selectedId]="copy.circ_modifier()"
-      (onChange)="copy.ischanged(true) && copy.circ_modifier($event ? $event.id : null)">
+      (onChange)="valueChange('circ_modifier', $event)">
     </eg-combobox>
   </div>
   <div class="flex-1 p-1" i18n>
     <input type="text" class="form-control" 
       placeholder="Call Number..." i18n-placeholder
-      [ngModel]="copy.ischanged(true) && copy.cn_label()" 
-      (ngModelChange)="copy.cn_label($event)">
+      [ngModel]="copy.cn_label()" 
+      (ngModelChange)="valueChange('cn_label', $event)">
   </div>
   <div class="flex-1 p-1">
     <ng-container *ngIf="batchMode">
