@@ -8,7 +8,6 @@ import {NetService} from '@eg/core/net.service';
 import {AuthService} from '@eg/core/auth.service';
 import {LineitemService} from './lineitem.service';
 import {ComboboxEntry} from '@eg/share/combobox/combobox.component';
-import {ProgressDialogComponent} from '@eg/share/dialog/progress.component';
 
 @Component({
   templateUrl: 'copies.component.html'
@@ -21,8 +20,9 @@ export class LineitemCopiesComponent implements OnInit, AfterViewInit {
     batchOwningLib: IdlObject;
     batchFund: ComboboxEntry;
     batchCopyLocId: number;
-
-    @ViewChild('progressDialog') progressDialog: ProgressDialogComponent;
+    saving = false;
+    progressMax = 0;
+    progressValue = 0;
 
     constructor(
         private route: ActivatedRoute,
@@ -78,15 +78,17 @@ export class LineitemCopiesComponent implements OnInit, AfterViewInit {
     }
 
     save() {
-        this.progressDialog.reset();
-        this.progressDialog.open();
+        this.saving = true;
+        this.progressMax = null;
+        this.progressValue = 0;
+
         this.liService.updateLiDetails(this.lineitem).subscribe(
             struct => {
-                this.progressDialog.max = struct.max;
-                this.progressDialog.value = struct.progress;
+                this.progressMax = struct.total;
+                this.progressValue++;
             },
             err => {},
-            () => this.load().then(_ => this.progressDialog.close())
+            () => this.load().then(_ => this.saving = false)
         );
     }
 }
