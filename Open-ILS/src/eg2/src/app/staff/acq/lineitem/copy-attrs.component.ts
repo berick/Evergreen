@@ -14,7 +14,7 @@ import {ComboboxEntry} from '@eg/share/combobox/combobox.component';
 export class LineitemCopyAttrsComponent implements OnInit {
 
     @Input() copy: IdlObject; // acqlid
-    @Input() showBatchUpdate = false;
+    @Input() batchMode = false;
 
     // Emits an 'acqlid' object;
     @Output() saveRequested: EventEmitter<IdlObject> = new EventEmitter<IdlObject>();

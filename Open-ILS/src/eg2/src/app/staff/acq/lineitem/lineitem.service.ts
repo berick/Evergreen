@@ -1,15 +1,26 @@
 import {Injectable, EventEmitter} from '@angular/core';
-import {Observable} from 'rxjs';
-import {switchMap, map} from 'rxjs/operators';
+import {Observable, empty} from 'rxjs';
+import {switchMap, map, tap} from 'rxjs/operators';
 import {IdlObject, IdlService} from '@eg/core/idl.service';
 import {NetService} from '@eg/core/net.service';
 import {AuthService} from '@eg/core/auth.service';
 import {PcrudService} from '@eg/core/pcrud.service';
+import {ItemLocationService} from '@eg/share/item-location-select/item-location-select.service';
 
 export interface BatchLineitemStruct {
     id: number;
     lineitem: IdlObject;
     existing_copies: number;
+}
+
+export interface BatchLineitemUpdateStruct {
+    lineitem: IdlObject;
+    lid: number;
+    max: number;
+    progress: number;
+    complete: number; // Perl bool
+    total: number;
+    [key: string]: any; // Perl Acq::BatchManager
 }
 
 @Injectable()
@@ -21,7 +32,8 @@ export class LineitemService {
         private idl: IdlService,
         private net: NetService,
         private auth: AuthService,
-        private pcrud: PcrudService
+        private pcrud: PcrudService,
+        private loc: ItemLocationService
     ) {}
 
     getFleshedLineitems(ids: number[], flesh?: any): Observable<BatchLineitemStruct> {
@@ -39,11 +51,39 @@ export class LineitemService {
             };
         }
 
-        return this.net.request(
-            'open-ils.acq', 'open-ils.acq.lineitem.retrieve.batch',
-            this.auth.token(), ids, flesh);
+        return new Observable<BatchLineitemStruct>(observer => {
+            const locIds = {};
+            const lis = [];
+
+            this.net.request(
+                'open-ils.acq', 'open-ils.acq.lineitem.retrieve.batch',
+                this.auth.token(), ids, flesh
+
+            ).pipe(tap(struct => {
+
+                struct.lineitem.lineitem_details().forEach(copy => {
+                    if (copy.location()) { locIds[copy.location()] = true; }
+                });
+
+                lis.push(struct);
+
+            })).toPromise().then(_ => {
+                this.getLocations(Object.keys(locIds).map(id => Number(id)))
+                .toPromise().then(_ => {
+                    lis.forEach(struct => observer.next(struct));
+                    observer.complete();
+                });
+            })
+        });
     }
 
+    // Pre-fetch related copy locations so our update inputs aren't
+    // required to fetch them all one a a time (sometimes in parallel)
+    getLocations(ids: number[]): Observable<any> {
+        if (ids.length === 0) { return empty(); }
+        return this.pcrud.search('acpl', {id: ids})
+        .pipe(tap(loc => this.loc.locationCache[loc.id()] = loc));
+    }
 
     // Returns all matching attributes
     // 'li' should be fleshed with attributes()
@@ -136,6 +176,17 @@ export class LineitemService {
 
         return this.pcrud.retrieveAll('acqliad', {}, {atomic: true})
         .toPromise().then(defs => this.liAttrDefs = defs);
+    }
+
+    updateLiDetails(li: IdlObject): Observable<BatchLineitemUpdateStruct> {
+        const lids = li.lineitem_details().filter(copy =>
+            (copy.isnew() || copy.ischanged() || copy.isdeleted()));
+
+        if (lids.length === 0) { return empty(); }
+
+        return this.net.request(
+            'open-ils.acq',
+            'open-ils.acq.lineitem_detail.cud.batch', this.auth.token(), lids);
     }
 }
 

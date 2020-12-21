@@ -1,4 +1,5 @@
-import {Component, OnInit, AfterViewInit, Input, Output, EventEmitter} from '@angular/core';
+import {Component, OnInit, AfterViewInit, Input, Output, EventEmitter,
+  ViewChild} from '@angular/core';
 import {Router, ActivatedRoute, ParamMap} from '@angular/router';
 import {tap} from 'rxjs/operators';
 import {Pager} from '@eg/share/util/pager';
@@ -7,6 +8,7 @@ import {NetService} from '@eg/core/net.service';
 import {AuthService} from '@eg/core/auth.service';
 import {LineitemService} from './lineitem.service';
 import {ComboboxEntry} from '@eg/share/combobox/combobox.component';
+import {ProgressDialogComponent} from '@eg/share/dialog/progress.component';
 
 @Component({
   templateUrl: 'copies.component.html'
@@ -19,6 +21,8 @@ export class LineitemCopiesComponent implements OnInit, AfterViewInit {
     batchOwningLib: IdlObject;
     batchFund: ComboboxEntry;
     batchCopyLocId: number;
+
+    @ViewChild('progressDialog') progressDialog: ProgressDialogComponent;
 
     constructor(
         private route: ActivatedRoute,
@@ -41,7 +45,7 @@ export class LineitemCopiesComponent implements OnInit, AfterViewInit {
         this.liService.getLiAttrDefs();
     }
 
-    load() {
+    load(): Promise<any> {
         this.lineitem = null;
         return this.liService.getFleshedLineitems([this.lineitemId])
         .pipe(tap(liStruct => this.lineitem = liStruct.lineitem))
@@ -69,12 +73,21 @@ export class LineitemCopiesComponent implements OnInit, AfterViewInit {
         }
     }
 
-    applyBatch(copy: IdlObject) {
-        console.log('applying', copy);
-    }
-
     applyFormula(id: number) {
         console.log('applying formula ', id);
+    }
+
+    save() {
+        this.progressDialog.reset();
+        this.progressDialog.open();
+        this.liService.updateLiDetails(this.lineitem).subscribe(
+            struct => {
+                this.progressDialog.max = struct.max;
+                this.progressDialog.value = struct.progress;
+            },
+            err => {},
+            () => this.load().then(_ => this.progressDialog.close())
+        );
     }
 }
 

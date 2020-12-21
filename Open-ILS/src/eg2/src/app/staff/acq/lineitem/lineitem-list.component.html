@@ -160,7 +160,7 @@
           <a class="label-with-material-icon" title="Items" i18n-title
             routerLink="./lineitem/{{li.id()}}/items" queryParamsHandling="merge">
             <span class="material-icons small mr-1">shopping_basket</span>
-            <span i18n>Items ({{0}})</span>
+            <span i18n>Items ({{li.lineitem_details().length}})</span>
           </a>
           <span class="ml-1 mr-1" i18n> | </span>
           <a class="label-with-material-icon" title="Notes" i18n-title

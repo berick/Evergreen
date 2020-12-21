@@ -25,7 +25,6 @@ const BATCH_FIELDS = [
 export class LineitemBatchCopiesComponent implements OnInit {
 
     @Input() lineitem: IdlObject;
-    //@Output() saveRequested: EventEmitter<IdlObject> = new EventEmitter<IdlObject>();
 
     constructor(
         private idl: IdlService,
@@ -42,7 +41,10 @@ export class LineitemBatchCopiesComponent implements OnInit {
         BATCH_FIELDS.forEach(field => {
             const val = copyTemplate[field]();
             if (val === undefined) { return; }
-            this.lineitem.lineitem_details().forEach(copy => copy[field](val));
+            this.lineitem.lineitem_details().forEach(copy => {
+                copy[field](val);
+                copy.ischanged(true); // isnew() takes precedence
+            });
         });
     }
 }

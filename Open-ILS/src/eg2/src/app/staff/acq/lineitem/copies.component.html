@@ -1,9 +1,10 @@
 
+<eg-progress-dialog #progressDialog></eg-progress-dialog>
 
 <div class="row mt-3 mb-1">
   <div class="col-lg-12 form-inline">
     <a routerLink="../../../" queryParamsHandling="merge"> 
-      <button class="btn btn-sm btn-outline-dark" i18n>Return</button>
+      <button class="btn btn-sm btn-info" i18n>Return</button>
     </a>
 
     <span class="ml-3" i18n> | </span>
@@ -34,8 +35,7 @@
 <hr class="m-1 p-1"/>
 
 <ng-container *ngIf="lineitem">
-  <eg-lineitem-batch-copies [lineitem]="lineitem" (saveRequested)="applyBatch($event)">
-  </eg-lineitem-batch-copies>
+  <eg-lineitem-batch-copies [lineitem]="lineitem"></eg-lineitem-batch-copies>
 </ng-container>
 
 
