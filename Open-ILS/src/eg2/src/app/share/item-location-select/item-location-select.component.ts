@@ -53,6 +53,8 @@ export class ItemLocationSelectComponent
     // If false, selector will be click-able
     @Input() loadAsync = true;
 
+    @Input() disabled = false;
+
     @ViewChild('comboBox', {static: false}) comboBox: ComboboxComponent;
     @ViewChild('unsetString', {static: false}) unsetString: StringComponent;
 

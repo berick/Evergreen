@@ -47,6 +47,17 @@ export class LineitemBatchCopiesComponent implements OnInit {
             });
         });
     }
+
+    copyDeleteRequested(copy: IdlObject) {
+        if (copy.isnew()) {
+            // Brand new copies can be discarded
+            this.lineitem.lineitem_details(
+                this.lineitem.lineitem_details().filter(c => c.id() !== copy.id())
+            );
+        } else {
+            copy.isdeleted(true);
+        }
+    }
 }
 
 
