@@ -2,7 +2,7 @@ import {Component, OnInit, AfterViewInit, Input, Output, EventEmitter} from '@an
 import {Router, ActivatedRoute, ParamMap} from '@angular/router';
 import {tap} from 'rxjs/operators';
 import {Pager} from '@eg/share/util/pager';
-import {IdlObject} from '@eg/core/idl.service';
+import {IdlService, IdlObject} from '@eg/core/idl.service';
 import {NetService} from '@eg/core/net.service';
 import {AuthService} from '@eg/core/auth.service';
 import {LineitemService} from './lineitem.service';
@@ -15,13 +15,14 @@ export class LineitemCopiesComponent implements OnInit, AfterViewInit {
 
     lineitemId: number;
     lineitem: IdlObject;
-    copyCount = 0;
+    copyCount = 1;
     batchOwningLib: IdlObject;
     batchFund: ComboboxEntry;
     batchCopyLocId: number;
 
     constructor(
         private route: ActivatedRoute,
+        private idl: IdlService,
         private net: NetService,
         private auth: AuthService,
         private liService: LineitemService
@@ -43,12 +44,29 @@ export class LineitemCopiesComponent implements OnInit, AfterViewInit {
     load() {
         this.lineitem = null;
         return this.liService.getFleshedLineitems([this.lineitemId])
-        .pipe(tap(liStruct => this.lineitem = liStruct.lineitem)).toPromise();
+        .pipe(tap(liStruct => this.lineitem = liStruct.lineitem))
+        .toPromise().then(_ => this.applyCount());
     }
 
     ngAfterViewInit() {
-        const node = document.getElementById('copy-count-input');
-        if (node) { node.focus(); }
+        setTimeout(() => {
+            const node = document.getElementById('copy-count-input');
+            if (node) { (node as HTMLInputElement).select(); }
+        });
+    }
+
+    applyCount() {
+        const copies = this.lineitem.lineitem_details();
+        while (copies.length < this.copyCount) {
+            const copy = this.idl.create('acqlid');
+            copy.isnew(true);
+            copy.lineitem(this.lineitem.id());
+            copies.push(copy);
+        }
+
+        if (copies.length > this.copyCount) {
+            this.copyCount = copies.length;
+        }
     }
 
     applyBatch(copy: IdlObject) {

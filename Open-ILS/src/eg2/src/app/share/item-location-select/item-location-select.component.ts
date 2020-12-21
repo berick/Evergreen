@@ -217,8 +217,14 @@ export class ItemLocationSelectComponent
         return this.pcrud.retrieve('acpl', id).toPromise()
         .then(loc => {
             this.cache[loc.id()] = loc;
-            this.comboBox.entries.push(
-                {id: loc.id(), label: loc.name(), userdata: loc});
+            const entry: ComboboxEntry =
+                {id: loc.id(), label: loc.name(), userdata: loc};
+
+            if (this.comboBox.entries) {
+                this.comboBox.entries.push(entry);
+            } else {
+                this.comboBox.entries = [entry];
+            }
         });
     }
 

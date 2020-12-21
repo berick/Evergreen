@@ -24,8 +24,16 @@
     [showBatchUpdate]="true"> </eg-lineitem-copy-attrs>
 </div>
 
-<div class="mt-2 border-bottom border-secondary" *ngFor="let copy of copies">
-  <eg-lineitem-copy-attrs [copy]="copy"></eg-lineitem-copy-attrs>
+<hr/>
+
+<ng-container
+  *ngTemplateOutlet="copyAttrsHeader;context:{moreCss:''}">
+</ng-container>
+
+<div class="mt-1 pt-1 border-top">
+  <div class="batch-copy-row" *ngFor="let copy of lineitem.lineitem_details()">
+    <eg-lineitem-copy-attrs [copy]="copy"></eg-lineitem-copy-attrs>
+  </div>
 </div>
 
 
