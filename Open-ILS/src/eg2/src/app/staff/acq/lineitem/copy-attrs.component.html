@@ -23,6 +23,7 @@
   </div>
   <div class="flex-1 p-1" i18n>
     <eg-combobox idlClass="acqf" placeholder="Fund..." i18n-placeholder
+      [entries]="fundEntries"
       [selectedId]="copy.fund()"
       (onChange)="copy.ischanged(true) && copy.fund($event ? $event.id : null)"
       [idlQueryAnd]="{active: 't'}">
@@ -30,6 +31,7 @@
   </div>
   <div class="flex-1 p-1" i18n>
     <eg-combobox idlClass="ccm" placeholder="Circ Modifier..." i18n-placeholder
+      [entries]="circModEntries"
       [selectedId]="copy.circ_modifier()"
       (onChange)="copy.ischanged(true) && copy.circ_modifier($event ? $event.id : null)">
     </eg-combobox>
