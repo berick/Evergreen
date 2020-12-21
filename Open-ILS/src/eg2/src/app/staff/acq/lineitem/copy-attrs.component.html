@@ -2,28 +2,28 @@
     and the batch copy editor component -->
 
 <div class="div d-flex batch-copy-row" *ngIf="copy">
-  <div class="flex-1 p-1" i18n>
+  <div class="flex-1 p-1">
     <eg-org-select #owningLibSelect placeholder="Owning Branch..." 
       i18n-placeholder [disabled]="fieldIsDisabled('owning_lib')"
       [applyOrgId]="copy.owning_lib()"
       (onChange)="valueChange('owning_lib', $event)">
     </eg-org-select>
   </div>  
-  <div class="flex-1 p-1" i18n>
+  <div class="flex-1 p-1">
     <eg-item-location-select  [disabled]="fieldIsDisabled('location')"
       #locationSelector [ngModel]="copy.location()"
       (valueChange)="valueChange('location', $event)"
       permFilter="CREATE_PICKLIST">                         
     </eg-item-location-select>
   </div>
-  <div class="flex-1 p-1" i18n>
+  <div class="flex-1 p-1">
     <input type="text" class="form-control" 
       [disabled]="fieldIsDisabled('collection_code')"
       placeholder="Collection Code..." i18n-placeholder 
       (ngModelChange)="valueChange('collection_code', $event)"
       [ngModel]="copy.collection_code()"/>
   </div>
-  <div class="flex-1 p-1" i18n>
+  <div class="flex-1 p-1">
     <eg-combobox idlClass="acqf" placeholder="Fund..." i18n-placeholder
       [disabled]="fieldIsDisabled('fund')"
       #fundSelector [entries]="fundEntries"
@@ -31,7 +31,7 @@
       [idlQueryAnd]="{active: 't'}">
     </eg-combobox>
   </div>
-  <div class="flex-1 p-1" i18n>
+  <div class="flex-1 p-1">
     <eg-combobox idlClass="ccm" placeholder="Circ Modifier..." i18n-placeholder
       [disabled]="fieldIsDisabled('circ_modifier')"
       #circModSelector [entries]="circModEntries"
@@ -39,7 +39,7 @@
       (onChange)="valueChange('circ_modifier', $event)">
     </eg-combobox>
   </div>
-  <div class="flex-1 p-1" i18n>
+  <div class="flex-1 p-1">
     <input type="text" class="form-control" 
       [disabled]="fieldIsDisabled('cn_label')"
       placeholder="Call Number..." i18n-placeholder
@@ -51,6 +51,14 @@
       <button class="btn btn-outline-dark" 
         (click)="saveRequested.emit(copy)" i18n>Batch Update</button>
     </ng-container>
+    <ng-container *ngIf="!batchMode">
+      <input type="text" class="form-control" 
+        [disabled]="fieldIsDisabled('barcode')" [ngModel]="copy.barcode()" 
+        placeholder="Barcode..." i18n-placeholder
+        (ngModelChange)="valueChange('barcode', $event)">
+    </ng-container>
+  </div>
+  <div class="flex-1 p-1">
     <ng-container *ngIf="!batchMode">
       <ng-container *ngIf="!copy.isdeleted()">
         <button class="btn btn-outline-danger material-icon-button"
