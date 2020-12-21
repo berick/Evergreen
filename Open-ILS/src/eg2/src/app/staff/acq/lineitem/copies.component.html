@@ -10,7 +10,7 @@
 
     <label class="ml-3" for='copy-count-input' i18n>Item Count: </label>
     <input class="form-control-sm ml-3 small" id='copy-count-input' 
-      [(ngModel)]="copyCount" type="text"/>
+      [(ngModel)]="copyCount" type="text" (keyup.enter)="applyCount()"/>
 
     <button class="btn btn-sm btn-outline-dark ml-3" (click)="applyCount()" i18n>Apply</button>
 
@@ -25,7 +25,7 @@
       [disabled]="!distribFormCbox.selectedId"
       (click)="applyFormula(distribFormCbox.selectedId)" i18n>Apply</button>
 
-    <button class="btn btn-sm btn-outline-success ml-auto" 
+    <button class="btn btn-sm btn-success ml-auto" 
       (click)="save()" i18n>Save Changes</button>
 
   </div>

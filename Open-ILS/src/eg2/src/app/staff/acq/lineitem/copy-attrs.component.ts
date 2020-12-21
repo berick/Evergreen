@@ -28,6 +28,7 @@ export class LineitemCopyAttrsComponent implements OnInit {
 
     ngOnInit() {
         if (!this.copy) {
+            // Will be no copy in the batch edit row
             this.copy = this.idl.create('acqlid');
             this.copy.isnew(true);
         }

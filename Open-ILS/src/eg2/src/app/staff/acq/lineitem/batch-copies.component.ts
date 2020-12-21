@@ -8,16 +8,24 @@ import {LineitemService} from './lineitem.service';
 import {ComboboxEntry} from '@eg/share/combobox/combobox.component';
 import {LineitemCopyAttrsComponent} from './copy-attrs.component';
 
+const BATCH_FIELDS = [
+    'owning_lib',
+    'location',
+    'collection_code',
+    'fund',
+    'circ_modifier',
+    'cn_label'
+];
+
 @Component({
   templateUrl: 'batch-copies.component.html',
-  selector: 'eg-lineitem-batch-copies'
+  selector: 'eg-lineitem-batch-copies',
+  styleUrls: ['batch-copies.component.css']
 })
 export class LineitemBatchCopiesComponent implements OnInit {
 
-    copies: IdlObject[] = [];
-
     @Input() lineitem: IdlObject;
-    @Output() saveRequested: EventEmitter<IdlObject> = new EventEmitter<IdlObject>();
+    //@Output() saveRequested: EventEmitter<IdlObject> = new EventEmitter<IdlObject>();
 
     constructor(
         private idl: IdlService,
@@ -27,14 +35,15 @@ export class LineitemBatchCopiesComponent implements OnInit {
     ) {}
 
     ngOnInit() {
-        // testing
-        const c = this.idl.create('acqlid');
-        c.cn_label('FOO');
-        this.copies = [c, c, c];
     }
 
-    attrsSaveRequested(copy: IdlObject) { // acqlid
-        this.saveRequested.emit(copy);
+    // Propagate values from the batch edit bar into the indivudual LID's
+    attrsSaveRequested(copyTemplate: IdlObject) {
+        BATCH_FIELDS.forEach(field => {
+            const val = copyTemplate[field]();
+            if (val === undefined) { return; }
+            this.lineitem.lineitem_details().forEach(copy => copy[field](val));
+        });
     }
 }
 

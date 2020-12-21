@@ -1,7 +1,7 @@
 <!-- Flex values are set to align with lineitem copies UI 
     and the batch copy editor component -->
 
-<div class="div d-flex">
+<div class="div d-flex batch-copy-row" *ngIf="copy">
   <div class="flex-1 p-1" i18n>
     <eg-org-select #owningLibSelect placeholder="Owning Branch..." i18n-placeholder
       (onChange)="copy.owning_lib($event ? $event.id() : null)">
@@ -9,7 +9,7 @@
   </div>  
   <div class="flex-1 p-1" i18n>
     <eg-item-location-select 
-      [startId]="copy.location()"
+      [ngModel]="copy.location()"
       (valueChange)="copy.location($event ? $event.id() : null)"
       permFilter="CREATE_PICKLIST">                         
     </eg-item-location-select>
