@@ -13,6 +13,7 @@ import {ComboboxEntry} from '@eg/share/combobox/combobox.component';
   templateUrl: 'copies.component.html'
 })
 export class LineitemCopiesComponent implements OnInit, AfterViewInit {
+    static newCopyId = -1;
 
     lineitemId: number;
     lineitem: IdlObject;
@@ -47,6 +48,7 @@ export class LineitemCopiesComponent implements OnInit, AfterViewInit {
 
     load(): Promise<any> {
         this.lineitem = null;
+        this.copyCount = 0;
         return this.liService.getFleshedLineitems([this.lineitemId])
         .pipe(tap(liStruct => this.lineitem = liStruct.lineitem))
         .toPromise().then(_ => this.applyCount());
@@ -63,6 +65,7 @@ export class LineitemCopiesComponent implements OnInit, AfterViewInit {
         const copies = this.lineitem.lineitem_details();
         while (copies.length < this.copyCount) {
             const copy = this.idl.create('acqlid');
+            copy.id(LineitemCopiesComponent.newCopyId--);
             copy.isnew(true);
             copy.lineitem(this.lineitem.id());
             copies.push(copy);

@@ -41,6 +41,7 @@ export class LineitemCopyAttrsComponent implements OnInit {
 
     // Emits an 'acqlid' object;
     @Output() saveRequested: EventEmitter<IdlObject> = new EventEmitter<IdlObject>();
+    @Output() deleteRequested: EventEmitter<IdlObject> = new EventEmitter<IdlObject>();
 
     @ViewChild('locationSelector') locationSelector: ItemLocationSelectComponent;
     @ViewChild('circModSelector') circModSelector: ComboboxComponent;
@@ -140,6 +141,14 @@ export class LineitemCopyAttrsComponent implements OnInit {
             this.loc.locationCache[copy.location().id()] = copy.location();
             copy.location(copy.location().id());
         }
+    }
+
+    deleteCopy() {
+        this.deleteRequested.emit(this.copy);
+    }
+
+    fieldIsDisabled(field: string) {
+        if (this.copy.isdeleted()) { return true; }
     }
 }
 
