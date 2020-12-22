@@ -9,6 +9,7 @@ import {LineitemService} from './lineitem.service';
 import {LineitemComponent} from './lineitem.component';
 import {LineitemNotesComponent} from './notes.component';
 import {LineitemDetailComponent} from './detail.component';
+import {LineitemOrderSummaryComponent} from './order-summary.component';
 import {LineitemListComponent} from './lineitem-list.component';
 import {LineitemCopiesComponent} from './copies.component';
 import {LineitemBatchCopiesComponent} from './batch-copies.component';
@@ -21,6 +22,7 @@ import {LineitemCopyAttrsComponent} from './copy-attrs.component';
     LineitemNotesComponent,
     LineitemDetailComponent,
     LineitemCopiesComponent,
+    LineitemOrderSummaryComponent,
     LineitemBatchCopiesComponent,
     LineitemCopyAttrsComponent,
     WorksheetComponent
