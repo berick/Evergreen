@@ -114,6 +114,10 @@ export class LineitemCopiesComponent implements OnInit, AfterViewInit {
             {flesh: 1, flesh_fields: {acqdf: ['entries']}})
         .subscribe(formula => {
 
+            formula.entries(
+                formula.entries().sort((e1, e2) =>
+                    e1.position() < e2.position() ? -1 : 1));
+
             let rowIdx = this.formulaOffset - 1;
 
             while (++rowIdx < copies.length) {
