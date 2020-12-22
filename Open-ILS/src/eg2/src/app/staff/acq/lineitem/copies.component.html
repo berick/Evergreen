@@ -17,7 +17,8 @@
 
     <label class="ml-3" for='distrib-formula-cbox' i18n>Distribution Formulas</label>
     <span class="ml-3">
-      <eg-combobox idlClass="acqdf" #distribFormCbox domId="distrib-formula-cbox">
+      <eg-combobox idlClass="acqdf" [idlQueryAnd]="formulaFilter" 
+        #distribFormCbox domId="distrib-formula-cbox">
       </eg-combobox>
     </span>
     <button class="btn btn-sm btn-outline-dark ml-3" 

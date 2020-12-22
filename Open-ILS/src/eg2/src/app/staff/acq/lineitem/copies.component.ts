@@ -4,10 +4,25 @@ import {Router, ActivatedRoute, ParamMap} from '@angular/router';
 import {tap} from 'rxjs/operators';
 import {Pager} from '@eg/share/util/pager';
 import {IdlService, IdlObject} from '@eg/core/idl.service';
+import {OrgService} from '@eg/core/org.service';
 import {NetService} from '@eg/core/net.service';
+import {PcrudService} from '@eg/core/pcrud.service';
 import {AuthService} from '@eg/core/auth.service';
 import {LineitemService} from './lineitem.service';
 import {ComboboxEntry} from '@eg/share/combobox/combobox.component';
+
+const FORMULA_FIELDS = [
+    'owning_lib',
+    'location',
+    'fund',
+    'circ_modifier',
+    'collection_code'
+];
+
+interface FormulaApplication {
+    formula: IdlObject;
+    count: number;
+}
 
 @Component({
   templateUrl: 'copies.component.html'
@@ -24,16 +39,24 @@ export class LineitemCopiesComponent implements OnInit, AfterViewInit {
     saving = false;
     progressMax = 0;
     progressValue = 0;
+    formulaFilter = {owner: []};
+    formulaOffset = 0;
+    formulaCounts: {[id: number]: FormulaApplication} = {};
 
     constructor(
         private route: ActivatedRoute,
         private idl: IdlService,
+        private org: OrgService,
         private net: NetService,
+        private pcrud: PcrudService,
         private auth: AuthService,
         private liService: LineitemService
     ) {}
 
     ngOnInit() {
+
+        this.formulaFilter.owner =
+            this.org.fullPath(this.auth.user().ws_ou(), true);
 
         this.route.paramMap.subscribe((params: ParamMap) => {
             const id = +params.get('lineitemId');
@@ -77,7 +100,65 @@ export class LineitemCopiesComponent implements OnInit, AfterViewInit {
     }
 
     applyFormula(id: number) {
-        console.log('applying formula ', id);
+
+        const copies = this.lineitem.lineitem_details();
+        if (this.formulaOffset >= copies.length) {
+            // We have already applied a formula entry to every item.
+            return;
+        }
+
+        // TODO: fetch/cache new values to avoid paralell explody
+
+        this.pcrud.retrieve('acqdf', id,
+            {flesh: 1, flesh_fields: {acqdf: ['entries']}})
+        .subscribe(formula => {
+
+            let applied = 0;
+            let rowIdx = this.formulaOffset - 1;
+
+            while (++rowIdx < copies.length) {
+                applied += this.formulateOneCopy(formula, rowIdx);
+            }
+
+            if (applied) {
+                this.formulaOffset += applied;
+
+                if (!this.formulaCounts[id]) {
+                    this.formulaCounts[id] = {formula: formula, count: 0};
+                }
+
+                this.formulaCounts[id].count++;
+            }
+        });
+    }
+
+    // Apply a formula entry to a single copy.
+    formulateOneCopy(formula: IdlObject, rowIdx: number): number {
+
+        let targetEntry = null;
+        let entryIdx = this.formulaOffset;
+        const copy = this.lineitem.lineitem_details()[rowIdx];
+
+        // Find the correct entry for the current copy.
+        formula.entries().forEach(entry => {
+            if (!targetEntry) {
+                entryIdx += entry.item_count();
+                if (entryIdx > rowIdx) {
+                    targetEntry = entry;
+                }
+            }
+        });
+
+        // We ran out of copies.
+        if (!targetEntry) { return 0; }
+
+        FORMULA_FIELDS.forEach(field => {
+            if (targetEntry[field]()) {
+                copy[field](targetEntry[field]());
+            }
+        })
+
+        return 1;
     }
 
     save() {
