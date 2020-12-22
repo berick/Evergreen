@@ -4,9 +4,7 @@
 <div class="row mt-3">
   <div class="col-lg-1">
     <div ngbDropdown>
-      <button class="btn btn-outline-dark btn-sm" ngbDropdownToggle i18n>
-        Actions
-      </button>
+      <button class="btn btn-outline-dark btn-sm" ngbDropdownToggle i18n>Actions</button>
       <div ngbDropdownMenu>
         <button class="btn-sm" ngbDropdownItem
           (click)="addBriefRecord()">Add Brief Record</button>
@@ -25,7 +23,7 @@
         Note is vendor-public
       </label>
     </div>
-    <button class="btn btn-sm btn-outline-dark" (click)="applyBatchNote()"
+    <button class="btn btn-outline-dark" (click)="applyBatchNote()"
       [disabled]="!selectedIds().length" i18n>
       Apply To Selected
     </button>

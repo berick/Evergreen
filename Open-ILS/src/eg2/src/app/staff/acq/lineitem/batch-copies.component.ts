@@ -33,8 +33,7 @@ export class LineitemBatchCopiesComponent implements OnInit {
         private liService: LineitemService
     ) {}
 
-    ngOnInit() {
-    }
+    ngOnInit() {}
 
     // Propagate values from the batch edit bar into the indivudual LID's
     attrsSaveRequested(copyTemplate: IdlObject) {
