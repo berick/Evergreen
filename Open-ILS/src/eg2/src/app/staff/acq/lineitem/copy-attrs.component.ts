@@ -37,7 +37,12 @@ export class LineitemCopyAttrsComponent implements OnInit {
         return this._copy;
     }
 
+    // A row of batch edit inputs
     @Input() batchMode = false;
+
+    // One of several rows embedded in the main LI list page.
+    // Always read-only.
+    @Input() embedded = false;
 
     // Emits an 'acqlid' object;
     @Output() saveRequested: EventEmitter<IdlObject> = new EventEmitter<IdlObject>();
@@ -88,6 +93,7 @@ export class LineitemCopyAttrsComponent implements OnInit {
         switch (field) {
 
             case 'cn_label':
+            case 'barcode':
             case 'collection_code':
                 this.copy[field](entry);
                 break;
@@ -115,31 +121,18 @@ export class LineitemCopyAttrsComponent implements OnInit {
         }
     }
 
-    // Tell our inputs about the values we know we need,
-    // then de-flesh the items for consistency
+    // Tell our inputs about the values we know we need
+    // Values will be pre-cached in the liService
     setInitialOptions(copy: IdlObject) {
+
         if (copy.fund()) {
-            this.fundEntries = [{
-                id: copy.fund().id(),
-                label: copy.fund().code(),
-                fm: copy.fund()
-            }];
-            copy.fund(copy.fund().id());
+            const fund = this.liService.fundCache[copy.fund()];
+            this.fundEntries = [{id: fund.id(), label: fund.code(), fm: fund}];
         }
 
         if (copy.circ_modifier()) {
-            this.circModEntries = [{
-                id: copy.circ_modifier().code(),
-                label: copy.circ_modifier().name(),
-                fm: copy.circ_modifier()
-            }];
-            copy.circ_modifier(copy.circ_modifier().code());
-        }
-
-        if (copy.location()) {
-            // This comp is a cbox wrapper and has its own cache
-            this.loc.locationCache[copy.location().id()] = copy.location();
-            copy.location(copy.location().id());
+            const mod = this.liService.circModCache[copy.circ_modifier()];
+            this.circModEntries = [{id: mod.code(), label: mod.name(), fm: mod}];
         }
     }
 
@@ -148,7 +141,9 @@ export class LineitemCopyAttrsComponent implements OnInit {
     }
 
     fieldIsDisabled(field: string) {
-        if (this.copy.isdeleted()) { return true; }
+        if (this.embedded || this.copy.isdeleted()) {
+            return true;
+        }
     }
 }
 

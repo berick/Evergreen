@@ -40,6 +40,7 @@ export class LineitemListComponent implements OnInit {
     batchSelectPage = false;
     batchSelectAll = false;
     showNotesFor: number;
+    showExpandFor: number; // 'Expand'
     action = '';
 
     constructor(
@@ -310,7 +311,13 @@ export class LineitemListComponent implements OnInit {
     }
 
     toggleShowNotes(liId: number) {
+        this.showExpandFor = null;
         this.showNotesFor = this.showNotesFor === liId ? null : liId;
+    }
+
+    toggleShowExpand(liId: number) {
+        this.showNotesFor = null;
+        this.showExpandFor = this.showExpandFor === liId ? null : liId;
     }
 
     liHasAlerts(li: IdlObject): boolean {
