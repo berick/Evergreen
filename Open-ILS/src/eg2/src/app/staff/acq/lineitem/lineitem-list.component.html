@@ -163,6 +163,18 @@
             <span i18n>Items ({{li.lineitem_details().length}})</span>
           </a>
           <span class="ml-1 mr-1" i18n> | </span>
+          <a class="label-with-material-icon" title="Expand" i18n-title
+            href="javascript:;" (click)="toggleShowExpand(li.id())">
+            <ng-container *ngIf="showExpandFor != li.id()">
+              <span class="material-icons small mr-1">unfold_more</span>
+              <span i18n>Expand</span>
+            </ng-container>
+            <ng-container *ngIf="showExpandFor == li.id()">
+              <span class="material-icons small mr-1">unfold_less</span>
+              <span i18n>Collapse</span>
+            </ng-container>
+          </a>
+          <span class="ml-1 mr-1" i18n> | </span>
           <a class="label-with-material-icon" title="Notes" i18n-title
             href="javascript:;" (click)="toggleShowNotes(li.id())">
             <span class="material-icons small mr-1">event_note</span>
@@ -254,9 +266,17 @@
       </div>
     </div>
     <div class="row" *ngIf="showNotesFor == li.id()">
-      <div class="col-lg-10 offset-lg-1 p-2">
+      <div class="col-lg-10 offset-lg-1 p-2 mt-2">
         <eg-lineitem-notes [lineitem]="li" (closeRequested)="showNotesFor = null">
         </eg-lineitem-notes>
+      </div>
+    </div>
+    <div class="row" *ngIf="showExpandFor == li.id()">
+      <div class="col-lg-10 offset-lg-1 p-2 mt-2 shadow">
+        <div class="batch-copy-row" *ngFor="let copy of li.lineitem_details()">
+          <eg-lineitem-copy-attrs [embedded]="true" [copy]="copy">
+          </eg-lineitem-copy-attrs>
+        </div>
       </div>
     </div>
   </div>

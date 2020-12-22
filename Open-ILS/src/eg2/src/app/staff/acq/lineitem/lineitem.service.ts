@@ -1,11 +1,12 @@
 import {Injectable, EventEmitter} from '@angular/core';
 import {Observable} from 'rxjs';
-import {switchMap, map} from 'rxjs/operators';
+import {switchMap, map, tap} from 'rxjs/operators';
 import {IdlObject, IdlService} from '@eg/core/idl.service';
 import {NetService} from '@eg/core/net.service';
 import {AuthService} from '@eg/core/auth.service';
 import {PcrudService} from '@eg/core/pcrud.service';
 import {ComboboxEntry} from '@eg/share/combobox/combobox.component';
+import {ItemLocationService} from '@eg/share/item-location-select/item-location-select.service';
 
 export interface BatchLineitemStruct {
     id: number;
@@ -31,24 +32,24 @@ export class LineitemService {
 
     liAttrDefs: IdlObject[];
 
-    // Pre-fetch large batches of objects so our comboboxes aren't
-    // forced to fetch them all in parallel at render time.
-    preloadLocations: ComboboxEntry[];
-    preloadFunds: ComboboxEntry[];
-    preloadCircMods: ComboboxEntry[];
-
     // Emitted when our copy batch editor wants to apply a value
-    // to a set of inputs.  This allows the the copy input comboxoes, etc.
+    // to a set of inputs.  This allows the the copy input comboboxes, etc.
     // to add the entry before it's forced to grab the value from the
     // server, often in large parallel batches.
     batchOptionWanted: EventEmitter<{[field: string]: ComboboxEntry}>
         = new EventEmitter<{[field: string]: ComboboxEntry}> ();
 
+    // Cache for circ modifiers and funds; locations are cached in the
+    // item location select service.
+    circModCache: {[code: string]: IdlObject} = {};
+    fundCache: {[id: number]: IdlObject} = {};
+
     constructor(
         private idl: IdlService,
         private net: NetService,
         private auth: AuthService,
-        private pcrud: PcrudService
+        private pcrud: PcrudService,
+        private loc: ItemLocationService
     ) {}
 
     getFleshedLineitems(ids: number[]): Observable<BatchLineitemStruct> {
@@ -69,9 +70,29 @@ export class LineitemService {
 
         return this.net.request(
             'open-ils.acq', 'open-ils.acq.lineitem.retrieve.batch',
-            this.auth.token(), ids, flesh);
-    }
+            this.auth.token(), ids, flesh
+        ).pipe(tap(liStruct => {
 
+            // De-flesh some values we don't want living directly on
+            // the copy.  Cache the values so our comboboxes, etc.
+            // can use them without have to re-fetch them .
+            liStruct.lineitem.lineitem_details().forEach(copy => {
+                let val;
+                if ((val = copy.circ_modifier())) { // assignment
+                    this.circModCache[val.code()] = copy.circ_modifier();
+                    copy.circ_modifier(val.code());
+                }
+                if ((val = copy.fund())) {
+                    this.fundCache[val.id()] = copy.fund();
+                    copy.fund(val.id());
+                }
+                if ((val = copy.location())) {
+                    this.loc.locationCache[val.id()] = copy.location();
+                    copy.location(val.id());
+                }
+            });
+        }));
+    }
 
     // Returns all matching attributes
     // 'li' should be fleshed with attributes()

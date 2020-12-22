@@ -55,6 +55,10 @@ export class ItemLocationSelectComponent
 
     @Input() disabled = false;
 
+    // Display the selected value as text instead of within
+    // the typeahead
+    @Input() readOnly = false;
+
     @ViewChild('comboBox', {static: false}) comboBox: ComboboxComponent;
     @ViewChild('unsetString', {static: false}) unsetString: StringComponent;
 
