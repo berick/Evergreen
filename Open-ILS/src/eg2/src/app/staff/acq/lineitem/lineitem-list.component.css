@@ -1,7 +1,9 @@
 
+.jacket-wrapper {
+  width: 70px;
+}
 .jacket {
-  max-width: 40px;
-  max-height: 65px;
+  width: 65px;
 }
 
 input[type="text"].form-control-sm { border-width: 1px; }
