@@ -56,6 +56,8 @@ export class LineitemService {
 
         const flesh: any = {
             flesh_attrs: true,
+            flesh_provider: true,
+            flesh_order_summary: true,
             flesh_cancel_reason: true,
             flesh_li_details: true,
             flesh_notes: true,
@@ -72,6 +74,12 @@ export class LineitemService {
             'open-ils.acq', 'open-ils.acq.lineitem.retrieve.batch',
             this.auth.token(), ids, flesh
         ).pipe(tap(liStruct => {
+
+            // These values come through as NULL
+            const summary = liStruct.lineitem.order_summary();
+            if (!summary.estimated_amount()) { summary.estimated_amount(0); }
+            if (!summary.encumbrance_amount()) { summary.encumbrance_amount(0); }
+            if (!summary.paid_amount()) { summary.paid_amount(0); }
 
             // De-flesh some values we don't want living directly on
             // the copy.  Cache the values so our comboboxes, etc.

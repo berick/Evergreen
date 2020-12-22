@@ -133,6 +133,7 @@
             <div class="input-group-prepend">
               <div ngbDropdown>
                 <button class="btn btn-outline-dark btn-sm" ngbDropdownToggle 
+                  title="Order Identifier Type" i18n-title
                   [ngClass]="{'btn-warning': !selectedIdent(li)}">
                   <ng-container *ngIf="orderIdentTypes[li.id()]=='isbn'" i18n>ISBN</ng-container>
                   <ng-container *ngIf="orderIdentTypes[li.id()]=='upc'" i18n>UPC</ng-container>
@@ -154,6 +155,33 @@
               (onChange)="orderIdentChanged(li, $event)">
             </eg-combobox>
           </div>
+        </div>
+      </div>
+    </div>
+    <div class="row mt-1">
+      <div class="col-lg-12 d-flex">
+        <div class="pr-2">
+          <!-- for vertical alignment with above -->
+          <div class="form-check invisible">
+            <input class="form-check-input" type="checkbox"/>
+          </div>
+        </div>
+        <div class="flex-1">
+          <span i18n>{{li.order_summary().item_count()}} Ordered</span>
+          <span class="ml-1 mr-1" i18n> | </span>
+          <span i18n>{{li.order_summary().recv_count()}} Received</span>
+          <span class="ml-1 mr-1" i18n> | </span>
+          <span i18n>{{li.order_summary().invoice_count()}} Invoiced</span>
+          <span class="ml-1 mr-1" i18n> | </span>
+          <span i18n>{{li.order_summary().cancel_count()}} Canceled</span>
+          <span class="ml-1 mr-1" i18n> | </span>
+          <span i18n>{{li.order_summary().delay_count()}} Delayed</span>
+          <span class="ml-1 mr-1" i18n> | </span>
+          <span i18n>{{li.order_summary().estimated_amount() | currency}} Estimated</span>
+          <span class="ml-1 mr-1" i18n> | </span>
+          <span i18n>{{li.order_summary().encumbrance_amount() | currency}} Encumbered</span>
+          <span class="ml-1 mr-1" i18n> | </span>
+          <span i18n>{{li.order_summary().paid_amount() | currency}} Paid</span>
         </div>
       </div>
     </div>
@@ -200,7 +228,7 @@
           <span class="ml-1 mr-1" i18n> | </span>
           <a class="label-with-material-icon"
             routerLink="null">
-            <span class="material-icons small mr-1">receipt</span>
+            <span class="material-icons small mr-1">list</span>
             <span i18n>Invoices ({{0}})</span>
           </a>
           <ng-container *ngIf="li.eg_bib_id()">
@@ -213,13 +241,6 @@
           </ng-container>
 
           <ng-container *ngIf="li.purchase_order()">
-            <span class="ml-1 mr-1" i18n> | </span>
-            <a class="label-with-material-icon"
-              title="Provider" i18n-title
-              routerLink="/staff/acq/provider/{{li.purchase_order().provider()}}/details">
-              <span class="material-icons small mr-1">adjust</span>
-              <span i18n>todo</span>
-            </a>
             <span class="ml-1 mr-1" i18n> | </span>
             <a class="label-with-material-icon"
               title="Purchase Order" i18n-title
@@ -235,6 +256,15 @@
               routerLink="/staff/acq/picklist/{{li.picklist().id()}}">
               <span class="material-icons small mr-1">widgets</span>
               <span i18n>{{li.picklist().name()}}</span>
+            </a>
+          </ng-container>
+          <ng-container *ngIf="li.provider()">
+            <span class="ml-1 mr-1" i18n> | </span>
+            <a class="label-with-material-icon"
+              title="Selection List" i18n-title 
+              routerLink="/staff/acq/provider/{{li.provider().id()}}/details">
+              <span class="material-icons small mr-1">store</span>
+              <span i18n>{{li.provider().name()}}</span>
             </a>
           </ng-container>
         </div>
