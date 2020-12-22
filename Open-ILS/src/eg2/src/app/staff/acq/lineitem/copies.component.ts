@@ -42,6 +42,7 @@ export class LineitemCopiesComponent implements OnInit, AfterViewInit {
     formulaFilter = {owner: []};
     formulaOffset = 0;
     formulaCounts: {[id: number]: FormulaApplication} = {};
+    formulaValues: {[field: string]: {[val: string]: boolean}} = {};
 
     constructor(
         private route: ActivatedRoute,
@@ -107,33 +108,56 @@ export class LineitemCopiesComponent implements OnInit, AfterViewInit {
             return;
         }
 
-        // TODO: fetch/cache new values to avoid paralell explody
+        this.formulaValues = {};
 
         this.pcrud.retrieve('acqdf', id,
             {flesh: 1, flesh_fields: {acqdf: ['entries']}})
         .subscribe(formula => {
 
-            let applied = 0;
             let rowIdx = this.formulaOffset - 1;
 
             while (++rowIdx < copies.length) {
-                applied += this.formulateOneCopy(formula, rowIdx);
+                this.formulateOneCopy(formula, rowIdx, true);
             }
 
-            if (applied) {
-                this.formulaOffset += applied;
+            // No new values will be applied
+            if (!Object.keys(this.formulaValues)) { return; }
 
-                if (!this.formulaCounts[id]) {
-                    this.formulaCounts[id] = {formula: formula, count: 0};
+            this.fetchFormulaValues().then(_ => {
+
+                let applied = 0;
+                let rowIdx = this.formulaOffset - 1;
+
+                while (++rowIdx < copies.length) {
+                    applied += this.formulateOneCopy(formula, rowIdx);
                 }
 
-                this.formulaCounts[id].count++;
-            }
+                if (applied) {
+                    this.formulaOffset += applied;
+
+                    if (!this.formulaCounts[id]) {
+                        this.formulaCounts[id] = {formula: formula, count: 0};
+                    }
+
+                    this.formulaCounts[id].count++;
+                }
+            });
         });
     }
 
+    // Grab values applied by distribution formulas and cache them before
+    // applying them to their target copies, so the comboboxes, etc.
+    // are not required to go fetch them en masse / en duplicato.
+    fetchFormulaValues(): Promise<any> {
+
+        return Promise.resolve();
+    }
+
     // Apply a formula entry to a single copy.
-    formulateOneCopy(formula: IdlObject, rowIdx: number): number {
+    // extracOnly means we are only collecting the new values we wish to
+    // apply from the formula w/o applying them to the copy in question.
+    formulateOneCopy(formula: IdlObject,
+        rowIdx: number, extractOnly?: boolean): number {
 
         let targetEntry = null;
         let entryIdx = this.formulaOffset;
@@ -153,8 +177,17 @@ export class LineitemCopiesComponent implements OnInit, AfterViewInit {
         if (!targetEntry) { return 0; }
 
         FORMULA_FIELDS.forEach(field => {
-            if (targetEntry[field]()) {
-                copy[field](targetEntry[field]());
+            const val = targetEntry[field]();
+            if (val === undefined || val === null) { return; }
+
+            if (extractOnly) {
+                if (!this.formulaValues[field]) {
+                    this.formulaValues[field] = {};
+                }
+                this.formulaValues[field][val] = true;
+
+            } else {
+                copy[field](val);
             }
         })
 
