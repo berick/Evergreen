@@ -1,4 +1,6 @@
 
+<!-- BATCH ACTIONS -->
+
 <div class="row mt-2">
   <div class="col-lg-1">
     <div ngbDropdown>
@@ -13,7 +15,7 @@
   </div>
   <div class="col-lg-5">
     <input type="text" class="form-control" [(ngModel)]="batchNote"
-      placeholder="Line Item Notes..." i18n-placeholder/>
+      placeholder="New Line Item Note..." i18n-placeholder/>
   </div>
   <div class="col-lg-4 form-inline">
     <div class="form-check mr-2">
@@ -29,6 +31,8 @@
     </button>
   </div>
 </div>
+
+<!-- NAVIGATION / EXPANDY -->
 
 <div class="row mt-3 mb-1 border border-info rounded pb-1 pt-1 toolbar">
   <div class="col-lg-12 d-flex">
@@ -97,15 +101,17 @@
   </div>
 </div>
 
-<ng-container *ngFor="let li of pageOfLineitems">
+<!-- LINEITEM LIST -->
+
+<div class="li-state-{{li.state()}}" *ngFor="let li of pageOfLineitems">
   <div class="row mt-2 border-bottom pt-2 pb-2">
-
     <div class="col-lg-12 d-flex">
-
       <div class="jacket-wrapper">
         <ng-container *ngIf="jacketIdent(li)">
-          <img class="jacket"
-          src='/opac/extras/ac/jacket/small/{{jacketIdent(li)}}'/>
+          <a href="/opac/extras/ac/jacket/large/{{jacketIdent(li)}}">
+            <img class="jacket"
+              src='/opac/extras/ac/jacket/small/{{jacketIdent(li)}}'/>
+          </a>
         </ng-container>
         <ng-container *ngIf="!jacketIdent(li)"><img class="jacket"/></ng-container>
       </div>
@@ -131,7 +137,7 @@
             <span class="pr-1">{{li.source_label()}}</span>
           </div>
         </div>
-        <div class="row">
+        <div class="row" *ngIf="li.purchase_order()">
           <div class="col-lg-12">
             <eg-lineitem-order-summary [li]="li"></eg-lineitem-order-summary>
           </div>
@@ -308,7 +314,7 @@
       </div>
     </div>
   </div>
-</ng-container>
+</div>
 
 <div class="row" *ngIf="loading">
   <div class="offset-lg-3 col-lg-6">

@@ -24,5 +24,10 @@ input[type="text"].form-control-sm { border-width: 1px; }
 }
 
 
-
-
+.li-state-new { background-color: #FFFFEE; }
+.li-state-selector-ready { background-color: #FFEEEE; }
+.li-state-order-ready { background-color: #EEEEEE; }
+.li-state-pending-order { background-color: #EEEEDD; }
+.li-state-on-order { background-color: #EEDDDD; }
+.li-state-received { background-color: #DDDDDD; }
+.li-state-delayed { background-color: #99CCFF; }
