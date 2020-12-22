@@ -6,12 +6,19 @@
 
 input[type="text"].form-control-sm { border-width: 1px; }
 
-.toolbar {
+.toolbar .form-check-label {
   font-size: 115%;
 }
 
 .batch-copy-row:nth-child(even) {
   background-color: rgba(0,0,0,.03);
+}
+
+/* Kind of hacky -- only way to get a toolbar button with no 
+ * mat icon to line up horizontally with mat icon buttons */
+.toolbar .text-button {
+  padding-top: 11px;
+  padding-bottom: 11px;
 }
 
 

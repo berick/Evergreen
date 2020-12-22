@@ -41,6 +41,7 @@ export class LineitemListComponent implements OnInit {
     batchSelectAll = false;
     showNotesFor: number;
     showExpandFor: number; // 'Expand'
+    expandAll = false;
     action = '';
 
     constructor(
@@ -318,6 +319,12 @@ export class LineitemListComponent implements OnInit {
     toggleShowExpand(liId: number) {
         this.showNotesFor = null;
         this.showExpandFor = this.showExpandFor === liId ? null : liId;
+    }
+
+    toggleExpandAll() {
+        this.showNotesFor = null;
+        this.showExpandFor = null;
+        this.expandAll = !this.expandAll;
     }
 
     liHasAlerts(li: IdlObject): boolean {
