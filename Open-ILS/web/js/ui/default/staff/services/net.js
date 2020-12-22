@@ -31,13 +31,19 @@
  *  );
  */
 
+var MAX_PARALLEL_REQUESTS = 5;
+
 angular.module('egCoreMod')
 
 .factory('egNet', 
        ['$q','$rootScope','egEvent', 
 function($q,  $rootScope,  egEvent) {
 
-    var net = {};
+    var net = {
+        autoId: 0,
+        pending: [],
+        active: []
+    };
 
     // Simple container class for tracking a single request.
     function NetRequest(kwargs) {
@@ -82,10 +88,12 @@ function($q,  $rootScope,  egEvent) {
         request.deferred.notify(request.last);
     };
 
+    // Queue a new request
     net.request = function(service, method) {
         var params = Array.prototype.slice.call(arguments, 2);
 
         var request = new NetRequest({
+            id         : net.autoId++,
             service    : service,
             method     : method,
             params     : params,
@@ -93,14 +101,47 @@ function($q,  $rootScope,  egEvent) {
             superseded : false
         });
 
-        console.debug('egNet ' + method);
-        new OpenSRF.ClientSession(service).request({
+        net.pending.push(request);
+        net.sendFromQueue();
+        return request.deferred.promise;
+    }
+
+    // Send as many pending requests as we can.
+    net.sendFromQueue = function(remove) {
+
+        if (remove) {
+            // Remove a completed request from the active request queue
+            for (var idx = 0; idx < net.active.length; idx++) {
+                if (net.active[idx].id === remove.id) {
+                    net.active.splice(idx, 1);
+                    break;
+                }
+            }
+        }
+
+        while (net.pending.length > 0 
+            && net.active.length < MAX_PARALLEL_REQUESTS) {
+            var req = this.pending.shift();
+            this.active.push(req);
+            console.log('sending req', req.id);
+            this._request(req);
+        }
+    }
+
+    net._request = function(request) {
+        console.debug('egNet ' + request.method);
+
+        new OpenSRF.ClientSession(request.service).request({
             async  : true,
             method : request.method,
             params : request.params,
             oncomplete : function() {
                 if (!request.superseded)
                     request.deferred.resolve(request.last);
+
+                // Even if this request was superseded, the initial
+                // API call has completed; remove it.
+                net.sendFromQueue(request);
             },
             onresponse : function(r) {
                 request.last = r.recv().content();
@@ -115,17 +156,17 @@ function($q,  $rootScope,  egEvent) {
                     ' (' + request.params + ')  failed.  See server logs.';
                 console.error(note, msg);
                 request.deferred.reject(note);
+                net.sendFromQueue(request);
             },
             onmethoderror : function(req, statCode, statMsg) { 
                 var msg = 'error calling method ' + 
                     request.method + ' : ' + statCode + ' : ' + statMsg;
                 console.error(msg);
                 request.deferred.reject(msg);
+                net.sendFromQueue(request);
             }
 
         }).send();
-
-        return request.deferred.promise;
     }
 
     // In addition to the service and method names, accepts a single array
