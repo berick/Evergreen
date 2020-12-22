@@ -50,7 +50,7 @@
       </div>
 
       <div class="d-flex ml-3 justify-content-center flex-column h-100">
-        <span class="font-italic font-small" style="font-size:90%" i18n>
+        <span class="font-italic" style="font-size:90%" i18n>
           {{selectedIds().length}} Selected
         </span>
       </div>
@@ -58,20 +58,30 @@
       <div class="flex-1"></div>
 
       <div class="btn-toolbar">
-        <button [disabled]="pager.isFirstPage()" type="button"
-          class="btn btn-outline-dark mr-1" (click)="pager.toFirst(); goToPage()">
-          <span title="First Page" i18n-title i18n>&#x2b70;</span>
+        <button type="button" (click)="toggleExpandAll()"
+          class="btn btn-sm btn-outline-dark mr-1">
+          <span title="Expand All" i18n-title *ngIf="!expandAll"
+            class="material-icons mat-icon-in-button">unfold_more</span>
+          <span title="Collapse All" i18n-title *ngIf="expandAll"
+            class="material-icons mat-icon-in-button">unfold_less</span>
         </button>
         <button [disabled]="pager.isFirstPage()" type="button"
-          class="btn btn-outline-dark mr-1" (click)="pager.decrement(); goToPage()">
-          <span title="Previous Page" i18n-title i18n>&#x21e0;</span>
+          class="btn btn-sm btn-outline-dark mr-1" (click)="pager.toFirst(); goToPage()">
+          <span title="First Page" i18n-title
+            class="material-icons mat-icon-in-button">first_page</span>
+        </button>
+        <button [disabled]="pager.isFirstPage()" type="button"
+          class="btn btn-sm btn-outline-dark mr-1" (click)="pager.decrement(); goToPage()">
+          <span title="Previous Page" i18n-title
+              class="material-icons mat-icon-in-button">keyboard_arrow_left</span>
         </button>
         <button [disabled]="pager.isLastPage()" type="button"
-          class="btn btn-outline-dark mr-1" (click)="pager.increment(); goToPage()">
-          <span title="Next Page" i18n-title i18n>&#x21e2;</span>
+          class="btn btn-sm btn-outline-dark mr-1" (click)="pager.increment(); goToPage()">
+          <span title="Next Page" i18n-title
+            class="material-icons mat-icon-in-button">keyboard_arrow_right</span>
         </button>
         <div ngbDropdown class="mr-1" placement="bottom-right">
-          <button ngbDropdownToggle class="btn btn-outline-dark">
+          <button ngbDropdownToggle class="btn btn-outline-dark text-button">
             <span title="Select Row Count" i18n-title i18n>
               Rows {{pager.limit}}
             </span>
@@ -85,7 +95,6 @@
           </div>
         </div>
       </div><!-- buttons -->
-
     </div>
   </div>
 
@@ -271,7 +280,7 @@
         </eg-lineitem-notes>
       </div>
     </div>
-    <div class="row" *ngIf="showExpandFor == li.id()">
+    <div class="row" *ngIf="showExpandFor == li.id() || expandAll">
       <div class="col-lg-10 offset-lg-1 p-2 mt-2 shadow">
         <div class="batch-copy-row" *ngFor="let copy of li.lineitem_details()">
           <eg-lineitem-copy-attrs [embedded]="true" [copy]="copy">
