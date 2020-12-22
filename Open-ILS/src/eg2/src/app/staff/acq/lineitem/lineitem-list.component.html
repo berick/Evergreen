@@ -1,7 +1,7 @@
 
 <!-- BATCH ACTIONS -->
 
-<div class="row mt-2">
+<div class="row mt-3">
   <div class="col-lg-1">
     <div ngbDropdown>
       <button class="btn btn-outline-dark btn-sm" ngbDropdownToggle i18n>
@@ -34,7 +34,7 @@
 
 <!-- NAVIGATION / EXPANDY -->
 
-<div class="row mt-3 mb-1 border border-info rounded pb-1 pt-1 toolbar">
+<div class="row mt-3 mb-1 border border-info rounded toolbar">
   <div class="col-lg-12 d-flex">
     <div class="d-flex justify-content-center flex-column h-100">
       <div class="form-check">
@@ -103,8 +103,8 @@
 
 <!-- LINEITEM LIST -->
 
-<div class="li-state-{{li.state()}}" *ngFor="let li of pageOfLineitems">
-  <div class="row mt-2 border-bottom pt-2 pb-2">
+<ng-container *ngFor="let li of pageOfLineitems">
+  <div class="row mt-2 border-bottom pt-2 pb-2 li-state-{{li.state()}}">
     <div class="col-lg-12 d-flex">
       <div class="jacket-wrapper">
         <ng-container *ngIf="jacketIdent(li)">
@@ -314,7 +314,7 @@
       </div>
     </div>
   </div>
-</div>
+</ng-container>
 
 <div class="row" *ngIf="loading">
   <div class="offset-lg-3 col-lg-6">
