@@ -282,8 +282,10 @@
                   Actions
                 </button>
                 <div ngbDropdownMenu>
-                  <button class="btn-sm" ngbDropdownItem 
-                    (click)="markReceived(li)">Mark Received</button>
+                  <button ngbDropdownItem 
+                    (click)="markReceived(li)" i18n>Mark Received</button>
+                  <button ngbDropdownItem [disabled]="!li.eg_bib_id()"
+                    (click)="editHoldings(li)" i18n>Holdings Maintenance</button>
                 </div>
               </div>
             </div>

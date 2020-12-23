@@ -8,6 +8,7 @@ import {NetService} from '@eg/core/net.service';
 import {AuthService} from '@eg/core/auth.service';
 import {LineitemService} from './lineitem.service';
 import {ComboboxEntry} from '@eg/share/combobox/combobox.component';
+import {HoldingsService} from '@eg/staff/share/holdings/holdings.service';
 
 @Component({
   templateUrl: 'lineitem-list.component.html',
@@ -50,6 +51,7 @@ export class LineitemListComponent implements OnInit {
         private route: ActivatedRoute,
         private net: NetService,
         private auth: AuthService,
+        private holdings: HoldingsService,
         private liService: LineitemService
     ) {}
 
@@ -351,6 +353,23 @@ export class LineitemListComponent implements OnInit {
         });
 
         promise.then(_ => this.load());
+    }
+
+    editHoldings(li: IdlObject) {
+        const copies = li.lineitem_details()
+            .filter(lid => lid.eg_copy_id())
+            .map(lid => lid.eg_copy_id());
+
+        if (copies.length === 0) { return; }
+
+        this.holdings.spawnAddHoldingsUi(
+            li.eg_bib_id(),
+            copies.map(c => c.call_number()),
+            null,
+            copies.map(c => c.id()),
+            false,
+            false
+        );
     }
 }
 
