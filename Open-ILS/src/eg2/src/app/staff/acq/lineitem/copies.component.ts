@@ -42,7 +42,6 @@ export class LineitemCopiesComponent implements OnInit, AfterViewInit {
     progressValue = 0;
     formulaFilter = {owner: []};
     formulaOffset = 0;
-    formulaCounts: {[id: number]: FormulaApplication} = {};
     formulaValues: {[field: string]: {[val: string]: boolean}} = {};
 
     constructor(
@@ -140,14 +139,22 @@ export class LineitemCopiesComponent implements OnInit, AfterViewInit {
 
                 if (applied) {
                     this.formulaOffset += applied;
-
-                    if (!this.formulaCounts[id]) {
-                        this.formulaCounts[id] = {formula: formula, count: 0};
-                    }
-
-                    this.formulaCounts[id].count++;
+                    this.saveAppliedFormula(formula);
                 }
             });
+        });
+    }
+
+    saveAppliedFormula(formula: IdlObject) {
+        const app = this.idl.create('acqdfa');
+        app.lineitem(this.lineitem.id());
+        app.creator(this.auth.user().id());
+        app.formula(formula.id());
+
+        this.pcrud.create(app).toPromise().then(a => {
+            a.creator(this.auth.user());
+            a.formula(formula);
+            this.lineitem.distribution_formulas().push(a)
         });
     }
 
@@ -234,7 +241,7 @@ export class LineitemCopiesComponent implements OnInit, AfterViewInit {
             } else {
                 copy[field](val);
             }
-        })
+        });
 
         return 1;
     }
@@ -252,6 +259,15 @@ export class LineitemCopiesComponent implements OnInit, AfterViewInit {
             err => {},
             () => this.load().then(_ => this.saving = false)
         );
+    }
+
+    deleteFormula(formula: IdlObject) {
+        this.pcrud.remove(formula).subscribe(_ => {
+            this.lineitem.distribution_formulas(
+                this.lineitem.distribution_formulas()
+                .filter(f => f.id() !== formula.id())
+            );
+        });
     }
 }
 
