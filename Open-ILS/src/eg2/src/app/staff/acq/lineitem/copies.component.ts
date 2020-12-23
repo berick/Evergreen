@@ -10,6 +10,7 @@ import {PcrudService} from '@eg/core/pcrud.service';
 import {AuthService} from '@eg/core/auth.service';
 import {LineitemService} from './lineitem.service';
 import {ComboboxEntry} from '@eg/share/combobox/combobox.component';
+import {ItemLocationService} from '@eg/share/item-location-select/item-location-select.service';
 
 const FORMULA_FIELDS = [
     'owning_lib',
@@ -51,6 +52,7 @@ export class LineitemCopiesComponent implements OnInit, AfterViewInit {
         private net: NetService,
         private pcrud: PcrudService,
         private auth: AuthService,
+        private loc: ItemLocationService,
         private liService: LineitemService
     ) {}
 
@@ -154,7 +156,46 @@ export class LineitemCopiesComponent implements OnInit, AfterViewInit {
     // are not required to go fetch them en masse / en duplicato.
     fetchFormulaValues(): Promise<any> {
 
-        return Promise.resolve();
+        const funds = Object.keys(this.formulaValues.fund);
+        const mods = Object.keys(this.formulaValues.circ_modifier);
+        const locs = Object.keys(this.formulaValues.location);
+
+        let promise = Promise.resolve();
+
+        if (funds.length > 0) {
+            promise = promise.then(_ => {
+                return this.pcrud.search('acqf', {id: funds})
+                .pipe(tap(fund => {
+                    this.liService.fundCache[fund.id()] = fund;
+                    this.liService.batchOptionWanted.emit(
+                        {fund: {id: fund.id(), label: fund.code(), fm: fund}});
+                })).toPromise();
+            });
+        }
+
+        if (mods.length > 0) {
+            promise = promise.then(_ => {
+                return this.pcrud.search('ccm', {code: mods})
+                .pipe(tap(mod => {
+                    this.liService.circModCache[mod.code()] = mod;
+                    this.liService.batchOptionWanted.emit({circ_modifier:
+                        {id: mod.code(), label: mod.code(), fm: mod}});
+                })).toPromise();
+            });
+        }
+
+        if (locs.length > 0) {
+            promise = promise.then(_ => {
+                return this.pcrud.search('acpl', {id: locs})
+                .pipe(tap(loc => {
+                    this.loc.locationCache[loc.id()] = loc;
+                    this.liService.batchOptionWanted.emit({location:
+                        {id: loc.id(), label: loc.name(), fm: loc}});
+                })).toPromise();
+            });
+        }
+
+        return promise;
     }
 
     // Apply a formula entry to a single copy.
