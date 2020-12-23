@@ -286,6 +286,8 @@
                     (click)="markReceived(li)" i18n>Mark Received</button>
                   <button ngbDropdownItem [disabled]="!li.eg_bib_id()"
                     (click)="editHoldings(li)" i18n>Holdings Maintenance</button>
+                  <a ngbDropdownItem routerLink="lineitem/{{li.id()}}/history"
+                    queryParamsHandling="merge" i18n>View History</a>
                 </div>
               </div>
             </div>
