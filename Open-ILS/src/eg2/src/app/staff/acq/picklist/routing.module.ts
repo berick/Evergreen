@@ -5,6 +5,7 @@ import {PicklistSummaryComponent} from './summary.component';
 import {LineitemListComponent} from '../lineitem/lineitem-list.component';
 import {LineitemDetailComponent} from '../lineitem/detail.component';
 import {LineitemCopiesComponent} from '../lineitem/copies.component';
+import {BriefRecordComponent} from '../lineitem/brief-record.component';
 
 const routes: Routes = [{
   path: ':picklistId',
@@ -12,6 +13,9 @@ const routes: Routes = [{
   children : [{
     path: '',
     component: LineitemListComponent
+  }, {
+    path: 'brief-record',
+    component: BriefRecordComponent
   }, {
     path: 'lineitem/:lineitemId/detail',
     component: LineitemDetailComponent

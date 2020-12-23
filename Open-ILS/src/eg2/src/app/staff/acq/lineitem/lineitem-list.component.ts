@@ -17,6 +17,7 @@ import {ComboboxEntry} from '@eg/share/combobox/combobox.component';
 export class LineitemListComponent implements OnInit {
 
     picklistId: number;
+    poId: number;
 
     loading = false;
     pager: Pager = new Pager();
@@ -329,6 +330,27 @@ export class LineitemListComponent implements OnInit {
 
     liHasAlerts(li: IdlObject): boolean {
         return li.lineitem_notes().filter(n => n.alert_text()).length > 0;
+    }
+
+    deleteLineitems() {
+        const ids = Object.keys(this.selected).filter(id => this.selected[id]);
+
+        const method = this.poId ?
+            'open-ils.acq.purchase_order.lineitem.delete' :
+            'open-ils.acq.picklist.lineitem.delete';
+
+        let promise = Promise.resolve();
+
+        this.loading = true;
+
+        ids.forEach(id => {
+            promise = promise
+            .then(_ => this.net.request(
+                'open-ils.acq', method, this.auth.token(), id).toPromise()
+            );
+        });
+
+        promise.then(_ => this.load());
     }
 }
 

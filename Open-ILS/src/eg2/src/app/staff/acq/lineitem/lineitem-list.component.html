@@ -6,8 +6,11 @@
     <div ngbDropdown>
       <button class="btn btn-outline-dark btn-sm" ngbDropdownToggle i18n>Actions</button>
       <div ngbDropdownMenu>
-        <button class="btn-sm" ngbDropdownItem
-          (click)="addBriefRecord()">Add Brief Record</button>
+        <a ngbDropdownItem routerLink="../brief-record"
+          queryParamsHandling="merge" i18n>Add Brief Record</a>
+        <button ngbDropdownItem (click)="deleteLineitems()" i18n>
+          Delete Selected Lineitems
+        </button>
       </div>
     </div>
   </div>
