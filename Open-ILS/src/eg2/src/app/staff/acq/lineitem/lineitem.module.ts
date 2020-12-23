@@ -14,6 +14,7 @@ import {LineitemListComponent} from './lineitem-list.component';
 import {LineitemCopiesComponent} from './copies.component';
 import {LineitemBatchCopiesComponent} from './batch-copies.component';
 import {LineitemCopyAttrsComponent} from './copy-attrs.component';
+import {BriefRecordComponent} from './brief-record.component';
 
 @NgModule({
   declarations: [
@@ -25,6 +26,7 @@ import {LineitemCopyAttrsComponent} from './copy-attrs.component';
     LineitemOrderSummaryComponent,
     LineitemBatchCopiesComponent,
     LineitemCopyAttrsComponent,
+    BriefRecordComponent,
     WorksheetComponent
   ],
   exports: [

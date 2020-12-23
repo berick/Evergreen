@@ -44,7 +44,8 @@
     <div class="card-header" i18n>Distribution formulas applied to this lineitem</div>
     <div class="card-body">
       <ul class="p-0 m-0">
-        <li class="list-group-item p-0 m-0 border-0" *ngFor="let formula of lineitem.distribution_formulas()">
+        <li class="list-group-item p-0 m-0 border-0" 
+          *ngFor="let formula of lineitem.distribution_formulas()">
           <div class="d-flex">
             <button class="btn btn-outline-danger material-icon-button p-0 m-0"
               (click)="deleteFormula(formula)" title="Delete Formula" i18n-title>
