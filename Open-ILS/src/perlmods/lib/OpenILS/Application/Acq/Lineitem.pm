@@ -175,6 +175,12 @@ sub retrieve_lineitem_impl {
     push(@{$fields->{jub}   },        'editor') if $$options{flesh_editor};
     push(@{$fields->{jub}   },      'selector') if $$options{flesh_selector};
 
+    if ($$options{flesh_formulas}) {
+        push(@{$fields->{jub}},    'distribution_formulas');
+        push(@{$fields->{acqdfa}}, 'formula');
+        push(@{$fields->{acqdfa}}, 'creator');
+    }
+
     if($$options{flesh_li_details}) {
         push(@{$fields->{jub}   }, 'lineitem_details');
         push(@{$fields->{acqlid}}, 'fund'         ) if $$options{flesh_fund};

@@ -39,6 +39,26 @@
 </div>
 
 <ng-container *ngIf="lineitem && !saving">
+
+  <div class="card tight-card" *ngIf="lineitem.distribution_formulas().length">
+    <div class="card-header" i18n>Distribution formulas applied to this lineitem</div>
+    <div class="card-body">
+      <ul class="p-0 m-0">
+        <li class="list-group-item p-0 m-0 border-0" *ngFor="let formula of lineitem.distribution_formulas()">
+          <div class="d-flex">
+            <button class="btn btn-outline-danger material-icon-button p-0 m-0"
+              (click)="deleteFormula(formula)" title="Delete Formula" i18n-title>
+              <span class="material-icons">delete</span>
+            </button>
+            <div class="ml-2">{{formula.create_time() | date:'short'}}</div>
+            <div class="ml-2">{{formula.creator().usrname()}}</div>
+            <div class="ml-2 flex-1">{{formula.formula().name()}}</div>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+
   <eg-lineitem-batch-copies [lineitem]="lineitem"></eg-lineitem-batch-copies>
 </ng-container>
 

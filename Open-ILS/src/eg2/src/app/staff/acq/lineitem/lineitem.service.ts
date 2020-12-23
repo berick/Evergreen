@@ -67,7 +67,8 @@ export class LineitemService {
             flesh_fund_debit: true,
             clear_marc: true,
             flesh_po: true,
-            flesh_pl: true
+            flesh_pl: true,
+            flesh_formulas: true
         };
 
         return this.net.request(
@@ -75,16 +76,24 @@ export class LineitemService {
             this.auth.token(), ids, flesh
         ).pipe(tap(liStruct => {
 
+            const li = liStruct.lineitem;
+
             // These values come through as NULL
-            const summary = liStruct.lineitem.order_summary();
+            const summary = li.order_summary();
             if (!summary.estimated_amount()) { summary.estimated_amount(0); }
             if (!summary.encumbrance_amount()) { summary.encumbrance_amount(0); }
             if (!summary.paid_amount()) { summary.paid_amount(0); }
 
+            // Sort the formula applications
+            li.distribution_formulas(
+                li.distribution_formulas().sort((f1, f2) =>
+                    f1.create_time() < f2.create_time() ? -1 : 1)
+            );
+
             // De-flesh some values we don't want living directly on
             // the copy.  Cache the values so our comboboxes, etc.
             // can use them without have to re-fetch them .
-            liStruct.lineitem.lineitem_details().forEach(copy => {
+            li.lineitem_details().forEach(copy => {
                 let val;
                 if ((val = copy.circ_modifier())) { // assignment
                     this.circModCache[val.code()] = copy.circ_modifier();
