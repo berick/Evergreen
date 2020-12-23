@@ -65,10 +65,11 @@ export class LineitemService {
             flesh_circ_modifier: true,
             flesh_location: true,
             flesh_fund_debit: true,
-            clear_marc: true,
             flesh_po: true,
             flesh_pl: true,
-            flesh_formulas: true
+            flesh_formulas: true,
+            flesh_copies: true,
+            clear_marc: true
         };
 
         return this.net.request(
