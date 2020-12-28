@@ -361,5 +361,30 @@ export class LineitemListComponent implements OnInit {
             false
         );
     }
+
+    markReceived(liIds: number[]) {
+        this.net.request(
+            'open-ils.acq',
+            'open-ils.acq.lineitem.receive.batch',
+            this.auth.token(), liIds
+        ).toPromise().then(_ => this.postBatchAction(liIds));
+    }
+
+    markUnReceived(liIds: number[]) {
+        this.net.request(
+            'open-ils.acq',
+            'open-ils.acq.lineitem.receive.rollback.batch',
+            this.auth.token(), liIds
+        ).toPromise().then(_ => this.postBatchAction(liIds));
+    }
+
+    postBatchAction(liIds?: number[]) {
+        if (liIds) {
+            // Remove the modified LI's from the cache so we are
+            // forced to re-fetch them.
+            liIds.forEach(id => delete this.liService.liCache[id]);
+        }
+        this.loadPageOfLis();
+    }
 }
 
