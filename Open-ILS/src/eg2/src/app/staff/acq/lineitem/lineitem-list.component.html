@@ -232,8 +232,10 @@
       <div class="d-flex flex-column justify-content-end">
         <div class="row">
           <div class="col-lg-12 d-flex">
-          <div class="flex-1"></div>
-            <div class="input-group">
+          <div class="flex-1"> </div>
+            <!-- w-auto allows the input group to stick to the right 
+                 as the status label grows -->
+            <div class="input-group w-auto">
               <div class="input-group-prepend">
                 <div ngbDropdown>
                   <button class="btn btn-outline-dark btn-sm" ngbDropdownToggle 
@@ -271,7 +273,7 @@
                 <span i18n *ngSwitchCase="'order-ready'">Order-Ready</span>
                 <span i18n *ngSwitchCase="'approved'">Approved</span>
                 <span i18n *ngSwitchCase="'pending-order'" class="text-info">Pending-Order</span>
-                <span i18n *ngSwitchCase="'on-order'" class="text-warning">On-Order</span>
+                <span i18n *ngSwitchCase="'on-order'" class="text-primary">On-Order</span>
                 <span i18n *ngSwitchCase="'received'" class="text-success">Received</span>
                 <span i18n *ngSwitchCase="'cancelled'" class="text-danger">Canceled</span>
               </ng-container>
@@ -284,7 +286,8 @@
                 <div ngbDropdownMenu>
                   <button ngbDropdownItem 
                     (click)="markReceived(li)" i18n>Mark Received</button>
-                  <button ngbDropdownItem [disabled]="!li.eg_bib_id()"
+                  <button ngbDropdownItem 
+                    [disabled]="!li.eg_bib_id() || li.lineitem_details().length == 0"
                     (click)="editHoldings(li)" i18n>Holdings Maintenance</button>
                   <a ngbDropdownItem routerLink="lineitem/{{li.id()}}/history"
                     queryParamsHandling="merge" i18n>View History</a>
@@ -295,8 +298,7 @@
               <input type="text" class="form-control-sm medium"
                 [ngClass]="{'border border-danger text-danger': !liPriceIsValid(li)}"
                 placeholder='Price...' i18n-placeholder
-                (change)="liPriceChange(li)"
-                [ngModel]="li.estimated_unit_price()"
+                (change)="liPriceChange(li)" [ngModel]="li.estimated_unit_price()"
                 (ngModelChange)="li.estimated_unit_price($event)"/>
             </div>
           </div>

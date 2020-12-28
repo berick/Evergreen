@@ -44,6 +44,9 @@ export class LineitemService {
     circModCache: {[code: string]: IdlObject} = {};
     fundCache: {[id: number]: IdlObject} = {};
 
+    // Alerts the user has already confirmed are OK.
+    alertAcks: {[id: number]: boolean} = {};
+
     constructor(
         private idl: IdlService,
         private net: NetService,
@@ -89,6 +92,12 @@ export class LineitemService {
             li.distribution_formulas(
                 li.distribution_formulas().sort((f1, f2) =>
                     f1.create_time() < f2.create_time() ? -1 : 1)
+            );
+
+            // consistent sorting
+            li.lineitem_details(
+                li.lineitem_details().sort((d1, d2) =>
+                    d1.id() < d2.id() ? -1 : 1)
             );
 
             // De-flesh some values we don't want living directly on

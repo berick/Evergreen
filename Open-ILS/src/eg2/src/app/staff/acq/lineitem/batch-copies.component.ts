@@ -57,6 +57,14 @@ export class LineitemBatchCopiesComponent implements OnInit {
             copy.isdeleted(true);
         }
     }
+
+    // 'id' will match the ID of the lineitem we already have loaded.
+    liRefreshRequested(id: number) {
+        console.log('refresh requested for ', id);
+        this.liService.getFleshedLineitems([id]).subscribe(liStruct => {
+            this.lineitem = liStruct.lineitem;
+        });
+    }
 }
 
 
