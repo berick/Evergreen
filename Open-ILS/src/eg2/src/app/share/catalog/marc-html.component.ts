@@ -38,9 +38,13 @@ export class MarcHtmlComponent implements OnInit {
         return this._recordXml;
     }
 
-    recType: string;
+    private _recordType: string;
     @Input() set recordType(rtype: string) {
-        this.recType = rtype;
+        this._recordType = rtype;
+    }
+
+    get recordType(): string {
+        return this._recordType;
     }
 
     constructor(
@@ -54,13 +58,13 @@ export class MarcHtmlComponent implements OnInit {
     }
 
     collectData(): Promise<any> {
-        if (!this.recordId && !this.recordXml) { Promise.resolve(); }
+        if (!this.recordId && !this.recordXml) { return Promise.resolve(); }
 
         let service = 'open-ils.search';
         let method = 'open-ils.search.biblio.record.html';
         let params: any[] = [this.recordId];
 
-        switch (this.recType) {
+        switch (this.recordType) {
 
             case 'authority':
                 method = 'open-ils.search.authority.to_html';
