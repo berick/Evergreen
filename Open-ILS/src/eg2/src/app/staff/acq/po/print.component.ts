@@ -33,7 +33,7 @@ export class PrintComponent implements OnInit {
         private broadcaster: BroadcastService,
         private printer: PrintService) {
 
-        this.id = +this.route.snapshot.paramMap.get('id');
+        this.id = +this.route.snapshot.paramMap.get('poId');
 
         this.route.url.pipe(map(segments => segments.join('_')), take(1))
         .subscribe(path => {

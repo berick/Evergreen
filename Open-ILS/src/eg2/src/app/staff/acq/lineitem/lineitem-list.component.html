@@ -4,7 +4,7 @@
 <div class="row mt-3">
   <div class="col-lg-1">
     <div ngbDropdown>
-      <button class="btn btn-outline-dark btn-sm" ngbDropdownToggle i18n>Actions</button>
+      <button class="btn btn-info btn-sm" ngbDropdownToggle i18n>Actions</button>
       <div ngbDropdownMenu>
         <a ngbDropdownItem routerLink="../brief-record"
           queryParamsHandling="merge" i18n>Add Brief Record</a>
@@ -197,7 +197,7 @@
               </a>
             </ng-container>
 
-            <ng-container *ngIf="li.purchase_order()">
+            <ng-container *ngIf="!poId && li.purchase_order()">
               <span class="ml-1 mr-1" i18n> | </span>
               <a class="label-with-material-icon"
                 title="Purchase Order" i18n-title
@@ -206,7 +206,7 @@
                 <span i18n>{{li.purchase_order().id()}}</span>
               </a>
             </ng-container>
-            <ng-container *ngIf="li.picklist()">
+            <ng-container *ngIf="!picklistId && li.picklist()">
               <span class="ml-1 mr-1" i18n> | </span>
               <a class="label-with-material-icon"
                 title="Selection List" i18n-title 
@@ -280,16 +280,13 @@
             </div>
             <div class="mr-2">
               <div ngbDropdown>
-                <button class="btn btn-outline-dark btn-sm" ngbDropdownToggle i18n>
-                  Actions
-                </button>
+                <button class="btn btn-info btn-sm" ngbDropdownToggle i18n>Actions</button>
                 <div ngbDropdownMenu>
                   <button ngbDropdownItem [disabled]="li.state() != 'on-order'"
                     (click)="markReceived([li.id()])" i18n>Mark Received</button>
                   <button ngbDropdownItem [disabled]="li.state() != 'received'"
                     (click)="markUnReceived([li.id()])" i18n>Mark Un-Received</button>
-                  <button ngbDropdownItem 
-                    [disabled]="!li.eg_bib_id() || li.lineitem_details().length == 0"
+                  <button ngbDropdownItem [disabled]="!liHasRealCopies(li)"
                     (click)="editHoldings(li)" i18n>Holdings Maintenance</button>
                   <a ngbDropdownItem routerLink="lineitem/{{li.id()}}/history"
                     queryParamsHandling="merge" i18n>View History</a>
