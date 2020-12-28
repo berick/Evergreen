@@ -1,0 +1,49 @@
+
+<div *ngIf="po" class="p-1 border border-secondary rounded">
+
+  <h4 i18n>Purchase Order ({{po.state()}}) 
+    <ng-container *ngIf="po.order_date()">
+      Activated {{po.order_date() | date:'short'}}
+    </ng-container>
+  </h4>
+
+  <div class="row">
+    <div class="col-lg-1" i18n>ID</div>
+    <div class="col-lg-2">{{po.id()}}</div>
+    <div class="col-lg-2" i18n>Estimated Amount</div>
+    <div class="col-lg-1">{{po.amount_estimated() | currency}}</div>
+  </div>
+  <div class="row mt-1">
+    <div class="col-lg-1" i18n>Name</div>
+    <div class="col-lg-2" i18n>
+      <ng-container *ngIf="editPoName">
+        <input id='pl-name-input' type="text" class="form-control" 
+          [(ngModel)]="newPoName" (blur)="toggleNameEdit()"/>
+      </ng-container>
+      <ng-container *ngIf="!editPoName">
+        <a (click)="toggleNameEdit()" href='javascript:;' 
+          class='font-weight-bold'>{{po.name()}}</a>
+      </ng-container>
+    </div>
+    <div class="col-lg-2" i18n>Encumbered Amount</div>
+    <div class="col-lg-1">{{po.amount_encumbered() | currency}}</div>
+  </div>
+  <div class="row">
+    <div class="col-lg-1" i18n>Provider</div>
+    <div class="col-lg-2">
+      <a routerLink="/staff/acq/provider/{{po.provider().id()}}/details">
+        {{po.provider().name()}}
+      </a>
+    </div>
+    <div class="col-lg-2" i18n>Spent Amount</div>
+    <div class="col-lg-1">{{po.amount_spent() | currency}}</div>
+  </div>
+  <div class="row">
+    <div class="col-lg-1" i18n>Lineitems</div>
+    <div class="col-lg-2">{{po.lineitems().length}}</div>
+    <div class="col-lg-2" i18n>Prepayment Required?</div>
+    <div class="col-lg-1">
+      <eg-bool [value]="po.provider().prepayment_required()"></eg-bool>
+    </div>
+  </div>
+</div>

@@ -61,11 +61,12 @@ export class LineitemListComponent implements OnInit {
         this.route.queryParamMap.subscribe((params: ParamMap) => {
             this.pager.offset = +params.get('offset');
             this.pager.limit = +params.get('limit');
-            if (this.picklistId) { this.load(); }
+            if (this.picklistId || this.poId) { this.load(); }
         });
 
         this.route.parent.paramMap.subscribe((params: ParamMap) => {
             this.picklistId = +params.get('picklistId');
+            this.poId = +params.get('poId');
             this.load();
         });
     }
@@ -83,15 +84,25 @@ export class LineitemListComponent implements OnInit {
             .then(_ => this.loading = false);
     }
 
-    // TODO: support loading from PO, etc.
     loadIds(): Promise<any> {
         this.lineitemIds = [];
 
+        let id = this.poId;
+        let options: any = {flesh_lineitem_ids: true, li_limit: 10000};
+        let method = 'open-ils.acq.purchase_order.retrieve';
+        let handler = (po) => po.lineitems();
+
+        if (this.picklistId) {
+            id = this.picklistId;
+            options = {idlist: true, limit: 1000};
+            method = 'open-ils.acq.lineitem.picklist.retrieve.atomic';
+            handler = (ids) => ids;
+        }
+
         return this.net.request(
-            'open-ils.acq',
-            'open-ils.acq.lineitem.picklist.retrieve.atomic',
-            this.auth.token(), this.picklistId, {idlist: true, limit: 1000}
-        ).toPromise().then(ids => {
+            'open-ils.acq', method, this.auth.token(), id, options
+        ).toPromise().then(resp => {
+            const ids = handler(resp);
 
             this.lineitemIds = ids.sort(
                 (id1, id2) => Number(id1) < Number(id2) ? -1 : 1);
@@ -345,10 +356,19 @@ export class LineitemListComponent implements OnInit {
         promise.then(_ => this.load());
     }
 
+    liHasRealCopies(li: IdlObject): boolean {
+        for (let idx = 0; idx < li.lineitem_details().length; idx++) {
+            if (li.lineitem_details()[idx].eg_copy_id()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     editHoldings(li: IdlObject) {
+
         const copies = li.lineitem_details()
-            .filter(lid => lid.eg_copy_id())
-            .map(lid => lid.eg_copy_id());
+            .filter(lid => lid.eg_copy_id()).map(lid => lid.eg_copy_id());
 
         if (copies.length === 0) { return; }
 
@@ -356,11 +376,10 @@ export class LineitemListComponent implements OnInit {
             li.eg_bib_id(),
             copies.map(c => c.call_number()),
             null,
-            copies.map(c => c.id()),
-            false,
-            false
+            copies.map(c => c.id())
         );
     }
+
 
     markReceived(liIds: number[]) {
         this.net.request(
