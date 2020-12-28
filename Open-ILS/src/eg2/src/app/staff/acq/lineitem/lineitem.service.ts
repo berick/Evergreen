@@ -1,6 +1,6 @@
 import {Injectable, EventEmitter} from '@angular/core';
-import {Observable} from 'rxjs';
-import {switchMap, map, tap} from 'rxjs/operators';
+import {Observable, from} from 'rxjs';
+import {switchMap, map, tap, merge} from 'rxjs/operators';
 import {IdlObject, IdlService} from '@eg/core/idl.service';
 import {NetService} from '@eg/core/net.service';
 import {AuthService} from '@eg/core/auth.service';
@@ -43,6 +43,7 @@ export class LineitemService {
     // item location select service.
     circModCache: {[code: string]: IdlObject} = {};
     fundCache: {[id: number]: IdlObject} = {};
+    liCache: {[id: number]: BatchLineitemStruct} = {};
 
     // Alerts the user has already confirmed are OK.
     alertAcks: {[id: number]: boolean} = {};
@@ -55,7 +56,28 @@ export class LineitemService {
         private loc: ItemLocationService
     ) {}
 
-    getFleshedLineitems(ids: number[]): Observable<BatchLineitemStruct> {
+    getFleshedLineitems(ids: number[],
+        cacheOk?: boolean, wantMarc?: boolean): Observable<BatchLineitemStruct> {
+
+        const fromCache: BatchLineitemStruct[] = [];
+
+        if (cacheOk) {
+            const fetchIds = [];
+            ids.forEach((id, idx) => {
+                if (this.liCache[id]) {
+                    fromCache.push(this.liCache[id]);
+                } else {
+                    fetchIds.push(id);
+                }
+            });
+
+            ids = fetchIds;
+        }
+
+        const obs: Observable<BatchLineitemStruct> = from(fromCache);
+
+        // All LI's found in cache
+        if (ids.length === 0) { return obs; }
 
         const flesh: any = {
             flesh_attrs: true,
@@ -72,53 +94,58 @@ export class LineitemService {
             flesh_pl: true,
             flesh_formulas: true,
             flesh_copies: true,
-            clear_marc: true
+            clear_marc: wantMarc ? false : true
         };
 
-        return this.net.request(
-            'open-ils.acq', 'open-ils.acq.lineitem.retrieve.batch',
-            this.auth.token(), ids, flesh
-        ).pipe(tap(liStruct => {
+        return obs.pipe(merge(
+            this.net.request(
+                'open-ils.acq', 'open-ils.acq.lineitem.retrieve.batch',
+                this.auth.token(), ids, flesh
+            ).pipe(tap(liStruct => this.ingestLineitem(liStruct)))
+        ));
+    }
 
-            const li = liStruct.lineitem;
+    ingestLineitem(liStruct: BatchLineitemStruct): BatchLineitemStruct {
+        const li = liStruct.lineitem;
 
-            // These values come through as NULL
-            const summary = li.order_summary();
-            if (!summary.estimated_amount()) { summary.estimated_amount(0); }
-            if (!summary.encumbrance_amount()) { summary.encumbrance_amount(0); }
-            if (!summary.paid_amount()) { summary.paid_amount(0); }
+        // These values come through as NULL
+        const summary = li.order_summary();
+        if (!summary.estimated_amount()) { summary.estimated_amount(0); }
+        if (!summary.encumbrance_amount()) { summary.encumbrance_amount(0); }
+        if (!summary.paid_amount()) { summary.paid_amount(0); }
 
-            // Sort the formula applications
-            li.distribution_formulas(
-                li.distribution_formulas().sort((f1, f2) =>
-                    f1.create_time() < f2.create_time() ? -1 : 1)
-            );
+        // Sort the formula applications
+        li.distribution_formulas(
+            li.distribution_formulas().sort((f1, f2) =>
+                f1.create_time() < f2.create_time() ? -1 : 1)
+        );
 
-            // consistent sorting
-            li.lineitem_details(
-                li.lineitem_details().sort((d1, d2) =>
-                    d1.id() < d2.id() ? -1 : 1)
-            );
+        // consistent sorting
+        li.lineitem_details(
+            li.lineitem_details().sort((d1, d2) =>
+                d1.id() < d2.id() ? -1 : 1)
+        );
 
-            // De-flesh some values we don't want living directly on
-            // the copy.  Cache the values so our comboboxes, etc.
-            // can use them without have to re-fetch them .
-            li.lineitem_details().forEach(copy => {
-                let val;
-                if ((val = copy.circ_modifier())) { // assignment
-                    this.circModCache[val.code()] = copy.circ_modifier();
-                    copy.circ_modifier(val.code());
-                }
-                if ((val = copy.fund())) {
-                    this.fundCache[val.id()] = copy.fund();
-                    copy.fund(val.id());
-                }
-                if ((val = copy.location())) {
-                    this.loc.locationCache[val.id()] = copy.location();
-                    copy.location(val.id());
-                }
-            });
-        }));
+        // De-flesh some values we don't want living directly on
+        // the copy.  Cache the values so our comboboxes, etc.
+        // can use them without have to re-fetch them .
+        li.lineitem_details().forEach(copy => {
+            let val;
+            if ((val = copy.circ_modifier())) { // assignment
+                this.circModCache[val.code()] = copy.circ_modifier();
+                copy.circ_modifier(val.code());
+            }
+            if ((val = copy.fund())) {
+                this.fundCache[val.id()] = copy.fund();
+                copy.fund(val.id());
+            }
+            if ((val = copy.location())) {
+                this.loc.locationCache[val.id()] = copy.location();
+                copy.location(val.id());
+            }
+        });
+
+        return this.liCache[li.id()] = liStruct;
     }
 
     // Returns all matching attributes

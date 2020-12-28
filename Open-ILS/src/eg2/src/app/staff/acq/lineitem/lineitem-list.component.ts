@@ -25,17 +25,18 @@ export class LineitemListComponent implements OnInit {
     pageOfLineitems: IdlObject[] = [];
     lineitemIds: number[] = [];
 
+    // Selected lineitems
     selected: {[id: number]: boolean} = {};
 
+    // Order identifier type per lineitem
     orderIdentTypes: {[id: number]: 'isbn' | 'issn' | 'upc'} = {};
 
+    // Copy counts per lineitem
     existingCopyCounts: {[id: number]: number} = {};
 
     // Squash these down to an easily traversable data set to avoid
     // a lot of repetitive looping.
     liMarcAttrs: {[id: number]: {[name: string]: IdlObject[]}} = {};
-
-    liCache: {[id: number]: IdlObject} = {};
 
     batchNote: string;
     noteIsPublic = false;
@@ -85,7 +86,6 @@ export class LineitemListComponent implements OnInit {
     // TODO: support loading from PO, etc.
     loadIds(): Promise<any> {
         this.lineitemIds = [];
-        this.liCache = {};
 
         return this.net.request(
             'open-ils.acq',
@@ -126,13 +126,6 @@ export class LineitemListComponent implements OnInit {
             return Promise.resolve();
         }
 
-        // See if we already have them in the cache
-        ids.forEach(id => {
-            if (this.liCache[id]) {
-                this.pageOfLineitems.push(this.liCache[id]);
-            }
-        });
-
         if (this.pageOfLineitems.length === ids.length) {
             // All entries found in the cache
             return Promise.resolve();
@@ -140,18 +133,15 @@ export class LineitemListComponent implements OnInit {
 
         this.pageOfLineitems = []; // reset
 
-        // TODO: cache in liService for faster navigation
-
-        return this.liService.getFleshedLineitems(ids).pipe(tap(struct => {
+        return this.liService.getFleshedLineitems(ids, true)
+        .pipe(tap(struct => {
             this.ingestOneLi(struct.lineitem);
             this.existingCopyCounts[struct.id] = struct.existing_copies;
         })).toPromise();
     }
 
     ingestOneLi(li: IdlObject, replace?: boolean) {
-
         this.liMarcAttrs[li.id()] = {};
-        this.liCache[li.id()] = li;
 
         li.attributes().forEach(attr => {
             const name = attr.attr_name();

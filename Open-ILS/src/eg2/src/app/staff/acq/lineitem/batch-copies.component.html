@@ -1,4 +1,11 @@
 
+<eg-confirm-dialog #confirmAlertsDialog
+  i18n-dialogTitle i18n-dialogBody
+  dialogTitle="Confirm Alert" dialogBody="{{alertText ? alertText.code() : ''}}">
+</eg-confirm-dialog>
+
+<eg-acq-cancel-dialog #cancelDialog></eg-acq-cancel-dialog>
+
 <!-- Note the flex values are set so they also match the layout
      of the list of copies in the copies component. -->
 
@@ -26,7 +33,7 @@
 </ng-container>
 
 <div class="pt-2 bg-light border border-secondary border-top-0 rounded-bottom">
-  <eg-lineitem-copy-attrs (saveRequested)="attrsSaveRequested($event)"
+  <eg-lineitem-copy-attrs (batchApplyRequested)="batchApplyAttrs($event)"
     [batchMode]="true"> </eg-lineitem-copy-attrs>
 </div>
 
@@ -36,7 +43,11 @@
 
 <div class="mt-1 pt-1 border-top">
   <div class="batch-copy-row" *ngFor="let copy of lineitem.lineitem_details()">
-    <eg-lineitem-copy-attrs (deleteRequested)="copyDeleteRequested($event)" 
+    <eg-lineitem-copy-attrs 
+      (receiveRequested)="receiveCopy($event)"
+      (unReceiveRequested)="unReceiveCopy($event)"
+      (deleteRequested)="deleteCopy($event)" 
+      (cancelRequested)="cancelCopy($event)"
       (liRefreshRequested)="liRefreshRequested($event)"
       [lineitem]="lineitem" [copy]="copy"></eg-lineitem-copy-attrs>
   </div>
