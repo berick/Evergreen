@@ -3,9 +3,7 @@ import {tap} from 'rxjs/operators';
 import {Pager} from '@eg/share/util/pager';
 import {IdlObject, IdlService} from '@eg/core/idl.service';
 import {NetService} from '@eg/core/net.service';
-import {EventService} from '@eg/core/event.service';
 import {AuthService} from '@eg/core/auth.service';
-import {ConfirmDialogComponent} from '@eg/share/dialog/confirm.component';
 import {LineitemService} from './lineitem.service';
 import {ComboboxComponent, ComboboxEntry} from '@eg/share/combobox/combobox.component';
 import {ItemLocationService} from '@eg/share/item-location-select/item-location-select.service';
@@ -20,9 +18,6 @@ export class LineitemCopyAttrsComponent implements OnInit {
     @Input() lineitem: IdlObject;
     fundEntries: ComboboxEntry[];
     circModEntries: ComboboxEntry[];
-
-    // Current alert that needs confirming
-    alertText: IdlObject;
 
     private _copy: IdlObject;
     @Input() set copy(c: IdlObject) { // acqlid
@@ -51,19 +46,19 @@ export class LineitemCopyAttrsComponent implements OnInit {
     @Input() embedded = false;
 
     // Emits an 'acqlid' object;
-    @Output() saveRequested: EventEmitter<IdlObject> = new EventEmitter<IdlObject>();
+    @Output() batchApplyRequested: EventEmitter<IdlObject> = new EventEmitter<IdlObject>();
     @Output() deleteRequested: EventEmitter<IdlObject> = new EventEmitter<IdlObject>();
-    @Output() liRefreshRequested: EventEmitter<number> = new EventEmitter<number>();
+    @Output() receiveRequested: EventEmitter<IdlObject> = new EventEmitter<IdlObject>();
+    @Output() unReceiveRequested: EventEmitter<IdlObject> = new EventEmitter<IdlObject>();
+    @Output() cancelRequested: EventEmitter<IdlObject> = new EventEmitter<IdlObject>();
 
     @ViewChild('locationSelector') locationSelector: ItemLocationSelectComponent;
     @ViewChild('circModSelector') circModSelector: ComboboxComponent;
     @ViewChild('fundSelector') fundSelector: ComboboxComponent;
-    @ViewChild('confirmAlertsDialog') confirmAlertsDialog: ConfirmDialogComponent;
 
     constructor(
         private idl: IdlService,
         private net: NetService,
-        private evt: EventService,
         private auth: AuthService,
         private loc: ItemLocationService,
         private liService: LineitemService
@@ -145,65 +140,17 @@ export class LineitemCopyAttrsComponent implements OnInit {
         }
     }
 
-    deleteCopy() {
-        this.deleteRequested.emit(this.copy);
-    }
-
-    receiveCopy(rollback?: boolean) {
-        const method = 'open-ils.acq.lineitem_detail.receive' +
-            (rollback ? '.rollback' : '');
-
-        this.checkLiAlerts().then(
-            ok => {
-                this.net.request('open-ils.acq', method,
-                    this.auth.token(), this.copy.id()
-                ).subscribe(ok => {
-                    const evt = this.evt.parse(ok);
-                    if (evt) {
-                      alert(evt);
-                    } else if (ok) {
-                        this.liRefreshRequested.emit(this.lineitem.id());
-                    }
-                });
-            },
-            err => {} // avoid console errors on uncomfirmed alerts
-        );
-    }
-
-    cancelCopy() {
-    }
-
-    checkLiAlerts(): Promise<boolean> {
-
-        let promise = Promise.resolve(true);
-
-        const notes = this.lineitem.lineitem_notes().filter(note =>
-            note.alert_text() && !this.liService.alertAcks[note.id()]);
-
-        if (notes.length === 0) { return promise; }
-
-        notes.forEach(n => {
-            promise = promise.then(_ => {
-                this.alertText = n.alert_text();
-                return this.confirmAlertsDialog.open().toPromise().then(ok => {
-                    if (!ok) { return Promise.reject(); }
-                    this.liService.alertAcks[n.id()] = true;
-                    return true;
-                });
-            });
-        });
-
-        return promise;
-    }
-
     fieldIsDisabled(field: string) {
-        if (this.embedded || this.copy.isdeleted()) {
+        if (this.embedded || // inline expandy view
+            this.copy.isdeleted() ||
+            this.disposition() !== 'pre-order') {
             return true;
         }
+        return false;
     }
 
     disposition(): 'canceled' | 'delayed' | 'received' | 'on-order' | 'pre-order' {
-        if (!this.copy) {
+        if (!this.copy || !this.lineitem) {
             return null;
         } else if (this.copy.cancel_reason()) {
             if (this.copy.cancel_reason().keep_debits() === 't') {

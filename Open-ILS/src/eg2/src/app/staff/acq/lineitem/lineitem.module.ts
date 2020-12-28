@@ -16,6 +16,7 @@ import {LineitemBatchCopiesComponent} from './batch-copies.component';
 import {LineitemCopyAttrsComponent} from './copy-attrs.component';
 import {LineitemHistoryComponent} from './history.component';
 import {BriefRecordComponent} from './brief-record.component';
+import {CancelDialogComponent} from './cancel-dialog.component';
 
 @NgModule({
   declarations: [
@@ -28,6 +29,7 @@ import {BriefRecordComponent} from './brief-record.component';
     LineitemBatchCopiesComponent,
     LineitemCopyAttrsComponent,
     LineitemHistoryComponent,
+    CancelDialogComponent,
     BriefRecordComponent,
     WorksheetComponent
   ],

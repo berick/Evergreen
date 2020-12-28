@@ -1,11 +1,6 @@
 <!-- Flex values are set to align with lineitem copies UI 
     and the batch copy editor component -->
 
-<eg-confirm-dialog #confirmAlertsDialog
-  i18n-dialogTitle i18n-dialogBody
-  dialogTitle="Confirm Alert" dialogBody="{{alertText ? alertText.code() : ''}}">
-</eg-confirm-dialog>
-
 <div class="div d-flex batch-copy-row" *ngIf="copy">
   <div class="flex-1 p-1">
     <eg-org-select #owningLibSelect placeholder="Owning Branch..." 
@@ -62,7 +57,7 @@
   <div class="flex-1 p-1">
     <ng-container *ngIf="batchMode">
       <button class="btn btn-outline-dark" 
-        (click)="saveRequested.emit(copy)" i18n>Batch Update</button>
+        (click)="batchApplyRequested.emit(copy)" i18n>Batch Update</button>
     </ng-container>
     <ng-container *ngIf="!batchMode">
       <ng-container *ngIf="fieldIsDisabled('barcode')">
@@ -82,7 +77,7 @@
         <ng-container *ngIf="disposition() == 'pre-order'">
           <button *ngIf="!copy.isdeleted()"
             class="btn btn-outline-danger material-icon-button"
-            (click)="deleteCopy(copy)" title="Delete Item" i18n-title>
+            (click)="deleteRequested.emit(copy)" title="Delete Item" i18n-title>
             <span class="material-icons">delete</span>
           </button>
           <button  *ngIf="copy.isdeleted()"
@@ -92,22 +87,28 @@
           </button>
         </ng-container>
         <ng-container *ngIf="disposition() == 'on-order'">
-          <a href="javascript:;" (click)="receiveCopy()" i18n>Mark Received</a>
+          <a href="javascript:;" (click)="receiveRequested.emit(copy)" i18n>Mark Received</a>
         </ng-container>
         <ng-container *ngIf="disposition() == 'received'">
-          <a href="javascript:;" (click)="receiveCopy(true)" i18n>Un-Receive</a>
+          <a href="javascript:;" (click)="unReceiveRequested.emit(copy)" i18n>Un-Receive</a>
         </ng-container>
         <ng-container *ngIf="disposition() == 'on-order'">
-          <a href="javascript:;" class="ml-2" (click)="cancelCopy()" i18n>Cancel</a>
+          <a href="javascript:;" class="ml-2" (click)="cancelRequested.emit(copy)" i18n>Cancel</a>
         </ng-container>
         <ng-container *ngIf="disposition() == 'delayed'">
-          <a href="javascript:;" (click)="cancelCopy()" i18n>Cancel</a>
+          <a href="javascript:;" (click)="cancelRequested.emit(copy)" i18n>Cancel</a>
         </ng-container>
-        <ng-container *ngIf="disposition() == 'delayed' || disposition() == 'canceled'">
-          <span class="font-italic" title="copy.cancel_reason().description()">
+        <ng-container *ngIf="disposition() == 'delayed'">
+          <span class="font-italic ml-2" title="{{copy.cancel_reason().description()}}">
             {{copy.cancel_reason().label()}}
           </span>
         </ng-container>
+        <ng-container *ngIf="disposition() == 'canceled'">
+          <span class="font-italic" title="{{copy.cancel_reason().description()}}">
+            {{copy.cancel_reason().label()}}
+          </span>
+        </ng-container>
+
       </ng-container>
     </div>
   </ng-container>
