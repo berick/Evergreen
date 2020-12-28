@@ -37,7 +37,8 @@
 <div class="mt-1 pt-1 border-top">
   <div class="batch-copy-row" *ngFor="let copy of lineitem.lineitem_details()">
     <eg-lineitem-copy-attrs (deleteRequested)="copyDeleteRequested($event)" 
-      [copy]="copy"></eg-lineitem-copy-attrs>
+      (liRefreshRequested)="liRefreshRequested($event)"
+      [lineitem]="lineitem" [copy]="copy"></eg-lineitem-copy-attrs>
   </div>
 </div>
 
