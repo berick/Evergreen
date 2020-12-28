@@ -149,11 +149,13 @@ export class LineitemCopyAttrsComponent implements OnInit {
         this.deleteRequested.emit(this.copy);
     }
 
-    receiveCopy() {
+    receiveCopy(rollback?: boolean) {
+        const method = 'open-ils.acq.lineitem_detail.receive' +
+            (rollback ? '.rollback' : '');
+
         this.checkLiAlerts().then(
             ok => {
-                this.net.request('open-ils.acq',
-                    'open-ils.acq.lineitem_detail.receive',
+                this.net.request('open-ils.acq', method,
                     this.auth.token(), this.copy.id()
                 ).subscribe(ok => {
                     const evt = this.evt.parse(ok);
@@ -166,9 +168,6 @@ export class LineitemCopyAttrsComponent implements OnInit {
             },
             err => {} // avoid console errors on uncomfirmed alerts
         );
-    }
-
-    unReceiveCopy() {
     }
 
     cancelCopy() {

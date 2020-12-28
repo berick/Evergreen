@@ -95,7 +95,7 @@
           <a href="javascript:;" (click)="receiveCopy()" i18n>Mark Received</a>
         </ng-container>
         <ng-container *ngIf="disposition() == 'received'">
-          <a href="javascript:;" (click)="unReceiveCopy()" i18n>Un-Receive</a>
+          <a href="javascript:;" (click)="receiveCopy(true)" i18n>Un-Receive</a>
         </ng-container>
         <ng-container *ngIf="disposition() == 'on-order'">
           <a href="javascript:;" class="ml-2" (click)="cancelCopy()" i18n>Cancel</a>
