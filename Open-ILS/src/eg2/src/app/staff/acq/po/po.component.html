@@ -1,3 +1,8 @@
+<ng-container *ngIf="poService.currentPo">
+  <eg-staff-banner i18n-bannerText 
+    bannerText="Purchase Order #{{poId}} ({{poService.currentPo.state()}})">
+  </eg-staff-banner>
+</ng-container>
 
 <eg-acq-po-summary [poId]="poId"></eg-acq-po-summary>
 

@@ -34,7 +34,8 @@ import {CancelDialogComponent} from './cancel-dialog.component';
     WorksheetComponent
   ],
   exports: [
-    LineitemListComponent
+    LineitemListComponent,
+    CancelDialogComponent
   ],
   imports: [
     StaffCommonModule,

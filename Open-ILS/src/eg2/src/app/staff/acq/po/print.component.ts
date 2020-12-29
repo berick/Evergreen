@@ -10,6 +10,7 @@ import {IdlService} from '@eg/core/idl.service';
 import {OrgService} from '@eg/core/org.service';
 import {PrintService} from '@eg/share/print/print.service';
 import {BroadcastService} from '@eg/share/util/broadcast.service';
+import {PoService} from './po.service';
 
 @Component({
   templateUrl: 'print.component.html'
@@ -30,6 +31,7 @@ export class PrintComponent implements OnInit {
         private net: NetService,
         private auth: AuthService,
         private pcrud: PcrudService,
+        private poService: PoService,
         private broadcaster: BroadcastService,
         private printer: PrintService) {
 
@@ -48,28 +50,18 @@ export class PrintComponent implements OnInit {
 
         this.po = null;
 
-        this.net.request(
-            'open-ils.acq', 'open-ils.acq.purchase_order.retrieve',
-            this.auth.token(), this.id, {
-                flesh_provider: true,
-                flesh_provider_addresses: true,
-                flesh_price_summary: true,
-                flesh_po_items: true,
-                flesh_lineitems: true,
-                flesh_lineitem_attrs: true,
-                flesh_lineitem_notes: true,
-                flesh_lineitem_details: true,
-                clear_marc: true,
-                flesh_notes: true
-            }
-        ).toPromise()
+        this.poService.getFleshedPo(this.id, {
+            flesh_provider_addresses: true,
+            flesh_lineitems: true,
+            flesh_lineitem_attrs: true,
+            flesh_lineitem_notes: true,
+            flesh_lineitem_details: true,
+            clear_marc: true,
+            flesh_notes: true
+        })
         .then(po => this.po = po)
         .then(_ => this.populatePreview())
-        .then(_ => {
-            if (this.printing) {
-               this.printPo();
-            }
-        });
+        .then(_ => { if (this.printing) { this.printPo(); } });
     }
 
     populatePreview(): Promise<any> {

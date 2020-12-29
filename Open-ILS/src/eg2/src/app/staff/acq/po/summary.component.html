@@ -1,18 +1,23 @@
 
-<div *ngIf="po" class="p-1 border border-secondary rounded">
+<eg-acq-cancel-dialog #cancelDialog></eg-acq-cancel-dialog>
 
-  <h4 i18n>Purchase Order ({{po.state()}}) 
-    <ng-container *ngIf="po.order_date()">
-      Activated {{po.order_date() | date:'short'}}
-    </ng-container>
-  </h4>
+<div *ngIf="po" class="p-1 border border-secondary rounded">
 
   <div class="row">
     <div class="col-lg-1" i18n>ID</div>
     <div class="col-lg-2">{{po.id()}}</div>
     <div class="col-lg-2" i18n>Estimated Amount</div>
     <div class="col-lg-1">{{po.amount_estimated() | currency}}</div>
+    <div class="col-lg-1" i18n>Activatable?</div>
+    <div class="col-lg-3">
+      <ng-container *ngIf="po.order_date()">
+        Activated {{po.order_date() | date:'short'}}
+      </ng-container>
+      <ng-container *ngIf="!po.order_date()">
+      </ng-container>
+    </div>
   </div>
+
   <div class="row mt-1">
     <div class="col-lg-1" i18n>Name</div>
     <div class="col-lg-2" i18n>
@@ -27,8 +32,16 @@
     </div>
     <div class="col-lg-2" i18n>Encumbered Amount</div>
     <div class="col-lg-1">{{po.amount_encumbered() | currency}}</div>
+    <div class="col-lg-1">
+      <a routerLink="./notes" i18n>Notes ({{po.notes().length}})</a>
+    </div>
+    <div class="col-lg-2">
+      <a [queryParams]="{f: 'acqpo:id', val1: poId}"
+        routerLink="/staff/acq/search/invoices" i18n>Invoices ({{invoiceCount}})</a>
+    </div>
   </div>
-  <div class="row">
+
+  <div class="row mt-1">
     <div class="col-lg-1" i18n>Provider</div>
     <div class="col-lg-2">
       <a routerLink="/staff/acq/provider/{{po.provider().id()}}/details">
@@ -37,13 +50,37 @@
     </div>
     <div class="col-lg-2" i18n>Spent Amount</div>
     <div class="col-lg-1">{{po.amount_spent() | currency}}</div>
+    <div class="col-lg-1">
+      <a routerLink="./edi" i18n>EDI ({{ediMessageCount}})</a>
+    </div>
+    <div class="col-lg-2">
+      <a class="label-with-material-icon" 
+        href="/eg/acq/invoice/view?create=1&attach_po={{poId}}" 
+        i18n>Create Invoice<span class="material-icons small pl-1">list</span>
+      </a>
+    </div>
   </div>
-  <div class="row">
+
+  <div class="row mt-1">
     <div class="col-lg-1" i18n>Lineitems</div>
-    <div class="col-lg-2">{{po.lineitems().length}}</div>
+    <div class="col-lg-2">{{po.lineitem_count()}}</div>
     <div class="col-lg-2" i18n>Prepayment Required?</div>
     <div class="col-lg-1">
       <eg-bool [value]="po.provider().prepayment_required()"></eg-bool>
+    </div>
+    <div class="col-lg-1"><a routerLink="./history" i18n>History</a></div>
+    <div class="col-lg-5">
+      <ng-container *ngIf="po.state() == 'on-order' || po.state() == 'pending'">
+        <a (click)="cancelPo()" class="label-with-material-icon" 
+          href="javascript:;" i18n>Cancel
+          <span class="material-icons small pl-1">cancel</span>
+        </a>
+      </ng-container>
+      <ng-container *ngIf="po.cancel_reason()">
+        <span class="text-danger" i18n>
+          {{po.cancel_reason().label()}} =&gt; {{po.cancel_reason().description()}}
+        </span>
+      </ng-container>
     </div>
   </div>
 </div>

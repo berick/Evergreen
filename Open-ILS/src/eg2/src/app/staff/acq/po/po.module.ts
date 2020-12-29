@@ -5,6 +5,7 @@ import {CatalogCommonModule} from '@eg/share/catalog/catalog-common.module';
 import {LineitemModule} from '@eg/staff/acq/lineitem/lineitem.module';
 import {HoldingsModule} from '@eg/staff/share/holdings/holdings.module';
 import {PoRoutingModule} from './routing.module';
+import {PoService} from './po.service';
 import {PoComponent} from './po.component';
 import {PrintComponent} from './print.component';
 import {PoSummaryComponent} from './summary.component';
@@ -24,6 +25,7 @@ import {PoSummaryComponent} from './summary.component';
     PoRoutingModule
   ],
   providers: [
+    PoService
   ]
 })
 
