@@ -1,94 +1,82 @@
-import {Component, Input, OnInit, AfterViewInit, ViewChild} from '@angular/core';
+import {Component, Input, OnInit, ViewChild} from '@angular/core';
+import {Router} from '@angular/router';
 import {of, Observable} from 'rxjs';
 import {tap, take, map} from 'rxjs/operators';
 import {IdlObject, IdlService} from '@eg/core/idl.service';
 import {NetService} from '@eg/core/net.service';
-import {FormatService} from '@eg/core/format.service';
 import {AuthService} from '@eg/core/auth.service';
 import {OrgService} from '@eg/core/org.service';
 import {PcrudService} from '@eg/core/pcrud.service';
-import {StoreService} from '@eg/core/store.service';
 import {ServerStoreService} from '@eg/core/server-store.service';
 import {ComboboxEntry, ComboboxComponent} from '@eg/share/combobox/combobox.component';
 import {ProgressDialogComponent} from '@eg/share/dialog/progress.component';
 import {EventService} from '@eg/core/event.service';
-import {HoldingsService} from '@eg/staff/share/holdings/holdings.service';
 import {ConfirmDialogComponent} from '@eg/share/dialog/confirm.component';
-import {BroadcastService} from '@eg/share/util/broadcast.service';
+import {PoService} from './po.service';
+import {CancelDialogComponent} from '../lineitem/cancel-dialog.component';
 
 
 @Component({
   templateUrl: 'summary.component.html',
   selector: 'eg-acq-po-summary'
 })
-export class PoSummaryComponent implements OnInit, AfterViewInit {
+export class PoSummaryComponent implements OnInit {
 
     private _poId: number;
     @Input() set poId(id: number) {
-        if (id !== this._poId) {
-            this._poId = id;
-            if (this.initDone) {
-                this.load();
-            }
-        }
+        if (id === this._poId) { return; }
+        this._poId = id;
+        if (this.initDone) { this.load(); }
     }
-
-    get poId(): number {
-        return this._poId;
-    }
+    get poId(): number { return this._poId; }
 
     po: IdlObject;
     newPoName: string;
     editPoName = false;
     initDone = false;
+    ediMessageCount = 0;
+    invoiceCount = 0;
+    showCancel = false;
+
+    @ViewChild('cancelDialog') cancelDialog: CancelDialogComponent;
 
     constructor(
+        private router: Router,
+        private evt: EventService,
         private idl: IdlService,
         private net: NetService,
-        private format: FormatService,
-        private evt: EventService,
         private org: OrgService,
         private pcrud: PcrudService,
         private auth: AuthService,
-        private store: StoreService,
-        private serverStore: ServerStoreService,
-        private broadcaster: BroadcastService,
-        private holdingSvc: HoldingsService
+        private store: ServerStoreService,
+        private poService: PoService
     ) {}
 
     ngOnInit() {
         this.load().then(_ => this.initDone = true);
     }
 
-    ngAfterViewInit() {
-    }
-
     load(): Promise<any> {
         this.po = null;
         if (!this.poId) { return Promise.resolve(); }
 
-        return this.net.request(
-            'open-ils.acq',
-            'open-ils.acq.purchase_order.retrieve',
-            this.auth.token(), this.poId, {
-                flesh_provider: true,
-                flesh_creator: true,
-                flesh_editor: true,
-                flesh_owner: true,
-                flesh_notes: true,
-                flesh_po_items: true,
-                flesh_price_summary: true,
-                flesh_lineitem_ids: true,
-                li_limit: 10000
-        }).toPromise().then(po => {
+        return this.poService.getFleshedPo(this.poId)
+        .then(po => {
 
-            const evt = this.evt.parse(po);
-            if (evt) {
-                alert(evt);
-                return Promise.reject();
-            }
-
+            // EDI message count
             this.po = po;
+            return this.pcrud.search('acqedim',
+                {purchase_order: this.poId}, {}, {idlist: true, atomic: true}
+            ).toPromise().then(ids => this.ediMessageCount = ids.length);
+
+        }).then(_ => {
+
+            // Invoice count
+            return this.net.request('open-ils.acq',
+                'open-ils.acq.invoice.unified_search.atomic',
+                this.auth.token(), {acqpo: [{id: this.poId}]},
+                null, null, {id_list: true}
+            ).toPromise().then(ids => this.invoiceCount = ids.length);
         });
     }
 
@@ -118,4 +106,16 @@ export class PoSummaryComponent implements OnInit, AfterViewInit {
             });
         }
     }
+
+    cancelPo() {
+        this.cancelDialog.open().subscribe(reason => {
+            if (!reason) { return; }
+
+            this.net.request('open-ils.acq',
+                'open-ils.acq.purchase_order.cancel',
+                this.auth.token(), this.poId, reason
+            ).subscribe(ok => location.href = location.href);
+        });
+    }
 }
+
