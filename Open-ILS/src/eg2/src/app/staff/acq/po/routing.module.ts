@@ -8,6 +8,8 @@ import {LineitemDetailComponent} from '../lineitem/detail.component';
 import {LineitemCopiesComponent} from '../lineitem/copies.component';
 import {BriefRecordComponent} from '../lineitem/brief-record.component';
 import {LineitemHistoryComponent} from '../lineitem/history.component';
+import {PoHistoryComponent} from './history.component';
+import {PoEdiMessagesComponent} from './edi.component';
 
 const routes: Routes = [{
   path: ':poId',
@@ -15,6 +17,12 @@ const routes: Routes = [{
   children : [{
     path: '',
     component: LineitemListComponent
+  }, {
+    path: 'history',
+    component: PoHistoryComponent
+  }, {
+    path: 'edi',
+    component: PoEdiMessagesComponent
   }, {
     path: 'brief-record',
     component: BriefRecordComponent
