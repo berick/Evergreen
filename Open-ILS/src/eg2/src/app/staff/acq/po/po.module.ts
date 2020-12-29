@@ -9,12 +9,18 @@ import {PoService} from './po.service';
 import {PoComponent} from './po.component';
 import {PrintComponent} from './print.component';
 import {PoSummaryComponent} from './summary.component';
+import {PoHistoryComponent} from './history.component';
+import {PoEdiMessagesComponent} from './edi.component';
+import {PoNotesComponent} from './notes.component';
 
 
 @NgModule({
   declarations: [
     PoComponent,
     PoSummaryComponent,
+    PoHistoryComponent,
+    PoEdiMessagesComponent,
+    PoNotesComponent,
     PrintComponent
   ],
   imports: [

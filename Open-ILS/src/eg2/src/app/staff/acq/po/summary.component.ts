@@ -36,7 +36,7 @@ export class PoSummaryComponent implements OnInit {
     initDone = false;
     ediMessageCount = 0;
     invoiceCount = 0;
-    showCancel = false;
+    showNotes = false;
 
     @ViewChild('cancelDialog') cancelDialog: CancelDialogComponent;
 
