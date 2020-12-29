@@ -10,7 +10,7 @@ import {PcrudService} from '@eg/core/pcrud.service';
 import {ServerStoreService} from '@eg/core/server-store.service';
 import {ComboboxEntry, ComboboxComponent} from '@eg/share/combobox/combobox.component';
 import {ProgressDialogComponent} from '@eg/share/dialog/progress.component';
-import {EventService} from '@eg/core/event.service';
+import {EventService, EgEvent} from '@eg/core/event.service';
 import {ConfirmDialogComponent} from '@eg/share/dialog/confirm.component';
 import {PoService} from './po.service';
 import {CancelDialogComponent} from '../lineitem/cancel-dialog.component';
@@ -37,6 +37,11 @@ export class PoSummaryComponent implements OnInit {
     ediMessageCount = 0;
     invoiceCount = 0;
     showNotes = false;
+    canActivate: boolean = null;
+
+    activateStops: EgEvent[] = [];
+    activateWarns: EgEvent[] = [];
+    activateOther: EgEvent[] = [];
 
     @ViewChild('cancelDialog') cancelDialog: CancelDialogComponent;
 
@@ -77,7 +82,8 @@ export class PoSummaryComponent implements OnInit {
                 this.auth.token(), {acqpo: [{id: this.poId}]},
                 null, null, {id_list: true}
             ).toPromise().then(ids => this.invoiceCount = ids.length);
-        });
+
+        }).then(_ => this.setCanActivate());
     }
 
     toggleNameEdit() {
@@ -115,6 +121,49 @@ export class PoSummaryComponent implements OnInit {
                 'open-ils.acq.purchase_order.cancel',
                 this.auth.token(), this.poId, reason
             ).subscribe(ok => location.href = location.href);
+        });
+    }
+
+    setCanActivate() {
+
+        if (this.po.state() !== 'pending') {
+            this.canActivate = false;
+            return;
+        }
+
+        this.activateStops = [];
+        this.activateWarns = [];
+        this.activateOther = [];
+
+        this.net.request('open-ils.acq',
+            'open-ils.acq.purchase_order.activate.dry_run',
+            this.auth.token(), this.poId
+
+        ).pipe(tap(resp => {
+            const evt = this.evt.parse(resp);
+            if (!evt) { return; }
+
+            if (evt.textcode === 'ACQ_FUND_EXCEEDS_STOP_PERCENT') {
+                this.activateStops.push(evt);
+            } else if (evt.textcode === 'ACQ_FUND_EXCEEDS_WARN_PERCENT') {
+                this.activateWarns.push(evt);
+            } else {
+                this.activateOther.push(evt);
+            }
+
+        })).toPromise().then(_ => {
+
+            if (!(this.activateStops.length ||
+                  this.activateWarns.length ||
+                  this.activateOther.length)) {
+
+                this.canActivate = true;
+                return;
+            }
+
+            this.canActivate = false;
+
+            // More logic likely needs to go here.
         });
     }
 }
