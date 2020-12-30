@@ -123,13 +123,12 @@ export class PoSummaryComponent implements OnInit {
     }
 
     setCanActivate() {
+        this.activationBlocks = [];
 
-        if (this.po.state() !== 'pending') {
+        if (!(this.po.state().match(/new|pending/))) {
             this.canActivate = false;
             return;
         }
-
-        this.activationBlocks = [];
 
         this.net.request('open-ils.acq',
             'open-ils.acq.purchase_order.activate.dry_run',

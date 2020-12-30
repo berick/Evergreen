@@ -50,6 +50,11 @@
     <span class="material-icons text-danger pr-2">report</span>
     Batch operation failed: 
     {{batchFailure.textcode}} {{batchFailure.desc}}
+
+    <a class="ml-auto" href="javascript:;" 
+      (click)="batchFailure = null" title="Close" i18n-title>
+      <span class="material-icons text-danger">close</span>
+    </a>
   </div>
 </div>
 

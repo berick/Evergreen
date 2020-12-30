@@ -662,6 +662,8 @@ sub rollback_receive_lineitem {
     my($mgr, $li_id) = @_;
     my $li = $mgr->editor->retrieve_acq_lineitem($li_id) or return 0;
 
+    return 0 unless ($li->state eq 'received' || $li->state eq 'on-order');
+
     my $lid_ids = $mgr->editor->search_acq_lineitem_detail(
         {lineitem => $li_id, recv_time => {'!=' => undef}}, {idlist => 1});
 
@@ -2495,7 +2497,12 @@ sub rollback_receive_lineitem_batch_api {
         return $e->die_event unless
             $e->allowed('RECEIVE_PURCHASE_ORDER', $po->ordering_agency);
 
-        $li = rollback_receive_lineitem($mgr, $li_id) or return $e->die_event;
+        unless ($li = rollback_receive_lineitem($mgr, $li_id)) {
+            return (
+                $e->die_event || # may not be an event here
+                OpenILS::Event->new('ACQ_LI_ROLLBACK_RECEIVE_FAILED')
+            );
+        }
 
         my $result = {"li" => {$li->id => {"state" => $li->state}}};
         if ($po->state eq "received") { # should happen first time, not after
