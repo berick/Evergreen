@@ -42,6 +42,7 @@ export class PoSummaryComponent implements OnInit {
 
     activationBlocks: EgEvent[] = [];
     activationEvent: EgEvent;
+    nameEditEnterToggled = false;
 
     @ViewChild('cancelDialog') cancelDialog: CancelDialogComponent;
     @ViewChild('progressDialog') progressDialog: ProgressDialogComponent;
@@ -93,7 +94,19 @@ export class PoSummaryComponent implements OnInit {
         }).then(_ => this.setCanActivate());
     }
 
-    toggleNameEdit() {
+    // Can run via Enter or blur.  If it just ran via Enter, avoid
+    // running it again on the blur, which will happen directly after
+    // the Enter.
+    toggleNameEdit(fromEnter?: boolean) {
+        if (fromEnter) {
+            this.nameEditEnterToggled = true;
+        } else {
+            if (this.nameEditEnterToggled) {
+                this.nameEditEnterToggled = false;
+                return;
+            }
+        }
+
         this.editPoName = !this.editPoName;
 
         if (this.editPoName) {
