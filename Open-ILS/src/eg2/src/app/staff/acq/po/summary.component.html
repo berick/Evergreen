@@ -1,5 +1,6 @@
 
 <eg-acq-cancel-dialog #cancelDialog></eg-acq-cancel-dialog>
+<eg-progress-dialog #progressDialog></eg-progress-dialog>
 
 <div *ngIf="po" class="p-1 border border-secondary rounded">
 
@@ -38,7 +39,12 @@
           </div>
 
           <span *ngIf="po.state() == 'on-order'" i18n>On Order</span>
-          <span *ngIf="canActivate" i18n>Pending / Activatable</span>
+          <ng-container *ngIf="canActivate">
+            <span *ngIf="!activationEvent" i18n>Pending / Activatable</span>
+            <span *ngIf="activationEvent" i18n>
+              Activation Error: {{activationEvent.textcode}} {{activationEvent.desc}}
+            </span>
+          </ng-container>
 
           <!-- canceled -->
           <ng-container *ngIf="po.cancel_reason()">

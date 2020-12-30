@@ -13,6 +13,7 @@ import {ProgressDialogComponent} from '@eg/share/dialog/progress.component';
 import {EventService, EgEvent} from '@eg/core/event.service';
 import {ConfirmDialogComponent} from '@eg/share/dialog/confirm.component';
 import {PoService} from './po.service';
+import {LineitemService} from '../lineitem/lineitem.service';
 import {CancelDialogComponent} from '../lineitem/cancel-dialog.component';
 
 
@@ -40,8 +41,10 @@ export class PoSummaryComponent implements OnInit {
     canActivate: boolean = null;
 
     activationBlocks: EgEvent[] = [];
+    activationEvent: EgEvent;
 
     @ViewChild('cancelDialog') cancelDialog: CancelDialogComponent;
+    @ViewChild('progressDialog') progressDialog: ProgressDialogComponent;
 
     constructor(
         private router: Router,
@@ -52,11 +55,17 @@ export class PoSummaryComponent implements OnInit {
         private pcrud: PcrudService,
         private auth: AuthService,
         private store: ServerStoreService,
+        private liService: LineitemService,
         private poService: PoService
     ) {}
 
     ngOnInit() {
         this.load().then(_ => this.initDone = true);
+
+        // Re-check for activation blocks if the LI service tells us
+        // something significant happened.
+        this.liService.activateStateChange
+        .subscribe(_ => this.setCanActivate());
     }
 
     load(): Promise<any> {
@@ -123,6 +132,7 @@ export class PoSummaryComponent implements OnInit {
     }
 
     setCanActivate() {
+        this.canActivate = null;
         this.activationBlocks = [];
 
         if (!(this.po.state().match(/new|pending/))) {
@@ -148,9 +158,46 @@ export class PoSummaryComponent implements OnInit {
 
             this.canActivate = false;
 
-            // More logic likely needed here to handle zero-copy
+            // TODO More logic likely needed here to handle zero-copy
             // activation / ACQ_LINEITEM_NO_COPIES
         });
     }
+
+    activatePo() {
+        // TODO This code bypasses the Vandelay UI and force-loads the records.
+
+        this.activationEvent = null;
+        this.progressDialog.open();
+        this.progressDialog.update({max: this.po.lineitem_count() * 3});
+
+        this.net.request(
+            'open-ils.acq',
+            'open-ils.acq.purchase_order.activate',
+            this.auth.token(), this.poId, {
+                // Import all records, no merging, etc.
+                import_no_match: true,
+                queue_name: `ACQ ${new Date().toISOString()}`
+            }
+        ).subscribe(resp => {
+            const evt = this.evt.parse(resp);
+
+            if (evt) {
+                this.progressDialog.close();
+                this.activationEvent = evt;
+                return;
+            }
+
+            if (Number(resp) === 1) {
+                this.progressDialog.close();
+                // Refresh everything.
+                location.href = location.href;
+
+            } else {
+                this.progressDialog.update(
+                    {value: resp.bibs + resp.li + resp.vqbr});
+            }
+        });
+    }
 }
+
 
