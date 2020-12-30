@@ -11,6 +11,18 @@
         <button ngbDropdownItem (click)="deleteLineitems()" i18n>
           Delete Selected Lineitems
         </button>
+        <ng-container *ngIf="poId">
+          <div class="dropdown-divider"></div>
+          <button ngbDropdownItem (click)="receiveSelected()" i18n>
+            Mark Selected Lineitems as Received
+          </button>
+          <button ngbDropdownItem (click)="unReceiveSelected()" i18n>
+            Un-Receive Selected Lineitems
+          </button>
+          <button ngbDropdownItem (click)="cancelSeleted()" i18n>
+            Cancel Selected Lineitems
+          </button>
+        </ng-container>
       </div>
     </div>
   </div>
@@ -30,6 +42,14 @@
       [disabled]="!selectedIds().length" i18n>
       Apply To Selected
     </button>
+  </div>
+</div>
+
+<div *ngIf="batchFailure" class="row mt-2 p-2">
+  <div class="col-lg-12 p-2 border border-danger label-with-material-icon" i18n>
+    <span class="material-icons text-danger pr-2">report</span>
+    Batch operation failed: 
+    {{batchFailure.textcode}} {{batchFailure.desc}}
   </div>
 </div>
 
