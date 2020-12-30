@@ -59,25 +59,20 @@ export class LineitemService {
     getFleshedLineitems(ids: number[],
         cacheOk?: boolean, wantMarc?: boolean): Observable<BatchLineitemStruct> {
 
-        const fromCache: BatchLineitemStruct[] = [];
-
         if (cacheOk) {
-            const fetchIds = [];
-            ids.forEach((id, idx) => {
+            const fromCache: BatchLineitemStruct[] = [];
+            ids.forEach(id => {
                 if (this.liCache[id]) {
                     fromCache.push(this.liCache[id]);
-                } else {
-                    fetchIds.push(id);
                 }
             });
 
-            ids = fetchIds;
+            // Only return LI's from cache if all of the requested LI's
+            // are cached, otherwise they would be returned in the
+            // wrong order.  This is simpler than addressing that and
+            // typically it will be all or none.
+            if (fromCache.length === ids.length) { return from(fromCache); }
         }
-
-        const obs: Observable<BatchLineitemStruct> = from(fromCache);
-
-        // All LI's found in cache
-        if (ids.length === 0) { return obs; }
 
         const flesh: any = {
             flesh_attrs: true,
@@ -97,12 +92,10 @@ export class LineitemService {
             clear_marc: wantMarc ? false : true
         };
 
-        return obs.pipe(merge(
-            this.net.request(
-                'open-ils.acq', 'open-ils.acq.lineitem.retrieve.batch',
-                this.auth.token(), ids, flesh
-            ).pipe(tap(liStruct => this.ingestLineitem(liStruct)))
-        ));
+        return this.net.request(
+            'open-ils.acq', 'open-ils.acq.lineitem.retrieve.batch',
+            this.auth.token(), ids, flesh
+        ).pipe(tap(liStruct => this.ingestLineitem(liStruct)));
     }
 
     ingestLineitem(liStruct: BatchLineitemStruct): BatchLineitemStruct {

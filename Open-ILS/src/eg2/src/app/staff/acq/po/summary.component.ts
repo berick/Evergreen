@@ -39,9 +39,7 @@ export class PoSummaryComponent implements OnInit {
     showNotes = false;
     canActivate: boolean = null;
 
-    activateStops: EgEvent[] = [];
-    activateWarns: EgEvent[] = [];
-    activateOther: EgEvent[] = [];
+    activationBlocks: EgEvent[] = [];
 
     @ViewChild('cancelDialog') cancelDialog: CancelDialogComponent;
 
@@ -131,39 +129,28 @@ export class PoSummaryComponent implements OnInit {
             return;
         }
 
-        this.activateStops = [];
-        this.activateWarns = [];
-        this.activateOther = [];
+        this.activationBlocks = [];
 
         this.net.request('open-ils.acq',
             'open-ils.acq.purchase_order.activate.dry_run',
             this.auth.token(), this.poId
 
         ).pipe(tap(resp => {
-            const evt = this.evt.parse(resp);
-            if (!evt) { return; }
 
-            if (evt.textcode === 'ACQ_FUND_EXCEEDS_STOP_PERCENT') {
-                this.activateStops.push(evt);
-            } else if (evt.textcode === 'ACQ_FUND_EXCEEDS_WARN_PERCENT') {
-                this.activateWarns.push(evt);
-            } else {
-                this.activateOther.push(evt);
-            }
+            const evt = this.evt.parse(resp);
+            if (evt) { this.activationBlocks.push(evt); }
 
         })).toPromise().then(_ => {
 
-            if (!(this.activateStops.length ||
-                  this.activateWarns.length ||
-                  this.activateOther.length)) {
-
+            if (this.activationBlocks.length == 0) {
                 this.canActivate = true;
                 return;
             }
 
             this.canActivate = false;
 
-            // More logic likely needs to go here.
+            // More logic likely needed here to handle zero-copy
+            // activation / ACQ_LINEITEM_NO_COPIES
         });
     }
 }

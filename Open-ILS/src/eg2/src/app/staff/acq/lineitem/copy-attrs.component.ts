@@ -141,11 +141,14 @@ export class LineitemCopyAttrsComponent implements OnInit {
     }
 
     fieldIsDisabled(field: string) {
+        if (this.batchMode) { return false; }
+
         if (this.embedded || // inline expandy view
             this.copy.isdeleted() ||
             this.disposition() !== 'pre-order') {
             return true;
         }
+
         return false;
     }
 
