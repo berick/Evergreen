@@ -1,4 +1,4 @@
-import {Component, OnInit, Input, Output} from '@angular/core';
+import {Component, OnInit, Input, Output, ViewChild} from '@angular/core';
 import {Router, ActivatedRoute, ParamMap} from '@angular/router';
 import {Observable} from 'rxjs';
 import {tap} from 'rxjs/operators';
@@ -10,6 +10,7 @@ import {AuthService} from '@eg/core/auth.service';
 import {LineitemService} from './lineitem.service';
 import {ComboboxEntry} from '@eg/share/combobox/combobox.component';
 import {HoldingsService} from '@eg/staff/share/holdings/holdings.service';
+import {CancelDialogComponent} from './cancel-dialog.component';
 
 @Component({
   templateUrl: 'lineitem-list.component.html',
@@ -48,6 +49,8 @@ export class LineitemListComponent implements OnInit {
     expandAll = false;
     action = '';
     batchFailure: EgEvent;
+
+    @ViewChild('cancelDialog') cancelDialog: CancelDialogComponent;
 
     constructor(
         private router: Router,
@@ -312,9 +315,8 @@ export class LineitemListComponent implements OnInit {
                 'open-ils.acq',
                 'open-ils.acq.lineitem.update',
                 this.auth.token(), li
-            ).subscribe(resp => {
-                console.debug('LI update returned ', resp);
-            });
+            ).subscribe(resp =>
+                this.liService.activateStateChange.emit(li.id()));
         }
     }
 
@@ -392,6 +394,17 @@ export class LineitemListComponent implements OnInit {
     }
 
     cancelSelected() {
+        const liIds = this.selectedIds();
+        if (liIds.length === 0) { return; }
+
+        this.cancelDialog.open().subscribe(reason => {
+            if (!reason) { return; }
+
+            this.net.request('open-ils.acq',
+                'open-ils.acq.lineitem.cancel.batch',
+                this.auth.token(), liIds, reason
+            ).toPromise().then(resp => this.postBatchAction(resp, liIds));
+        });
     }
 
     markReceived(liIds: number[]) {

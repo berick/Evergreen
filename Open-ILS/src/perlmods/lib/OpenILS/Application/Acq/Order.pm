@@ -2704,12 +2704,14 @@ sub delete_picklist_api {
 
 __PACKAGE__->register_method(
     method   => 'activate_purchase_order',
-    api_name => 'open-ils.acq.purchase_order.activate.dry_run'
+    api_name => 'open-ils.acq.purchase_order.activate.dry_run',
+    max_bundle_count => 1
 );
 
 __PACKAGE__->register_method(
     method    => 'activate_purchase_order',
     api_name  => 'open-ils.acq.purchase_order.activate',
+    max_bundle_count => 1,
     signature => {
         desc => q/Activates a purchase order.  This updates the status of the PO / .
                 q/and Lineitems to 'on-order'.  Activated PO's are ready for EDI delivery if appropriate./,

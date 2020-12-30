@@ -257,7 +257,10 @@ export class LineitemCopiesComponent implements OnInit, AfterViewInit {
                 this.progressValue++;
             },
             err => {},
-            () => this.load().then(_ => this.saving = false)
+            () => this.load().then(_ => {
+                this.liService.activateStateChange.emit(this.lineitem.id());
+                this.saving = false;
+            })
         );
     }
 

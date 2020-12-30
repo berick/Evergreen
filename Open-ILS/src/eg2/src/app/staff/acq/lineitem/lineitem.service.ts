@@ -39,6 +39,10 @@ export class LineitemService {
     batchOptionWanted: EventEmitter<{[field: string]: ComboboxEntry}>
         = new EventEmitter<{[field: string]: ComboboxEntry}> ();
 
+    // Emits a LI ID if the LI was edited in a way that could impact
+    // its activatability of its linked PO.
+    activateStateChange: EventEmitter<number> = new EventEmitter<number>();
+
     // Cache for circ modifiers and funds; locations are cached in the
     // item location select service.
     circModCache: {[code: string]: IdlObject} = {};
