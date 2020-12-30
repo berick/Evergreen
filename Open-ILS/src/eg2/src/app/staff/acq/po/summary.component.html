@@ -102,6 +102,8 @@
           <a routerLink="./edi" i18n>EDI Messages ({{ediMessageCount}})</a>
           <span class="pl-2 pr-2" i18n> | </span>
           <a routerLink="./history" i18n>History</a>
+          <span class="pl-2 pr-2" i18n> | </span>
+          <a routerLink="./printer" i18n>Print</a>
           <ng-container *ngIf="po.state() == 'on-order' || po.state() == 'pending'">
             <span class="pl-2 pr-2" i18n> | </span>
             <a (click)="cancelPo()" href="javascript:;" i18n>Cancel Order</a>

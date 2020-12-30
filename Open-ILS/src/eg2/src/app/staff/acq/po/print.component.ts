@@ -1,4 +1,4 @@
-import {Component, OnInit, Renderer2} from '@angular/core';
+import {Component, OnInit, AfterViewInit} from '@angular/core';
 import {Observable} from 'rxjs';
 import {map, take} from 'rxjs/operators';
 import {ActivatedRoute, ParamMap} from '@angular/router';
@@ -15,17 +15,17 @@ import {PoService} from './po.service';
 @Component({
   templateUrl: 'print.component.html'
 })
-export class PrintComponent implements OnInit {
+export class PrintComponent implements OnInit, AfterViewInit {
 
     id: number;
     outlet: Element;
     po: IdlObject;
     printing: boolean;
     closing: boolean;
+    initDone = false;
 
     constructor(
         private route: ActivatedRoute,
-        private renderer: Renderer2,
         private idl: IdlService,
         private org: OrgService,
         private net: NetService,
@@ -34,19 +34,30 @@ export class PrintComponent implements OnInit {
         private poService: PoService,
         private broadcaster: BroadcastService,
         private printer: PrintService) {
+    }
 
-        this.id = +this.route.snapshot.paramMap.get('poId');
+    ngOnInit() {
+
+        this.route.parent.paramMap.subscribe((params: ParamMap) => {
+            this.id = +params.get('poId');
+            if (this.initDone && this.po) { this.load(); }
+        });
 
         this.route.url.pipe(map(segments => segments.join('_')), take(1))
         .subscribe(path => {
             this.printing = Boolean(path.match(/printer_print/));
             this.closing = Boolean(path.match(/printer_print_close/));
         });
+
+        this.load();
     }
 
-    ngOnInit() {
-        this.outlet =
-            this.renderer.selectRootElement('#print-outlet');
+    ngAfterViewInit() {
+        this.outlet = document.getElementById('print-outlet');
+    }
+
+    load() {
+        if (!this.id) { return; }
 
         this.po = null;
 
@@ -61,7 +72,8 @@ export class PrintComponent implements OnInit {
         })
         .then(po => this.po = po)
         .then(_ => this.populatePreview())
-        .then(_ => { if (this.printing) { this.printPo(); } });
+        .then(_ => { if (this.printing) { this.printPo(); } })
+        .then(_ => this.initDone = true);
     }
 
     populatePreview(): Promise<any> {

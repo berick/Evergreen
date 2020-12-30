@@ -2304,7 +2304,10 @@ sub receive_lineitem_batch_api {
             'RECEIVE_PURCHASE_ORDER', $li->purchase_order->ordering_agency
         );
 
-        receive_lineitem($mgr, $li_id) or return $e->die_event;
+        # Editor may have no die_event to return
+        receive_lineitem($mgr, $li_id) or return 
+            $e->die_event || OpenILS::Event->new('ACQ_LI_RECEIVE_FAILED');
+
         $mgr->respond;
     }
 

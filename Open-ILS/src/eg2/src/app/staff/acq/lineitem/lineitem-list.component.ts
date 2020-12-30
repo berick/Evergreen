@@ -3,6 +3,7 @@ import {Router, ActivatedRoute, ParamMap} from '@angular/router';
 import {Observable} from 'rxjs';
 import {tap} from 'rxjs/operators';
 import {Pager} from '@eg/share/util/pager';
+import {EgEvent, EventService} from '@eg/core/event.service';
 import {IdlObject} from '@eg/core/idl.service';
 import {NetService} from '@eg/core/net.service';
 import {AuthService} from '@eg/core/auth.service';
@@ -46,10 +47,12 @@ export class LineitemListComponent implements OnInit {
     showExpandFor: number; // 'Expand'
     expandAll = false;
     action = '';
+    batchFailure: EgEvent;
 
     constructor(
         private router: Router,
         private route: ActivatedRoute,
+        private evt: EventService,
         private net: NetService,
         private auth: AuthService,
         private holdings: HoldingsService,
@@ -380,29 +383,52 @@ export class LineitemListComponent implements OnInit {
         );
     }
 
+    receiveSelected() {
+        this.markReceived(this.selectedIds());
+    }
+
+    unReceiveSelected() {
+        this.markUnReceived(this.selectedIds());
+    }
+
+    cancelSelected() {
+    }
 
     markReceived(liIds: number[]) {
+        if (liIds.length === 0) { return; }
+
         this.net.request(
             'open-ils.acq',
             'open-ils.acq.lineitem.receive.batch',
             this.auth.token(), liIds
-        ).toPromise().then(_ => this.postBatchAction(liIds));
+        ).toPromise().then(resp => this.postBatchAction(resp, liIds));
     }
 
     markUnReceived(liIds: number[]) {
+        if (liIds.length === 0) { return; }
+
         this.net.request(
             'open-ils.acq',
             'open-ils.acq.lineitem.receive.rollback.batch',
             this.auth.token(), liIds
-        ).toPromise().then(_ => this.postBatchAction(liIds));
+        ).toPromise().then(resp => this.postBatchAction(resp, liIds));
     }
 
-    postBatchAction(liIds?: number[]) {
-        if (liIds) {
-            // Remove the modified LI's from the cache so we are
-            // forced to re-fetch them.
-            liIds.forEach(id => delete this.liService.liCache[id]);
+    postBatchAction(response: any, liIds: number[]) {
+        const evt = this.evt.parse(response);
+
+        if (evt) {
+            console.warn('Batch operation failed', evt);
+            this.batchFailure = evt;
+            return;
         }
+
+        this.batchFailure = null;
+
+        // Remove the modified LI's from the cache so we are
+        // forced to re-fetch them.
+        liIds.forEach(id => delete this.liService.liCache[id]);
+
         this.loadPageOfLis();
     }
 }
