@@ -137,10 +137,15 @@ export class PoSummaryComponent implements OnInit {
         this.cancelDialog.open().subscribe(reason => {
             if (!reason) { return; }
 
+            this.progressDialog.reset();
+            this.progressDialog.open();
             this.net.request('open-ils.acq',
                 'open-ils.acq.purchase_order.cancel',
                 this.auth.token(), this.poId, reason
-            ).subscribe(ok => location.href = location.href);
+            ).subscribe(ok => {
+                this.progressDialog.close();
+                location.href = location.href;
+            });
         });
     }
 
