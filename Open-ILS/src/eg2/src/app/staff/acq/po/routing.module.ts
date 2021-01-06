@@ -10,8 +10,12 @@ import {BriefRecordComponent} from '../lineitem/brief-record.component';
 import {LineitemHistoryComponent} from '../lineitem/history.component';
 import {PoHistoryComponent} from './history.component';
 import {PoEdiMessagesComponent} from './edi.component';
+import {PoCreateComponent} from './create.component';
 
 const routes: Routes = [{
+  path: 'create',
+  component: PoCreateComponent
+}, {
   path: ':poId',
   component: PoComponent,
   children : [{

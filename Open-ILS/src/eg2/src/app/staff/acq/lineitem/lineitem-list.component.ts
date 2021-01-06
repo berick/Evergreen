@@ -444,5 +444,11 @@ export class LineitemListComponent implements OnInit {
 
         this.loadPageOfLis();
     }
+
+    createPo(fromAll?: boolean) {
+        this.router.navigate(['/staff/acq/po/create'], {
+            queryParams: {li: fromAll ? this.lineitemIds : this.selectedIds()}
+        });
+    }
 }
 

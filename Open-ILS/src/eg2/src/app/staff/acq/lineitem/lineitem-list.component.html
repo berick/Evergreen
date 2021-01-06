@@ -12,18 +12,23 @@
         <button ngbDropdownItem (click)="deleteLineitems()" i18n>
           Delete Selected Lineitems
         </button>
-        <ng-container *ngIf="poId">
-          <div class="dropdown-divider"></div>
-          <button ngbDropdownItem (click)="receiveSelected()" i18n>
-            Mark Selected Lineitems as Received
-          </button>
-          <button ngbDropdownItem (click)="unReceiveSelected()" i18n>
-            Un-Receive Selected Lineitems
-          </button>
-          <button ngbDropdownItem (click)="cancelSelected()" i18n>
-            Cancel Selected Lineitems
-          </button>
-        </ng-container>
+        <div class="dropdown-divider"></div>
+          <ng-container *ngIf="!poId">
+            <button ngbDropdownItem (click)="createPo()" i18n>
+              Create Purchase Order from Selected Lineitems
+            </button>
+          </ng-container>
+          <ng-container *ngIf="poId">
+            <button ngbDropdownItem (click)="receiveSelected()" i18n>
+              Mark Selected Lineitems as Received
+            </button>
+            <button ngbDropdownItem (click)="unReceiveSelected()" i18n>
+              Un-Receive Selected Lineitems
+            </button>
+            <button ngbDropdownItem (click)="cancelSelected()" i18n>
+              Cancel Selected Lineitems
+            </button>
+          </ng-container>
       </div>
     </div>
   </div>
