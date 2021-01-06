@@ -210,9 +210,10 @@
             </a>
             <span class="ml-1 mr-1" i18n> | </span>
             <a class="label-with-material-icon"
-              routerLink="null">
+              [queryParams]="{f: 'jub:id', val1: li.id()}"
+              routerLink="/staff/acq/search/invoices">
               <span class="material-icons small mr-1">list</span>
-              <span i18n>Invoices ({{0}})</span>
+              <span i18n>Invoice(s)</span>
             </a>
             <ng-container *ngIf="li.eg_bib_id()">
               <span class="ml-1 mr-1" i18n> | </span>
@@ -340,6 +341,18 @@
   </div>
   <div class="row" *ngIf="showExpandFor == li.id() || expandAll">
     <div class="col-lg-10 offset-lg-1 p-2 mt-2 shadow">
+
+      <!-- Note the flex values are set so they also match the layout
+           of the list of copies in the copies component. -->
+      <div class="div d-flex font-weight-bold">
+        <div class="flex-1 p-1" i18n>Owning Branch</div>  
+        <div class="flex-1 p-1" i18n>Copy Location</div>
+        <div class="flex-1 p-1" i18n>Collection Code</div>
+        <div class="flex-1 p-1" i18n>Fund</div>
+        <div class="flex-1 p-1" i18n>Circ Modifier</div>
+        <div class="flex-1 p-1" i18n>Callnumber</div>
+        <div class="flex-1 p-1" i18n>Barcode</div>
+      </div>
       <div class="batch-copy-row" *ngFor="let copy of li.lineitem_details()">
         <eg-lineitem-copy-attrs [embedded]="true" [copy]="copy">
         </eg-lineitem-copy-attrs>
