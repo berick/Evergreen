@@ -136,9 +136,11 @@ export class LineitemListComponent implements OnInit {
     }
 
     goToPage() {
+        this.focusLi = null;
         this.router.navigate([], {
             relativeTo: this.route,
             queryParamsHandling: 'merge',
+            fragment: null,
             queryParams: {
                 offset: this.pager.offset,
                 limit: this.pager.limit
