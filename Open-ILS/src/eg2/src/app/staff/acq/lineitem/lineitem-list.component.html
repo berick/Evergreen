@@ -17,6 +17,9 @@
             <button ngbDropdownItem (click)="createPo()" i18n>
               Create Purchase Order from Selected Lineitems
             </button>
+            <button ngbDropdownItem (click)="createPo(true)" i18n>
+              Create Purchase Order from All Lineitems
+            </button>
           </ng-container>
           <ng-container *ngIf="poId">
             <button ngbDropdownItem (click)="receiveSelected()" i18n>

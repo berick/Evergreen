@@ -226,7 +226,13 @@ export class LineitemService {
 
         return this.net.request('open-ils.acq',
             'open-ils.acq.lineitem_note.cud.batch',
-            this.auth.token(), notes).toPromise();
+            this.auth.token(), notes
+        ).pipe(tap(resp => {
+            if (resp && resp.note) {
+                const li = this.liCache[resp.note.lineitem()].lineitem;
+                li.lineitem_notes().unshift(resp.note);
+            }
+        })).toPromise();
     }
 
     getLiAttrDefs(): Promise<IdlObject[]> {
