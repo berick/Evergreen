@@ -19,7 +19,7 @@ export class PoHistoryComponent implements OnInit {
 
     ngOnInit() {
         this.dataSource.getRows = (pager: Pager, sort: any) =>
-            this.getHistory(pager, sort)
+            this.getHistory(pager, sort);
 
         this.route.parent.paramMap.subscribe((params: ParamMap) => {
             this.poId = +params.get('poId');

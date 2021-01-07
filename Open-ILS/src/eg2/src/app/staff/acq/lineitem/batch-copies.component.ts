@@ -99,7 +99,7 @@ export class LineitemBatchCopiesComponent implements OnInit {
                 'open-ils.acq',
                 'open-ils.acq.lineitem_detail.receive',
                 this.auth.token(), copy.id()
-            ).subscribe(ok => this.handleActionResponse(ok));
+            ).subscribe(ok2 => this.handleActionResponse(ok2));
         }, err => {}); // avoid console errors
     }
 

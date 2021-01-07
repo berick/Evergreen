@@ -23,7 +23,7 @@ export class LineitemHistoryComponent implements OnInit {
     ngOnInit() {
 
         this.dataSource.getRows = (pager: Pager, sort: any) =>
-            this.getHistory(pager, sort)
+            this.getHistory(pager, sort);
 
         this.route.paramMap.subscribe((params: ParamMap) => {
             this.lineitemId = +params.get('lineitemId');

@@ -138,10 +138,10 @@ export class LineitemCopiesComponent implements OnInit, AfterViewInit {
             this.fetchFormulaValues().then(_ => {
 
                 let applied = 0;
-                let rowIdx = this.formulaOffset - 1;
+                let rowIdx2 = this.formulaOffset - 1;
 
-                while (++rowIdx < copies.length) {
-                    applied += this.formulateOneCopy(formula, rowIdx);
+                while (++rowIdx2 < copies.length) {
+                    applied += this.formulateOneCopy(formula, rowIdx2);
                 }
 
                 if (applied) {
@@ -161,7 +161,7 @@ export class LineitemCopiesComponent implements OnInit, AfterViewInit {
         this.pcrud.create(app).toPromise().then(a => {
             a.creator(this.auth.user());
             a.formula(formula);
-            this.lineitem.distribution_formulas().push(a)
+            this.lineitem.distribution_formulas().push(a);
         });
     }
 

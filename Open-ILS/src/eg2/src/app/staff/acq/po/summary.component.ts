@@ -169,7 +169,7 @@ export class PoSummaryComponent implements OnInit {
 
         })).toPromise().then(_ => {
 
-            if (this.activationBlocks.length == 0) {
+            if (this.activationBlocks.length === 0) {
                 this.canActivate = true;
                 return;
             }

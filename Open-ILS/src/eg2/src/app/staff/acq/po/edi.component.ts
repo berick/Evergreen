@@ -19,7 +19,7 @@ export class PoEdiMessagesComponent implements OnInit {
 
     ngOnInit() {
         this.dataSource.getRows = (pager: Pager, sort: any) =>
-            this.getEdiMessages(pager, sort)
+            this.getEdiMessages(pager, sort);
 
         this.route.parent.paramMap.subscribe((params: ParamMap) => {
             this.poId = +params.get('poId');
