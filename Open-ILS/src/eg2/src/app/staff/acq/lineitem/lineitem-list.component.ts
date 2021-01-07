@@ -19,8 +19,8 @@ import {CancelDialogComponent} from './cancel-dialog.component';
 })
 export class LineitemListComponent implements OnInit {
 
-    picklistId: number;
-    poId: number;
+    picklistId: number = null;
+    poId: number = null;
 
     loading = false;
     pager: Pager = new Pager();

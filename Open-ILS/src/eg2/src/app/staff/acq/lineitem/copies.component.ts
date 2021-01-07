@@ -44,6 +44,9 @@ export class LineitemCopiesComponent implements OnInit, AfterViewInit {
     formulaOffset = 0;
     formulaValues: {[field: string]: {[val: string]: boolean}} = {};
 
+    // Can any changes be applied?
+    liLocked = false;
+
     constructor(
         private route: ActivatedRoute,
         private idl: IdlService,
@@ -75,8 +78,12 @@ export class LineitemCopiesComponent implements OnInit, AfterViewInit {
         this.lineitem = null;
         this.copyCount = 1;
         return this.liService.getFleshedLineitems([this.lineitemId])
-        .pipe(tap(liStruct => this.lineitem = liStruct.lineitem))
-        .toPromise().then(_ => this.applyCount());
+        .pipe(tap(liStruct => this.lineitem = liStruct.lineitem)).toPromise()
+        .then(_ => {
+            this.liLocked =
+              this.lineitem.state().match(/on-order|received|cancelled/);
+        })
+        .then(_ => this.applyCount());
     }
 
     ngAfterViewInit() {

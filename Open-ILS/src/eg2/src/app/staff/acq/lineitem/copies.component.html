@@ -8,10 +8,12 @@
     <span class="ml-3" i18n> | </span>
 
     <label class="ml-3" for='copy-count-input' i18n>Item Count: </label>
-    <input class="form-control-sm ml-3 small" id='copy-count-input' 
+    <input class="form-control-sm ml-3 small" 
+      id='copy-count-input' [disabled]="liLocked"
       [(ngModel)]="copyCount" type="text" (keyup.enter)="applyCount()"/>
 
-    <button class="btn btn-sm btn-outline-dark ml-3" (click)="applyCount()" i18n>Apply</button>
+    <button class="btn btn-sm btn-outline-dark ml-3" 
+      [disabled]="liLocked" (click)="applyCount()" i18n>Apply</button>
 
     <span class="ml-3" i18n> | </span>
 
@@ -22,10 +24,10 @@
       </eg-combobox>
     </span>
     <button class="btn btn-sm btn-outline-dark ml-3" 
-      [disabled]="!distribFormCbox.selectedId"
+      [disabled]="!distribFormCbox.selectedId || liLocked"
       (click)="applyFormula(distribFormCbox.selectedId)" i18n>Apply</button>
 
-    <button class="btn btn-sm btn-success ml-auto" 
+    <button class="btn btn-sm btn-success ml-auto" [disabled]="liLocked"
       (click)="save()" i18n>Save Changes</button>
 
   </div>

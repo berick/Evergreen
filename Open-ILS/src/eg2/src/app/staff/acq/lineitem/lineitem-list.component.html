@@ -9,29 +9,22 @@
       <div ngbDropdownMenu>
         <a ngbDropdownItem routerLink="../brief-record"
           queryParamsHandling="merge" i18n>Add Brief Record</a>
-        <button ngbDropdownItem (click)="deleteLineitems()" i18n>
-          Delete Selected Lineitems
-        </button>
         <div class="dropdown-divider"></div>
-          <ng-container *ngIf="!poId">
-            <button ngbDropdownItem (click)="createPo()" i18n>
-              Create Purchase Order from Selected Lineitems
-            </button>
-            <button ngbDropdownItem (click)="createPo(true)" i18n>
-              Create Purchase Order from All Lineitems
-            </button>
-          </ng-container>
-          <ng-container *ngIf="poId">
-            <button ngbDropdownItem (click)="receiveSelected()" i18n>
-              Mark Selected Lineitems as Received
-            </button>
-            <button ngbDropdownItem (click)="unReceiveSelected()" i18n>
-              Un-Receive Selected Lineitems
-            </button>
-            <button ngbDropdownItem (click)="cancelSelected()" i18n>
-              Cancel Selected Lineitems
-            </button>
-          </ng-container>
+        <h6 class="dropdown-header" i18n>Selection List Actions</h6>
+        <button ngbDropdownItem (click)="deleteLineitems()" 
+          [disabled]="!picklistId" i18n>Delete Selected Lineitems</button>
+        <button ngbDropdownItem (click)="createPo()" 
+          [disabled]="!picklistId" i18n>Create Purchase Order from Selected Lineitems</button>
+        <button ngbDropdownItem (click)="createPo(true)"
+          [disabled]="!picklistId" i18n>Create Purchase Order from All Lineitems</button>
+        <div class="dropdown-divider"></div>
+        <h6 class="dropdown-header" i18n>Purchase Order Actions</h6>
+        <button ngbDropdownItem (click)="receiveSelected()" 
+          [disabled]="!poId" i18n>Mark Selected Lineitems as Received</button>
+        <button ngbDropdownItem (click)="unReceiveSelected()" 
+          [disabled]="!poId" i18n>Un-Receive Selected Lineitems</button>
+        <button ngbDropdownItem (click)="cancelSelected()" 
+          [disabled]="!poId" i18n>Cancel Selected Lineitems</button>
       </div>
     </div>
   </div>
