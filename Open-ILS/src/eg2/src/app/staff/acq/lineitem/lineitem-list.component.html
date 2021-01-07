@@ -148,7 +148,7 @@
         <div class="row">
           <div class="col-lg-12">
             <input type="checkbox" [(ngModel)]="selected[li.id()]"/>
-            <a class="ml-2" queryParamsHandling="merge"
+            <a class="ml-2" queryParamsHandling="merge" [id]="li.id()"
               routerLink="./lineitem/{{li.id()}}/detail">
               {{displayAttr(li, 'title')}}
             </a>

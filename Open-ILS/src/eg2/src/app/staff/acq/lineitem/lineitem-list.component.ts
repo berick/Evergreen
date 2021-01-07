@@ -49,6 +49,7 @@ export class LineitemListComponent implements OnInit {
     expandAll = false;
     action = '';
     batchFailure: EgEvent;
+    focusLi: number;
 
     @ViewChild('cancelDialog') cancelDialog: CancelDialogComponent;
 
@@ -70,11 +71,26 @@ export class LineitemListComponent implements OnInit {
             if (this.picklistId || this.poId) { this.load(); }
         });
 
+        this.route.fragment.subscribe((fragment: string) => {
+            const id = Number(fragment);
+            if (id > 0) { this.focusLineitem(id); }
+        });
+
         this.route.parent.paramMap.subscribe((params: ParamMap) => {
             this.picklistId = +params.get('picklistId');
             this.poId = +params.get('poId');
             this.load();
         });
+    }
+
+    // Focus the selected lineitem, which may not yet exist in the
+    // DOM for focusing.
+    focusLineitem(id?: number) {
+        if (id !== undefined) { this.focusLi = id; }
+        if (this.focusLi) {
+            const node = document.getElementById('' + this.focusLi);
+            if (node) { node.scrollIntoView(true); }
+        }
     }
 
     load(): Promise<any> {
@@ -87,7 +103,8 @@ export class LineitemListComponent implements OnInit {
         this.loading = true;
         return this.loadIds()
             .then(_ => this.loadPage())
-            .then(_ => this.loading = false);
+            .then(_ => this.loading = false)
+            .catch(_ => {}); // re-route occured while page was loading
     }
 
     loadIds(): Promise<any> {
@@ -110,8 +127,9 @@ export class LineitemListComponent implements OnInit {
         ).toPromise().then(resp => {
             const ids = handler(resp);
 
-            this.lineitemIds = ids.sort(
-                (id1, id2) => Number(id1) < Number(id2) ? -1 : 1);
+            this.lineitemIds = ids
+                .map(id => Number(id))
+                .sort((id1, id2) => id1 < id2 ? -1 : 1);
 
             this.pager.resultCount = ids.length;
         });
@@ -129,7 +147,27 @@ export class LineitemListComponent implements OnInit {
     }
 
     loadPage(): Promise<any> {
-        return this.loadPageOfLis().then(_ => this.setBatchSelect());
+        return this.jumpToLiPage()
+            .then(_ => this.loadPageOfLis())
+            .then(_ => this.setBatchSelect())
+            .then(_ => setTimeout(() => this.focusLineitem()));
+    }
+
+    jumpToLiPage(): Promise<boolean> {
+        if (!this.focusLi) { return Promise.resolve(true); }
+
+        const idx = this.lineitemIds.indexOf(this.focusLi);
+        if (idx === -1) { return Promise.resolve(true); }
+
+        console.debug('Jumping to new page on focused lineitem', this.focusLi);
+
+        const offset = Math.floor(idx / this.pager.limit) * this.pager.limit;
+
+        return this.router.navigate(['./'], {
+            relativeTo: this.route,
+            queryParams: {offset: offset, limit: this.pager.limit},
+            fragment: '' + this.focusLi
+        });
     }
 
     loadPageOfLis(): Promise<any> {
@@ -139,9 +177,7 @@ export class LineitemListComponent implements OnInit {
             this.pager.offset, this.pager.offset + this.pager.limit)
             .filter(id => id !== undefined);
 
-        if (ids.length === 0) {
-            return Promise.resolve();
-        }
+        if (ids.length === 0) { return Promise.resolve(); }
 
         if (this.pageOfLineitems.length === ids.length) {
             // All entries found in the cache

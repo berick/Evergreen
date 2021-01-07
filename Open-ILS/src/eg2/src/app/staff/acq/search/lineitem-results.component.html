@@ -3,26 +3,30 @@
   defaultSearchSetting="eg.acq.search.default.lineitems"></eg-acq-search-form>
 
 <ng-template #idTmpl let-lineitem="row">
-  <a *ngIf="lineitem.purchase_order()" href="/eg/staff/acq/legacy/po/view/{{lineitem.purchase_order().id()}}?focus_li={{lineitem.id()}}"
-     target="_blank">
+  <a *ngIf="lineitem.purchase_order()" 
+     routerLink="/staff/acq/po/{{lineitem.purchase_order().id()}}"
+     fragment="{{lineitem.id()}}" target="_blank">
     {{lineitem.id()}}
   </a>
-  <a *ngIf="lineitem.picklist() && !lineitem.purchase_order()" href="/eg/staff/acq/legacy/picklist/view/{{lineitem.picklist().id()}}?focus_li={{lineitem.id()}}"
-     target="_blank">
+  <a *ngIf="lineitem.picklist() && !lineitem.purchase_order()" 
+     routerLink="/staff/acq/picklist/{{lineitem.picklist().id()}}"
+     fragment="{{lineitem.id()}}" target="_blank">
     {{lineitem.id()}}
   </a>
 </ng-template>
 
 <ng-template #poTmpl let-lineitem="row">
-  <a *ngIf="lineitem.purchase_order()" href="/eg/staff/acq/legacy/po/view/{{lineitem.purchase_order().id()}}?focus_li={{lineitem.id()}}"
-     target="_blank">
+  <a *ngIf="lineitem.purchase_order()" 
+     routerLink="/staff/acq/po/{{lineitem.purchase_order().id()}}"
+     fragment="{{lineitem.id()}}" target="_blank">
     {{lineitem.purchase_order().name()}}
   </a>
 </ng-template>
 
 <ng-template #plTmpl let-lineitem="row">
-  <a *ngIf="lineitem.picklist()" href="/eg/staff/acq/legacy/picklist/view/{{lineitem.picklist().id()}}?focus_li={{lineitem.id()}}"
-     target="_blank">
+  <a *ngIf="lineitem.picklist()"
+     routerLink="/staff/acq/picklist/{{lineitem.picklist().id()}}"
+     fragment="{{lineitem.id()}}" target="_blank">
     {{lineitem.picklist().name()}}
   </a>
 </ng-template>
