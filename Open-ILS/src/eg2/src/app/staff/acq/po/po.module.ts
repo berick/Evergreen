@@ -13,6 +13,7 @@ import {PoHistoryComponent} from './history.component';
 import {PoEdiMessagesComponent} from './edi.component';
 import {PoNotesComponent} from './notes.component';
 import {PoCreateComponent} from './create.component';
+import {PoChargesComponent} from './charges.component';
 
 
 @NgModule({
@@ -23,6 +24,7 @@ import {PoCreateComponent} from './create.component';
     PoEdiMessagesComponent,
     PoNotesComponent,
     PoCreateComponent,
+    PoChargesComponent,
     PrintComponent
   ],
   imports: [

@@ -128,7 +128,7 @@ export class LineitemListComponent implements OnInit {
             const ids = handler(resp);
 
             this.lineitemIds = ids
-                .map(id => Number(id))
+                .map(i => Number(i))
                 .sort((id1, id2) => id1 < id2 ? -1 : 1);
 
             this.pager.resultCount = ids.length;

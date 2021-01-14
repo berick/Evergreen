@@ -31,7 +31,6 @@ export class PoSummaryComponent implements OnInit {
     }
     get poId(): number { return this._poId; }
 
-    po: IdlObject;
     newPoName: string;
     editPoName = false;
     initDone = false;
@@ -69,15 +68,17 @@ export class PoSummaryComponent implements OnInit {
         .subscribe(_ => this.setCanActivate());
     }
 
+    po(): IdlObject {
+        return this.poService.currentPo;
+    }
+
     load(): Promise<any> {
-        this.po = null;
         if (!this.poId) { return Promise.resolve(); }
 
         return this.poService.getFleshedPo(this.poId)
         .then(po => {
 
             // EDI message count
-            this.po = po;
             return this.pcrud.search('acqedim',
                 {purchase_order: this.poId}, {}, {idlist: true, atomic: true}
             ).toPromise().then(ids => this.ediMessageCount = ids.length);
@@ -110,24 +111,24 @@ export class PoSummaryComponent implements OnInit {
         this.editPoName = !this.editPoName;
 
         if (this.editPoName) {
-            this.newPoName = this.po.name();
+            this.newPoName = this.po().name();
             setTimeout(() => {
                 const node =
                     document.getElementById('pl-name-input') as HTMLInputElement;
                 if (node) { node.select(); }
             });
 
-        } else if (this.newPoName && this.newPoName !== this.po.name()) {
+        } else if (this.newPoName && this.newPoName !== this.po().name()) {
 
-            const prevName = this.po.name();
-            this.po.name(this.newPoName);
+            const prevName = this.po().name();
+            this.po().name(this.newPoName);
             this.newPoName = null;
 
-            this.pcrud.update(this.po).subscribe(resp => {
+            this.pcrud.update(this.po()).subscribe(resp => {
                 const evt = this.evt.parse(resp);
                 if (evt) {
                     alert(evt);
-                    this.po.name(prevName);
+                    this.po().name(prevName);
                 }
             });
         }
@@ -153,7 +154,7 @@ export class PoSummaryComponent implements OnInit {
         this.canActivate = null;
         this.activationBlocks = [];
 
-        if (!(this.po.state().match(/new|pending/))) {
+        if (!(this.po().state().match(/new|pending/))) {
             this.canActivate = false;
             return;
         }
@@ -186,7 +187,7 @@ export class PoSummaryComponent implements OnInit {
 
         this.activationEvent = null;
         this.progressDialog.open();
-        this.progressDialog.update({max: this.po.lineitem_count() * 3});
+        this.progressDialog.update({max: this.po().lineitem_count() * 3});
 
         this.net.request(
             'open-ils.acq',

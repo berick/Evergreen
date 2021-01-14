@@ -2,7 +2,7 @@
 <eg-acq-cancel-dialog #cancelDialog></eg-acq-cancel-dialog>
 <eg-progress-dialog #progressDialog></eg-progress-dialog>
 
-<div *ngIf="po" class="p-1 border border-secondary rounded">
+<div *ngIf="po()" class="p-1 border border-secondary rounded">
 
   <div class="row">
     <div class="col-lg-9">
@@ -22,7 +22,7 @@
             </ng-container>
             <ng-container *ngIf="!editPoName">
               <a (click)="toggleNameEdit()" href='javascript:;'
-                class='font-weight-bold'>{{po.name()}}</a>
+                class='font-weight-bold'>{{po().name()}}</a>
             </ng-container>
           </div>
         </div>
@@ -31,13 +31,13 @@
       <div class="row">
         <div class="col-lg-3 d-flex">
           <div class="flex-2" i18n>Lineitems:</div>
-          <div class="flex-3">{{po.lineitem_count()}}</div>
+          <div class="flex-3">{{po().lineitem_count()}}</div>
         </div>
         <div class="col-lg-9 d-flex">
           <div class="flex-1" i18n>Provider:</div>
           <div class="flex-6">
-            <a routerLink="/staff/acq/provider/{{po.provider().id()}}/details">
-              {{po.provider().name()}}
+            <a routerLink="/staff/acq/provider/{{po().provider().id()}}/details">
+              {{po().provider().name()}}
             </a>
           </div>
         </div>
@@ -46,8 +46,8 @@
         <div class="col-lg-3 d-flex">
           <div class="flex-2" i18n>Activated:</div>
           <div class="flex-3">
-            <span *ngIf="po.order_date()">{{po.order_date() | date:'short'}}</span>
-            <span *ngIf="!po.order_date()" i18n>N/A</span>
+            <span *ngIf="po().order_date()">{{po().order_date() | date:'short'}}</span>
+            <span *ngIf="!po().order_date()" i18n>N/A</span>
           </div>
         </div>
         <div class="col-lg-9 d-flex">
@@ -57,7 +57,7 @@
               <eg-progress-inline></eg-progress-inline>
             </div>
 
-            <span *ngIf="po.state() == 'on-order'" i18n>On Order</span>
+            <span *ngIf="po().state() == 'on-order'" i18n>On Order</span>
             <ng-container *ngIf="canActivate">
               <span *ngIf="!activationEvent" i18n>Pending / Activatable</span>
               <span *ngIf="activationEvent" i18n>
@@ -66,9 +66,9 @@
             </ng-container>
 
             <!-- canceled -->
-            <ng-container *ngIf="po.cancel_reason()">
+            <ng-container *ngIf="po().cancel_reason()">
               <span class="text-danger" i18n>
-                {{po.cancel_reason().label()}} =&gt; {{po.cancel_reason().description()}}
+                {{po().cancel_reason().label()}} =&gt; {{po().cancel_reason().description()}}
               </span>
             </ng-container>
 
@@ -113,7 +113,7 @@
       <div class="row mt-1">
         <div class="col-lg-12">
           <a class="" href="javascript:;" (click)="showNotes=!showNotes" 
-            i18n>Notes ({{po.notes().length}})</a>
+            i18n>Notes ({{po().notes().length}})</a>
           <span class="pl-2 pr-2" i18n> | </span>
           <a [queryParams]="{f: 'acqpo:id', val1: poId}"
             routerLink="/staff/acq/search/invoices" i18n>Invoices ({{invoiceCount}})</a>
@@ -126,7 +126,7 @@
           <a routerLink="./history" i18n>History</a>
           <span class="pl-2 pr-2" i18n> | </span>
           <a routerLink="./printer" i18n>Print</a>
-          <ng-container *ngIf="po.state() == 'on-order' || po.state() == 'pending'">
+          <ng-container *ngIf="po().state() == 'on-order' || po().state() == 'pending'">
             <span class="pl-2 pr-2" i18n> | </span>
             <a (click)="cancelPo()" href="javascript:;" i18n>Cancel Order</a>
           </ng-container>
@@ -140,20 +140,20 @@
     <div class="col-lg-3">
       <div class="row">
         <div class="col-lg-8" i18n>Estimated Amount:</div>
-        <div class="col-lg-4">{{po.amount_estimated() | currency}}</div>
+        <div class="col-lg-4">{{po().amount_estimated() | currency}}</div>
       </div>
       <div class="row">
         <div class="col-lg-8" i18n>Encumbered Amount:</div>
-        <div class="col-lg-4">{{po.amount_encumbered() | currency}}</div>
+        <div class="col-lg-4">{{po().amount_encumbered() | currency}}</div>
       </div>
       <div class="row">
         <div class="col-lg-8" i18n>Spent Amount:</div>
-        <div class="col-lg-4">{{po.amount_spent() | currency}}</div>
+        <div class="col-lg-4">{{po().amount_spent() | currency}}</div>
       </div>
       <div class="row">
         <div class="col-lg-8" i18n>Prepayment Required?</div>
         <div class="col-lg-4">
-          <eg-bool [value]="po.provider().prepayment_required()"></eg-bool>
+          <eg-bool [value]="po().provider().prepayment_required()"></eg-bool>
         </div>
       </div>
     </div>

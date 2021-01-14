@@ -8,3 +8,9 @@
 
 <router-outlet></router-outlet>
 
+<hr class="mt-3 pt-3"/>
+
+<!-- gets its po from poService -->
+<ng-container *ngIf="isBasePage()">
+  <eg-acq-po-charges></eg-acq-po-charges>
+</ng-container>

@@ -12,6 +12,9 @@ export class PoService {
 
     currentPo: IdlObject;
 
+    // The PO will be accessible via currentPo above.
+    poRetrieved: EventEmitter<void> = new EventEmitter<void>();
+
     constructor(
         private evt: EventService,
         private net: NetService,
@@ -40,11 +43,29 @@ export class PoService {
         ).toPromise().then(po => {
 
             const evt = this.evt.parse(po);
-            if (evt) {
-                return Promise.reject(evt + '');
-            }
+            if (evt) { return Promise.reject(evt + ''); }
 
-            return this.currentPo = po;
+            this.currentPo = po;
+            this.poRetrieved.emit();
+
+            return this.currentPo;
+        });
+    }
+
+    // Fetch the PO again (with less fleshing) and update the
+    // order summary totals our main fully-fleshed PO.
+    refreshOrderSummary(): Promise<any> {
+
+        return this.net.request('open-ils.acq',
+            'open-ils.acq.purchase_order.retrieve.authoritative',
+            this.auth.token(), this.currentPo.id(),
+            {flesh_price_summary: true}
+
+        ).toPromise().then(po => {
+
+            this.currentPo.amount_encumbered(po.amount_encumbered());
+            this.currentPo.amount_spent(po.amount_spent());
+            this.currentPo.amount_estimated(po.amount_estimated());
         });
     }
 }
