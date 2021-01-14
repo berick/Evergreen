@@ -20,4 +20,9 @@ export class PicklistComponent implements OnInit {
             this.picklistId = +params.get('picklistId');
         });
     }
+
+    isBasePage(): boolean {
+        return !this.route.firstChild ||
+            this.route.firstChild.snapshot.url.length === 0;
+    }
 }
