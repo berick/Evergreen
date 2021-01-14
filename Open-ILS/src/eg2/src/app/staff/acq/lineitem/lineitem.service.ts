@@ -1,5 +1,5 @@
 import {Injectable, EventEmitter} from '@angular/core';
-import {Observable, from} from 'rxjs';
+import {Observable, from, concat, empty} from 'rxjs';
 import {switchMap, map, tap, merge} from 'rxjs/operators';
 import {IdlObject, IdlService} from '@eg/core/idl.service';
 import {NetService} from '@eg/core/net.service';
@@ -251,6 +251,24 @@ export class LineitemService {
         return this.net.request(
             'open-ils.acq',
             'open-ils.acq.lineitem_detail.cud.batch', this.auth.token(), lids);
+    }
+
+    updateLineitems(lis: IdlObject[]): Observable<BatchLineitemUpdateStruct> {
+
+        // Fire updates one LI at a time.  Note the API allows passing
+        // multiple LI's, but does not stream responses.  This approach
+        // allows the caller to get a stream of responses instead of a
+        // final "all done".
+        let obs: Observable<any> = empty();
+        lis.forEach(li => {
+            obs = concat(obs, this.net.request(
+                'open-ils.acq',
+                'open-ils.acq.lineitem.update',
+                this.auth.token(), li
+            ));
+        });
+
+        return obs;
     }
 }
 

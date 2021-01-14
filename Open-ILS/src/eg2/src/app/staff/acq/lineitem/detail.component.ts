@@ -53,6 +53,13 @@ export class LineitemDetailComponent implements OnInit {
 
         return def ? def.description() : '';
     }
+
+    saveMarcChanges(changes) { // MarcSavedEvent
+        const xml = changes.marcXml;
+        this.lineitem.marc(xml);
+        this.liService.updateLineitems([this.lineitem]).toPromise()
+        .then(_ => this.load());
+    }
 }
 
 

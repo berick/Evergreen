@@ -17,6 +17,7 @@ import {LineitemCopyAttrsComponent} from './copy-attrs.component';
 import {LineitemHistoryComponent} from './history.component';
 import {BriefRecordComponent} from './brief-record.component';
 import {CancelDialogComponent} from './cancel-dialog.component';
+import {MarcEditModule} from '@eg/staff/share/marc-edit/marc-edit.module';
 
 @NgModule({
   declarations: [
@@ -40,7 +41,8 @@ import {CancelDialogComponent} from './cancel-dialog.component';
   imports: [
     StaffCommonModule,
     LineitemRoutingModule,
-    ItemLocationSelectModule
+    ItemLocationSelectModule,
+    MarcEditModule
   ],
   providers: [
     LineitemService
