@@ -2,6 +2,37 @@ BEGIN;
 
 --SELECT evergreen.upgrade_deps_block_check('TODO', :eg_version);
 
+INSERT INTO config.workstation_setting_type (name, grp, datatype, label)
+VALUES (
+    'eg.grid.acq.lineitem.history', 'gui', 'object',
+    oils_i18n_gettext(
+        'eg.grid.acq.lineitem.history',
+        'Grid Config: Acq Lineitem History',
+        'cwst', 'label'
+    )
+), (
+    'eg.grid.acq.po.history', 'gui', 'object',
+    oils_i18n_gettext(
+        'eg.grid.acq.po.history',
+        'Grid Config: Acq PO History',
+        'cwst', 'label'
+    )
+), (
+    'eg.grid.acq.po.edi_messages', 'gui', 'object',
+    oils_i18n_gettext(
+        'eg.grid.acq.po.edi_messages',
+        'Grid Config: Acq PO EDI Messages',
+        'cwst', 'label'
+    )
+), (
+    'acq.lineitem.page_size', 'gui', 'integer',
+    oils_i18n_gettext(
+        'acq.lineitem.page_size',
+        'ACQ Lineitem List Page Size',
+        'cwst', 'label'
+    )
+);
+
 INSERT INTO config.print_template
     (id, name, label, owner, active, locale, template)
 VALUES (
