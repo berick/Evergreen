@@ -118,8 +118,7 @@
           </span>
         </button>
         <div class="dropdown-menu" ngbDropdownMenu>
-          <a class="dropdown-item" 
-            (click)="pager.setLimit(count); pager.toFirst(); goToPage()"
+          <a class="dropdown-item" (click)="pageSizeChange(count)"
             *ngFor="let count of [5, 10, 25, 50, 100, 500, 1000, 10000]">
             <span class="ml-2">{{count}}</span>
           </a>

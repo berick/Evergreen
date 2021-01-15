@@ -7,6 +7,7 @@ import {EgEvent, EventService} from '@eg/core/event.service';
 import {IdlObject} from '@eg/core/idl.service';
 import {NetService} from '@eg/core/net.service';
 import {AuthService} from '@eg/core/auth.service';
+import {ServerStoreService} from '@eg/core/server-store.service';
 import {LineitemService} from './lineitem.service';
 import {ComboboxEntry} from '@eg/share/combobox/combobox.component';
 import {HoldingsService} from '@eg/staff/share/holdings/holdings.service';
@@ -59,6 +60,7 @@ export class LineitemListComponent implements OnInit {
         private evt: EventService,
         private net: NetService,
         private auth: AuthService,
+        private store: ServerStoreService,
         private holdings: HoldingsService,
         private liService: LineitemService
     ) {}
@@ -68,7 +70,7 @@ export class LineitemListComponent implements OnInit {
         this.route.queryParamMap.subscribe((params: ParamMap) => {
             this.pager.offset = +params.get('offset');
             this.pager.limit = +params.get('limit');
-            if (this.picklistId || this.poId) { this.load(); }
+            this.load();
         });
 
         this.route.fragment.subscribe((fragment: string) => {
@@ -80,6 +82,19 @@ export class LineitemListComponent implements OnInit {
             this.picklistId = +params.get('picklistId');
             this.poId = +params.get('poId');
             this.load();
+        });
+
+        this.store.getItem('acq.lineitem.page_size').then(count => {
+            this.pager.setLimit(count || 20);
+            this.load();
+        });
+    }
+
+    pageSizeChange(count: number) {
+        this.store.setItem('acq.lineitem.page_size', count).then(_ => {
+            this.pager.setLimit(count);
+            this.pager.toFirst();
+            this.goToPage();
         });
     }
 
@@ -96,15 +111,20 @@ export class LineitemListComponent implements OnInit {
     load(): Promise<any> {
         this.pageOfLineitems = [];
 
-        if (!this.pager.limit) {
-            this.pager.limit = 10; // TODO: setting
+        if (!this.loading &&
+            this.pager.limit && (this.poId || this.picklistId)) {
+
+            this.loading = true;
+
+            return this.loadIds()
+                .then(_ => this.loadPage())
+                .then(_ => this.loading = false)
+                .catch(_ => {}); // re-route while page is loading
         }
 
-        this.loading = true;
-        return this.loadIds()
-            .then(_ => this.loadPage())
-            .then(_ => this.loading = false)
-            .catch(_ => {}); // re-route occured while page was loading
+        // We have not collected enough data to proceed.
+        return Promise.resolve();
+
     }
 
     loadIds(): Promise<any> {
@@ -160,8 +180,6 @@ export class LineitemListComponent implements OnInit {
 
         const idx = this.lineitemIds.indexOf(this.focusLi);
         if (idx === -1) { return Promise.resolve(true); }
-
-        console.debug('Jumping to new page on focused lineitem', this.focusLi);
 
         const offset = Math.floor(idx / this.pager.limit) * this.pager.limit;
 
