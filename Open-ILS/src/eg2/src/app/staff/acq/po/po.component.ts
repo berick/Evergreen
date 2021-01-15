@@ -18,7 +18,6 @@ export class PoComponent implements OnInit {
     ngOnInit() {
         this.route.paramMap.subscribe((params: ParamMap) => {
             this.poId = +params.get('poId');
-            console.log('ROOT', this.isBasePage());
         });
     }
 

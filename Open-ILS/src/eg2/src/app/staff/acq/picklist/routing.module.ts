@@ -5,6 +5,7 @@ import {PicklistSummaryComponent} from './summary.component';
 import {LineitemListComponent} from '../lineitem/lineitem-list.component';
 import {LineitemDetailComponent} from '../lineitem/detail.component';
 import {LineitemCopiesComponent} from '../lineitem/copies.component';
+import {LineitemWorksheetComponent} from '../lineitem/worksheet.component';
 import {BriefRecordComponent} from '../lineitem/brief-record.component';
 import {LineitemHistoryComponent} from '../lineitem/history.component';
 
@@ -26,6 +27,9 @@ const routes: Routes = [{
   }, {
     path: 'lineitem/:lineitemId/items',
     component: LineitemCopiesComponent
+  }, {
+    path: 'lineitem/:lineitemId/worksheet',
+    component: LineitemWorksheetComponent
   }]
 }];
 

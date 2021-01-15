@@ -12,8 +12,7 @@ export class PoService {
 
     currentPo: IdlObject;
 
-    // The PO will be accessible via currentPo above.
-    poRetrieved: EventEmitter<void> = new EventEmitter<void>();
+    poRetrieved: EventEmitter<IdlObject> = new EventEmitter<IdlObject>();
 
     constructor(
         private evt: EventService,
@@ -21,11 +20,13 @@ export class PoService {
         private auth: AuthService
     ) {}
 
-    getFleshedPo(id: number, fleshMore?: any): Promise<IdlObject> {
+    getFleshedPo(id: number, fleshMore?: any, noCache?: boolean): Promise<IdlObject> {
 
-        if (this.currentPo && id === this.currentPo.id()) {
-            // Set poService.currentPo = null to bypass the cache
-            return Promise.resolve(this.currentPo);
+        if (!noCache) {
+            if (this.currentPo && id === this.currentPo.id()) {
+                // Set poService.currentPo = null to bypass the cache
+                return Promise.resolve(this.currentPo);
+            }
         }
 
         const flesh = Object.assign({
@@ -45,10 +46,10 @@ export class PoService {
             const evt = this.evt.parse(po);
             if (evt) { return Promise.reject(evt + ''); }
 
-            this.currentPo = po;
-            this.poRetrieved.emit();
+            if (!noCache) { this.currentPo = po; }
 
-            return this.currentPo;
+            this.poRetrieved.emit(po);
+            return po;
         });
     }
 

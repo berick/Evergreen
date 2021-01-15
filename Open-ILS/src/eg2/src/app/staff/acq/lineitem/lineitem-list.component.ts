@@ -188,7 +188,8 @@ export class LineitemListComponent implements OnInit {
 
         this.pageOfLineitems = []; // reset
 
-        return this.liService.getFleshedLineitems(ids, true)
+        return this.liService.getFleshedLineitems(
+            ids, {fromCache: true, toCache: true})
         .pipe(tap(struct => {
             this.ingestOneLi(struct.lineitem);
             this.existingCopyCounts[struct.id] = struct.existing_copies;

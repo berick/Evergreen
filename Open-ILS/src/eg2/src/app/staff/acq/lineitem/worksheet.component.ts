@@ -1,4 +1,4 @@
-import {Component, OnInit, Renderer2} from '@angular/core';
+import {Component, OnInit, AfterViewInit} from '@angular/core';
 import {map, take} from 'rxjs/operators';
 import {ActivatedRoute, ParamMap} from '@angular/router';
 import {IdlObject} from '@eg/core/idl.service';
@@ -6,15 +6,16 @@ import {NetService} from '@eg/core/net.service';
 import {AuthService} from '@eg/core/auth.service';
 import {PcrudService} from '@eg/core/pcrud.service';
 import {OrgService} from '@eg/core/org.service';
+import {LineitemService} from './lineitem.service';
 import {PrintService} from '@eg/share/print/print.service';
 
 @Component({
   templateUrl: 'worksheet.component.html'
 })
-export class WorksheetComponent implements OnInit {
+export class LineitemWorksheetComponent implements OnInit, AfterViewInit {
 
     outlet: Element;
-    id: number;
+    lineitemId: number;
     lineitem: IdlObject;
     holdCount: number;
     printing: boolean;
@@ -22,31 +23,35 @@ export class WorksheetComponent implements OnInit {
 
     constructor(
         private route: ActivatedRoute,
-        private renderer: Renderer2,
         private org: OrgService,
         private net: NetService,
         private auth: AuthService,
         private pcrud: PcrudService,
-        private printer: PrintService) {
+        private printer: PrintService,
+        private liService: LineitemService
+    ) { }
 
-        this.id = +this.route.snapshot.paramMap.get('id');
+    ngOnInit() {
 
-        this.route.url.pipe(map(segments => segments.join('_')), take(1))
-        .subscribe(path => {
-            this.printing = Boolean(path.match(/worksheet_print/));
-            this.closing = Boolean(path.match(/worksheet_print_close/));
+        this.route.paramMap.subscribe((params: ParamMap) => {
+            const id = +params.get('lineitemId');
+            if (id !== this.lineitemId) {
+                this.lineitemId = id;
+                if (id) { this.load(); }
+            }
         });
     }
 
-    ngOnInit() {
-        this.outlet =
-            this.renderer.selectRootElement('#worksheet-outlet');
+    ngAfterViewInit() {
+        this.outlet = document.getElementById('worksheet-outlet');
+    }
 
-        this.lineitem = null;
+    load() {
+        if (!this.lineitemId) { return; }
 
         this.net.request(
             'open-ils.acq', 'open-ils.acq.lineitem.retrieve',
-            this.auth.token(), this.id, {
+            this.auth.token(), this.lineitemId, {
                 flesh_attrs: true,
                 flesh_notes: true,
                 flesh_cancel_reason: true,
@@ -60,12 +65,7 @@ export class WorksheetComponent implements OnInit {
         ).toPromise()
         .then(li => this.lineitem = li)
         .then(_ => this.getRemainingData())
-        .then(_ => this.populatePreview())
-        .then(_ => {
-            if (this.printing) {
-               this.printWorksheet();
-            }
-        });
+        .then(_ => this.populatePreview());
     }
 
     getRemainingData(): Promise<any> {

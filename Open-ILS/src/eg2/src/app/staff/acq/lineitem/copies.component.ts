@@ -77,7 +77,8 @@ export class LineitemCopiesComponent implements OnInit, AfterViewInit {
     load(): Promise<any> {
         this.lineitem = null;
         this.copyCount = 1;
-        return this.liService.getFleshedLineitems([this.lineitemId])
+        return this.liService.getFleshedLineitems(
+            [this.lineitemId], {toCache: true, fromCache: true})
         .pipe(tap(liStruct => this.lineitem = liStruct.lineitem)).toPromise()
         .then(_ => {
             this.liLocked =

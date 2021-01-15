@@ -160,7 +160,7 @@
   </div>
   <div class="row" *ngIf="showNotes">
     <div class="col-lg-10 offset-lg-1 p-2 mt-2 shadow">
-      <eg-po-notes [po]="po" (closeRequested)="showNotes = false">
+      <eg-po-notes [po]="po()" (closeRequested)="showNotes = false">
       </eg-po-notes>
     </div>
   </div>

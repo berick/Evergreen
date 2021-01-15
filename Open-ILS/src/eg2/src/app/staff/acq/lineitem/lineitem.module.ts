@@ -3,8 +3,7 @@ import {StaffCommonModule} from '@eg/staff/common.module';
 import {HttpClientModule} from '@angular/common/http';
 import {ItemLocationSelectModule
     } from '@eg/share/item-location-select/item-location-select.module';
-import {LineitemRoutingModule} from './routing.module';
-import {WorksheetComponent} from './worksheet.component';
+import {LineitemWorksheetComponent} from './worksheet.component';
 import {LineitemService} from './lineitem.service';
 import {LineitemComponent} from './lineitem.component';
 import {LineitemNotesComponent} from './notes.component';
@@ -32,7 +31,7 @@ import {MarcEditModule} from '@eg/staff/share/marc-edit/marc-edit.module';
     LineitemHistoryComponent,
     CancelDialogComponent,
     BriefRecordComponent,
-    WorksheetComponent
+    LineitemWorksheetComponent
   ],
   exports: [
     LineitemListComponent,
@@ -40,7 +39,6 @@ import {MarcEditModule} from '@eg/staff/share/marc-edit/marc-edit.module';
   ],
   imports: [
     StaffCommonModule,
-    LineitemRoutingModule,
     ItemLocationSelectModule,
     MarcEditModule
   ],

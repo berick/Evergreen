@@ -8,6 +8,7 @@ import {LineitemDetailComponent} from '../lineitem/detail.component';
 import {LineitemCopiesComponent} from '../lineitem/copies.component';
 import {BriefRecordComponent} from '../lineitem/brief-record.component';
 import {LineitemHistoryComponent} from '../lineitem/history.component';
+import {LineitemWorksheetComponent} from '../lineitem/worksheet.component';
 import {PoHistoryComponent} from './history.component';
 import {PoEdiMessagesComponent} from './edi.component';
 import {PoCreateComponent} from './create.component';
@@ -39,6 +40,9 @@ const routes: Routes = [{
   }, {
     path: 'lineitem/:lineitemId/items',
     component: LineitemCopiesComponent
+  }, {
+    path: 'lineitem/:lineitemId/worksheet',
+    component: LineitemWorksheetComponent
   }, {
     path: 'printer',
     component: PrintComponent

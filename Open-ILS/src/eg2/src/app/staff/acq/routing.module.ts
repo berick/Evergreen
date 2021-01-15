@@ -10,10 +10,6 @@ const routes: Routes = [{
   loadChildren: () =>
     import('./provider/acq-provider.module').then(m => m.AcqProviderModule)
 }, {
-  path: 'lineitem',
-  loadChildren: () =>
-    import('./lineitem/lineitem.module').then(m => m.LineitemModule)
-}, {
   path: 'po',
   loadChildren: () => import('./po/po.module').then(m => m.PoModule)
 }, {

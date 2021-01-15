@@ -27,6 +27,20 @@ export interface BatchLineitemUpdateStruct {
     [key: string]: any; // Perl Acq::BatchManager
 }
 
+interface FleshedLineitemParams {
+
+    // Flesh data beyond the default.
+    fleshMore?: any;
+
+    // OK to pull the requested LI from the cache.
+    fromCache?: boolean;
+
+    // OK to add this LI to the cache.
+    // Generally a good thing, but if you are fetching an LI with
+    // fewer fleshed fields than the default, this could break code.
+    toCache?: boolean;
+}
+
 @Injectable()
 export class LineitemService {
 
@@ -61,24 +75,14 @@ export class LineitemService {
     ) {}
 
     getFleshedLineitems(ids: number[],
-        cacheOk?: boolean, wantMarc?: boolean): Observable<BatchLineitemStruct> {
+        params: FleshedLineitemParams = {}): Observable<BatchLineitemStruct> {
 
-        if (cacheOk) {
-            const fromCache: BatchLineitemStruct[] = [];
-            ids.forEach(id => {
-                if (this.liCache[id]) {
-                    fromCache.push(this.liCache[id]);
-                }
-            });
-
-            // Only return LI's from cache if all of the requested LI's
-            // are cached, otherwise they would be returned in the
-            // wrong order.  This is simpler than addressing that and
-            // typically it will be all or none.
-            if (fromCache.length === ids.length) { return from(fromCache); }
+        if (params.fromCache) {
+            const fromCache = this.getLineitemsFromCache(ids);
+            if (fromCache) { return from(fromCache); }
         }
 
-        const flesh: any = {
+        const flesh: any = Object.assign({
             flesh_attrs: true,
             flesh_provider: true,
             flesh_order_summary: true,
@@ -93,16 +97,37 @@ export class LineitemService {
             flesh_pl: true,
             flesh_formulas: true,
             flesh_copies: true,
-            clear_marc: wantMarc ? false : true
-        };
+            clear_marc: false
+        }, params.fleshMore || {});
 
         return this.net.request(
             'open-ils.acq', 'open-ils.acq.lineitem.retrieve.batch',
             this.auth.token(), ids, flesh
-        ).pipe(tap(liStruct => this.ingestLineitem(liStruct)));
+        ).pipe(tap(liStruct =>
+            this.ingestLineitem(liStruct, params.toCache)));
     }
 
-    ingestLineitem(liStruct: BatchLineitemStruct): BatchLineitemStruct {
+    getLineitemsFromCache(ids: number[]): BatchLineitemStruct[] {
+
+        const fromCache: BatchLineitemStruct[] = [];
+
+        ids.forEach(id => {
+            if (this.liCache[id]) { fromCache.push(this.liCache[id]); }
+        });
+
+        // Only return LI's from cache if all of the requested LI's
+        // are cached, otherwise they would be returned in the wrong
+        // order.  Typically it will be all or none so I'm not
+        // fussing with interleaving cached and uncached lineitems
+        // to fix the sorting.
+        if (fromCache.length === ids.length) { return fromCache; }
+
+        return null;
+    }
+
+    ingestLineitem(
+        liStruct: BatchLineitemStruct, toCache: boolean): BatchLineitemStruct {
+
         const li = liStruct.lineitem;
 
         // These values come through as NULL
@@ -142,7 +167,8 @@ export class LineitemService {
             }
         });
 
-        return this.liCache[li.id()] = liStruct;
+        if (toCache) { this.liCache[li.id()] = liStruct; }
+        return liStruct;
     }
 
     // Returns all matching attributes

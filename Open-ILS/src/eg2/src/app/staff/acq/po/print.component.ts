@@ -17,7 +17,7 @@ import {PoService} from './po.service';
 })
 export class PrintComponent implements OnInit, AfterViewInit {
 
-    id: number;
+    poId: number;
     outlet: Element;
     po: IdlObject;
     printing: boolean;
@@ -37,16 +37,12 @@ export class PrintComponent implements OnInit, AfterViewInit {
     }
 
     ngOnInit() {
-
         this.route.parent.paramMap.subscribe((params: ParamMap) => {
-            this.id = +params.get('poId');
-            if (this.initDone && this.po) { this.load(); }
-        });
-
-        this.route.url.pipe(map(segments => segments.join('_')), take(1))
-        .subscribe(path => {
-            this.printing = Boolean(path.match(/printer_print/));
-            this.closing = Boolean(path.match(/printer_print_close/));
+            const poId = +params.get('poId');
+            if (poId !== this.poId) {
+                this.poId = poId;
+                if (poId && this.initDone) { this.load(); }
+            }
         });
 
         this.load();
@@ -57,11 +53,10 @@ export class PrintComponent implements OnInit, AfterViewInit {
     }
 
     load() {
-        if (!this.id) { return; }
+        if (!this.poId) { return; }
 
         this.po = null;
-
-        this.poService.getFleshedPo(this.id, {
+        this.poService.getFleshedPo(this.poId, {
             flesh_provider_addresses: true,
             flesh_lineitems: true,
             flesh_lineitem_attrs: true,
@@ -69,10 +64,9 @@ export class PrintComponent implements OnInit, AfterViewInit {
             flesh_lineitem_details: true,
             clear_marc: true,
             flesh_notes: true
-        })
+        }, true)
         .then(po => this.po = po)
         .then(_ => this.populatePreview())
-        .then(_ => { if (this.printing) { this.printPo(); } })
         .then(_ => this.initDone = true);
     }
 

@@ -70,7 +70,7 @@ export class LineitemBatchCopiesComponent implements OnInit {
     }
 
     refreshLineitem() {
-        this.liService.getFleshedLineitems([this.lineitem.id()])
+        this.liService.getFleshedLineitems([this.lineitem.id()], {toCache: true})
         .subscribe(liStruct => this.lineitem = liStruct.lineitem);
     }
 

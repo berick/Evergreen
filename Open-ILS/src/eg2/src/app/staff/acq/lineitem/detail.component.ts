@@ -41,8 +41,10 @@ export class LineitemDetailComponent implements OnInit {
         this.lineitem = null;
         // Avoid pulling from cache since li's do not have marc()
         // fleshed by default.
-        return this.liService.getFleshedLineitems([this.lineitemId], false, true)
-        .pipe(tap(liStruct => this.lineitem = liStruct.lineitem)).toPromise();
+        return this.liService.getFleshedLineitems([this.lineitemId], {
+            toCache: true, // OK to cache with marc()
+            fleshMore: {clear_marc: false}
+        }).pipe(tap(liStruct => this.lineitem = liStruct.lineitem)).toPromise();
     }
 
     attrLabel(attr: IdlObject): string {

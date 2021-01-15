@@ -205,7 +205,7 @@
             </a>
             <span class="ml-1 mr-1" i18n> | </span>
             <a class="label-with-material-icon"
-              routerLink="/staff/acq/lineitem/{{li.id()}}/worksheet/">
+              routerLink="lineitem/{{li.id()}}/worksheet/">
               <span class="material-icons small mr-1">create</span>
               <span i18n>Worksheet</span>
             </a>
@@ -296,14 +296,30 @@
             <div class="flex-1"></div>
             <div class="mr-2">
               <ng-container [ngSwitch]="li.state()">	
-                <span i18n *ngSwitchCase="'new'" class="text-dark">New</span>
-                <span i18n *ngSwitchCase="'selector-ready'">Selector-Ready</span>
-                <span i18n *ngSwitchCase="'order-ready'">Order-Ready</span>
-                <span i18n *ngSwitchCase="'approved'">Approved</span>
-                <span i18n *ngSwitchCase="'pending-order'" class="text-info">Pending-Order</span>
-                <span i18n *ngSwitchCase="'on-order'" class="text-primary">On-Order</span>
-                <span i18n *ngSwitchCase="'received'" class="text-success">Received</span>
-                <span i18n *ngSwitchCase="'cancelled'" class="text-danger">Canceled</span>
+                <div i18n 
+                  class="p-1 text-dark border border-dark bg-light rounded-lg" 
+                  *ngSwitchCase="'new'">New</div>
+                <div i18n 
+                  class="p-1 text-dark border border-dark bg-light rounded-lg" 
+                  *ngSwitchCase="'selector-ready'">Selector-Ready</div>
+                <div i18n 
+                  class="p-1 text-dark border border-dark bg-light rounded-lg" 
+                  *ngSwitchCase="'order-ready'">Order-Ready</div>
+                <div i18n 
+                  class="p-1 text-dark border border-dark bg-light rounded-lg" 
+                  *ngSwitchCase="'approved'">Approved</div>
+                <div i18n 
+                  class="p-1 text-dark border border-dark bg-light rounded-lg" 
+                  *ngSwitchCase="'pending-order'">Pending-Order</div>
+                <div i18n 
+                  class="p-1 text-primary border border-primary bg-light rounded-lg" 
+                  *ngSwitchCase="'on-order'">On-Order</div>
+                <div i18n 
+                  class="p-1 text-success border border-success bg-light rounded-lg" 
+                  *ngSwitchCase="'received'">Received</div>
+                <div i18n 
+                  class="p-1 text-danger border border-danger bg-light rounded-lg" 
+                  *ngSwitchCase="'cancelled'">Canceled</div>
               </ng-container>
             </div>
             <div class="mr-2">
