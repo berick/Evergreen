@@ -108,7 +108,10 @@ export class ComboboxComponent implements ControlValueAccessor, OnInit, AfterVie
         if (id === undefined) { return; }
 
         // clear on explicit null
-        if (id === null) { this.selected = null; }
+        if (id === null) {
+            this.selected = null;
+            return;
+        }
 
         if (this.entrylist.length) {
             this.selected = this.entrylist.filter(e => e.id === id)[0];
@@ -403,6 +406,7 @@ export class ComboboxComponent implements ControlValueAccessor, OnInit, AfterVie
     }
 
     addAsyncEntry(entry: ComboboxEntry) {
+        if (!entry) { return; }
         // Avoid duplicate async entries
         if (!this.asyncIds['' + entry.id]) {
             this.asyncIds['' + entry.id] = true;
