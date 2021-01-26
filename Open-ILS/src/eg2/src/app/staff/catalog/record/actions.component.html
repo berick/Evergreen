@@ -77,8 +77,7 @@
       <button class="dropdown-item" (click)="recordBucketDialog.open({size: 'lg'})">
         <span i18n>Add To Bucket</span>
       </button>
-      <a class="dropdown-item" 
-        href="/eg/staff/acq/legacy/lineitem/related/{{recId}}?target=bib">
+      <a class="dropdown-item" routerLink="/staff/acq/related/{{recId}}">
         <span i18n>View/Place Orders</span>
       </a>
     </div>
