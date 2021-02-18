@@ -31,6 +31,7 @@ import {CnBrowseResultsComponent} from './cnbrowse/results.component';
 import {SearchTemplatesComponent} from './search-templates.component';
 import {MarcEditModule} from '@eg/staff/share/marc-edit/marc-edit.module';
 import {PreferencesComponent} from './prefs.component';
+import {BarcodesModule} from '@eg/staff/share/barcodes/barcodes.module';
 
 @NgModule({
   declarations: [
@@ -66,6 +67,7 @@ import {PreferencesComponent} from './prefs.component';
     HoldingsModule,
     BookingModule,
     PatronModule,
+    BarcodesModule,
     MarcEditModule
   ],
   providers: [
