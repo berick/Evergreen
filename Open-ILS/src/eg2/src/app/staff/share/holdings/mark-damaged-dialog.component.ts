@@ -27,6 +27,10 @@ export class MarkDamagedDialogComponent
     extends DialogComponent implements OnInit {
 
     @Input() copyId: number;
+
+    // If the item is checked out, ask the API to check it in first.
+    @Input() handleCheckin = false;
+
     copy: IdlObject;
     bibSummary: BibRecordSummary;
     billingTypes: ComboboxEntry[];
@@ -123,10 +127,14 @@ export class MarkDamagedDialogComponent
     markDamaged(args: any) {
         this.chargeResponse = null;
 
-        if (args && args.apply_fines === 'apply') {
+        if (args.apply_fines === 'apply') {
             args.override_amount = this.newCharge;
             args.override_btype = this.newBtype;
             args.override_note = this.newNote;
+        }
+
+        if (this.handleCheckin) {
+            args.handle_checkin = true;
         }
 
         this.net.request(
