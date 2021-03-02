@@ -199,7 +199,8 @@ export class HoldsGridComponent implements OnInit {
         this.cellTextGenerator = {
             title: row => row.title,
             cp_barcode: row => (row.cp_barcode == null) ? '' : row.cp_barcode,
-            patron_barcode: row => row.ucard_barcode
+            patron_barcode: row => row.ucard_barcode,
+            hold_status: row => row.hold_status // TODO labels
         };
     }
 
