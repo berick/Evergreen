@@ -1,4 +1,4 @@
-import {Component, OnInit, Input, ViewChild} from '@angular/core';
+import {Component, OnInit, Input, Output, EventEmitter, ViewChild} from '@angular/core';
 import {Location} from '@angular/common';
 import {Observable, Observer, of} from 'rxjs';
 import {IdlObject} from '@eg/core/idl.service';
@@ -44,6 +44,10 @@ export class HoldsGridComponent implements OnInit {
     @Input() preFetchSetting: string;
 
     @Input() printTemplate: string;
+
+    // Adds a Place Hold grid toolbar button that emits
+    // placeHoldRequested on click.
+    @Input() showPlaceHoldButton = false;
 
     // If set, all holds are fetched on grid load and sorting/paging all
     // happens in the client.  If false, sorting and paging occur on
@@ -144,6 +148,9 @@ export class HoldsGridComponent implements OnInit {
             this.holdsGrid.reload();
         }
     }
+
+    // Notify the caller the place hold button was clicked.
+    @Output() placeHoldRequested: EventEmitter<void> = new EventEmitter<void>();
 
     constructor(
         private ngLocation: Location,
