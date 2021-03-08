@@ -5360,7 +5360,6 @@ sub user_billing_xacts {
                         target_copy 
                         workstation 
                         checkin_workstation 
-                        circ_lib
                     /],
 				    acp =>  [qw/
 					    call_number
