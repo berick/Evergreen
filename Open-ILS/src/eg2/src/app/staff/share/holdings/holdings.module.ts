@@ -1,5 +1,6 @@
 import {NgModule} from '@angular/core';
 import {StaffCommonModule} from '@eg/staff/common.module';
+import {BillingModule} from '@eg/staff/share/billing/billing.module';
 import {HoldingsService} from './holdings.service';
 import {MarkDamagedDialogComponent} from './mark-damaged-dialog.component';
 import {MarkMissingDialogComponent} from './mark-missing-dialog.component';
@@ -22,7 +23,8 @@ import {TransferHoldingsComponent} from './transfer-holdings.component';
       TransferHoldingsComponent
     ],
     imports: [
-        StaffCommonModule
+        StaffCommonModule,
+        BillingModule
     ],
     exports: [
       MarkDamagedDialogComponent,
