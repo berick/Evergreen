@@ -22,6 +22,10 @@ const routes: Routes = [{
     path: ':id',
     redirectTo: ':id/checkout'
   }, {
+    path: ':id/:tab/:xactId/statement',
+    component: PatronComponent,
+    resolve: {resolver : PatronResolver}
+  }, {
     path: ':id/:tab',
     component: PatronComponent,
     resolve: {resolver : PatronResolver}
