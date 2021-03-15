@@ -3,11 +3,15 @@ import {RouterModule, Routes} from '@angular/router';
 import {PatronComponent} from './patron.component';
 import {BcSearchComponent} from './bcsearch.component';
 import {PatronResolver} from './resolver.service';
+import {TestPatronPasswordComponent} from './test-password.component';
 
 const routes: Routes = [{
     path: '',
     pathMatch: 'full',
     redirectTo: 'search'
+  }, {
+    path: 'credentials',
+    component: TestPatronPasswordComponent
   }, {
     path: 'search',
     component: PatronComponent,
