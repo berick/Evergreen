@@ -12,12 +12,12 @@ export class DateUtil {
      */
     static intervalToSeconds(interval: string): number {
         const d = new Date();
-        let start = d.getTime();
+        const start = d.getTime();
         const parts = interval.split(' ');
 
-        for(let i = 0; i < parts.length; i += 2)  {
+        for (let i = 0; i < parts.length; i += 2)  {
 
-            if (!parts[i+1]) {
+            if (!parts[i + 1]) {
                 // interval is a bare hour:min:sec string
                 const times = parts[i].split(':');
                 d.setHours(d.getHours() + Number(times[0]));
@@ -27,7 +27,7 @@ export class DateUtil {
             }
 
             const count = Number(parts[i]);
-            const partType = parts[i+1].replace(/s?,?$/, '');
+            const partType = parts[i + 1].replace(/s?,?$/, '');
 
             if (partType.match(/^s/)) {
                 d.setSeconds(d.getSeconds() + count);
