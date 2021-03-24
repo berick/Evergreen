@@ -41,7 +41,24 @@ interface OrgDisplay {
 export class OrgSelectComponent implements OnInit {
     static domId = 0;
 
-    selected: OrgDisplay;
+    _selected: OrgDisplay;
+    set selected(s: OrgDisplay) {
+        if (s !== this._selected) {
+            this._selected = s;
+
+            // orgChanged() does not fire when the value is cleared,
+            // so emit the onChange here for cleared values only.
+            if (!s) { // may be '' or null
+                this._selected = null;
+                this.onChange.emit(null);
+            }
+        }
+    }
+
+    get selected(): OrgDisplay {
+        return this._selected;
+    }
+
     click$ = new Subject<string>();
     valueFromSetting: number = null;
     sortedOrgs: IdlObject[] = [];
@@ -253,8 +270,6 @@ export class OrgSelectComponent implements OnInit {
     }
 
     // Fired by the typeahead to inform us of a change.
-    // TODO: this does not fire when the value is cleared :( -- implement
-    // change detection on this.selected to look specifically for NULL.
     orgChanged(selEvent: NgbTypeaheadSelectItemEvent) {
         // console.debug('org unit change occurred ' + selEvent.item);
         this.onChange.emit(this.org.get(selEvent.item.id));
