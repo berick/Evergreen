@@ -95,11 +95,6 @@ h5 {font-size: .95rem}
     line-height: inherit;
 }
 
-.mat-icon-shrunk-in-button {
-    line-height: inherit;
-    font-size: 18px;
-}
-
 .input-group .mat-icon-in-button {
     font-size: .88rem !important; /* useful for buttons that cuddle up with inputs */
 }
@@ -107,6 +102,11 @@ h5 {font-size: .95rem}
 .material-icons {
   /** default is 24px which is pretty chunky */
   font-size: 22px;
+}
+
+.mat-icon-shrunk-in-button {
+    line-height: inherit;
+    font-size: 18px;
 }
 
 /* allow spans/labels to vertically orient with material icons */
