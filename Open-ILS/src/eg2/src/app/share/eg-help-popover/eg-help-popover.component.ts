@@ -24,6 +24,11 @@ export class EgHelpPopoverComponent implements OnInit {
     @Input()
     placement = '';
 
+    // Allow for overriding the default button class.
+    // This augments the basic 'btn' class
+    @Input()
+    buttonClass = 'btn-sm';
+
     constructor() { }
 
     ngOnInit() {
