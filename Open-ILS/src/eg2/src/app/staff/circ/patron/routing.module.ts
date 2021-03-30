@@ -12,13 +12,16 @@ const routes: Routes = [{
     redirectTo: 'search'
   }, {
     path: 'register',
-    component: RegisterPatronComponent
+    component: RegisterPatronComponent,
+    resolve: {resolver : PatronResolver}
   }, {
     path: 'register/clone/:cloneId',
-    component: RegisterPatronComponent
+    component: RegisterPatronComponent,
+    resolve: {resolver : PatronResolver}
   }, {
     path: 'register/stage/:stageUsername',
-    component: RegisterPatronComponent
+    component: RegisterPatronComponent,
+    resolve: {resolver : PatronResolver}
   }, {
     path: 'credentials',
     component: TestPatronPasswordComponent
