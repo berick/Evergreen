@@ -48,10 +48,23 @@ export class DateUtil {
     }
 
     // Create a date in the local time zone with selected YMD values.
+    // Note that new Date(ymd) produces a date in UTC.  This version
+    // produces a date in the local time zone.
     static localDateFromYmd(ymd: string): Date {
         const parts = ymd.split('-');
         return new Date(
             Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    }
+
+    // Note that date.toISOString() produces a UTC date, which can have
+    // a different YMD value than a date in the local time zone.
+    // This variation returns values for the local time zone.
+    // Defaults to 'now' if no date is provided.
+    static localYmdFromDate(date?: Date): string {
+        const now = date || new Date();
+        return now.getFullYear() + '-' +
+            (now.getMonth() + '').padStart(2, '0') + '-' +
+            (now.getDate() + '').padStart(2, '0');
     }
 }
 
