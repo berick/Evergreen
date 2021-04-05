@@ -63,7 +63,7 @@ export class DateUtil {
     static localYmdFromDate(date?: Date): string {
         const now = date || new Date();
         return now.getFullYear() + '-' +
-            (now.getMonth() + '').padStart(2, '0') + '-' +
+            ((now.getMonth() + 1) + '').padStart(2, '0') + '-' +
             (now.getDate() + '').padStart(2, '0');
     }
 }
