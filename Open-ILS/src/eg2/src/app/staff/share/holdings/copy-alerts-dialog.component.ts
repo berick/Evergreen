@@ -177,7 +177,7 @@ export class CopyAlertsDialogComponent
 
     applyChanges() {
         const alerts = this.copy.copy_alerts().filter(a => a.ischanged());
-        if (alerts.length === 0) { return; }
+        if (alerts.length === 0) { this.close(this.changesMade); }
         this.pcrud.update(alerts).toPromise().then(
             ok => this.successMsg.current().then(msg => this.toast.success(msg)),
             err => this.errorMsg.current().then(msg => this.toast.danger(msg))
