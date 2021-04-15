@@ -10,6 +10,7 @@ import {DeleteHoldingDialogComponent} from './delete-volcopy-dialog.component';
 import {ConjoinedItemsDialogComponent} from './conjoined-items-dialog.component';
 import {TransferItemsComponent} from './transfer-items.component';
 import {TransferHoldingsComponent} from './transfer-holdings.component';
+import {CopyAlertManagerDialogComponent} from './copy-alert-manager.component';
 
 @NgModule({
     declarations: [
@@ -20,7 +21,8 @@ import {TransferHoldingsComponent} from './transfer-holdings.component';
       DeleteHoldingDialogComponent,
       ConjoinedItemsDialogComponent,
       TransferItemsComponent,
-      TransferHoldingsComponent
+      TransferHoldingsComponent,
+      CopyAlertManagerDialogComponent
     ],
     imports: [
         StaffCommonModule,
@@ -34,7 +36,8 @@ import {TransferHoldingsComponent} from './transfer-holdings.component';
       DeleteHoldingDialogComponent,
       ConjoinedItemsDialogComponent,
       TransferItemsComponent,
-      TransferHoldingsComponent
+      TransferHoldingsComponent,
+      CopyAlertManagerDialogComponent
     ],
     providers: [
         HoldingsService

@@ -2,6 +2,7 @@
  * Common code for mananging holdings
  */
 import {Injectable, EventEmitter} from '@angular/core';
+import {tap} from 'rxjs/operators';
 import {NetService} from '@eg/core/net.service';
 import {AnonCacheService} from '@eg/share/util/anon-cache.service';
 import {PcrudService} from '@eg/core/pcrud.service';
@@ -18,6 +19,8 @@ interface NewCallNumData {
 
 @Injectable()
 export class HoldingsService {
+
+    copyStatuses: {[id: number]: IdlObject};
 
     constructor(
         private net: NetService,
@@ -78,6 +81,17 @@ export class HoldingsService {
                 return resp[0].id;
             }
         });
+    }
+
+    getCopyStatuses(): Promise<{[id: number]: IdlObject}> {
+        if (this.copyStatuses) {
+            return Promise.resolve(this.copyStatuses);
+        }
+
+        this.copyStatuses = {};
+        return this.pcrud.retrieveAll('ccs', {order_by: {ccs: 'name'}})
+        .pipe(tap(stat => this.copyStatuses[stat.id()] = stat))
+        .toPromise().then(_ => this.copyStatuses);
     }
 }
 
