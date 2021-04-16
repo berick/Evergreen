@@ -2,7 +2,7 @@
  * Collection of grid related classses and interfaces.
  */
 import {TemplateRef, EventEmitter, QueryList} from '@angular/core';
-import {Observable, Subscription} from 'rxjs';
+import {Observable, Subscription, empty} from 'rxjs';
 import {IdlService, IdlObject} from '@eg/core/idl.service';
 import {OrgService} from '@eg/core/org.service';
 import {ServerStoreService} from '@eg/core/server-store.service';
@@ -41,6 +41,7 @@ export class GridColumn {
     disableTooltip: boolean;
     asyncSupportsEmptyTermClick: boolean;
     comparator: (valueA: any, valueB: any) => number;
+    required = false;
 
     // True if the column was automatically generated.
     isAuto: boolean;
@@ -272,6 +273,12 @@ export class GridColumnSet {
 
     displayColumns(): GridColumn[] {
         return this.columns.filter(c => c.visible);
+    }
+
+    requiredColumns(): GridColumn[] {
+        const visible = this.displayColumns();
+        return visible.concat(
+            this.columns.filter(c => c.required && !c.visible));
     }
 
     insertBefore(source: GridColumn, target: GridColumn) {
@@ -535,6 +542,7 @@ export class GridContext {
     disablePaging: boolean;
     showDeclaredFieldsOnly: boolean;
     cellTextGenerator: GridCellTextGenerator;
+    reloadOnColumnChange: boolean;
 
     // Allow calling code to know when the select-all-rows-in-page
     // action has occurred.
@@ -769,10 +777,10 @@ export class GridContext {
     getRowColumnValue(row: any, col: GridColumn): string {
         let val;
 
-        if (col.path) {
-            val = this.nestedItemFieldValue(row, col);
-        } else if (col.name in row) {
+        if (col.name in row) {
             val = this.getObjectFieldValue(row, col.name);
+        } else {
+            val = this.nestedItemFieldValue(row, col);
         }
 
         if (col.datatype === 'bool') {
@@ -1183,15 +1191,20 @@ export class GridToolbarCheckbox {
     onChange: EventEmitter<boolean>;
 }
 
+export interface GridColumnSort {
+    name: string;
+    dir: string;
+}
+
 export class GridDataSource {
 
     data: any[];
-    sort: any[];
+    sort: GridColumnSort[];
     filters: Object;
     allRowsRetrieved: boolean;
     requestingData: boolean;
     retrievalError: boolean;
-    getRows: (pager: Pager, sort: any[]) => Observable<any>;
+    getRows: (pager: Pager, sort: GridColumnSort[]) => Observable<any>;
 
     constructor() {
         this.sort = [];
@@ -1270,5 +1283,4 @@ export class GridDataSource {
         }
     }
 }
-
 
