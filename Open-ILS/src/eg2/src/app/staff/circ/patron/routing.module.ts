@@ -44,6 +44,10 @@ const routes: Routes = [{
     component: PatronComponent,
     resolve: {resolver : PatronResolver}
   }, {
+    path: ':id/:tab/history/:billingHistoryTab',
+    component: PatronComponent,
+    resolve: {resolver : PatronResolver}
+  }, {
     path: ':id/:tab',
     component: PatronComponent,
     resolve: {resolver : PatronResolver},
