@@ -1245,6 +1245,7 @@ export class GridToolbarButton {
     onClick: EventEmitter<any []>;
     action: () => any; // DEPRECATED
     disabled: boolean;
+    routerLink: string;
 }
 
 export class GridToolbarCheckbox {
