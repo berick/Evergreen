@@ -216,6 +216,16 @@ $helpers = {
         return new_editor()->retrieve_actor_org_unit($org_id);
     },
 
+    # Useful for accessing hash values whose key contains dots (.), 
+    # which TT interprets as levels within a nested hash.
+    #
+    # e.g.  So you don't have to do stuff like this:
+    # SET field = 'summary.balance_owed'; xact.$field
+    hashval => sub {
+        my ($hash, $key) = @_;
+        return $hash ? $hash->{$key} : undef;
+    }
+
 };
 
 
