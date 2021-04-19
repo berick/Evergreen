@@ -116,6 +116,7 @@ export class GridColumnSet {
         this.applyColumnFilterability(col);
     }
 
+
     // Returns true if the new column was inserted, false otherwise.
     // Declared columns take precedence over auto-generated columns
     // when collisions occur.
@@ -779,7 +780,7 @@ export class GridContext {
 
         if (col.name in row) {
             val = this.getObjectFieldValue(row, col.name);
-        } else {
+        } else if (col.path) {
             val = this.nestedItemFieldValue(row, col);
         }
 
