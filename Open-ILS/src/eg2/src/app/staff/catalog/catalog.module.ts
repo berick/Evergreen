@@ -32,6 +32,7 @@ import {SearchTemplatesComponent} from './search-templates.component';
 import {MarcEditModule} from '@eg/staff/share/marc-edit/marc-edit.module';
 import {PreferencesComponent} from './prefs.component';
 import {BarcodesModule} from '@eg/staff/share/barcodes/barcodes.module';
+import {WorkLogModule} from '@eg/staff/share/worklog/worklog.module';
 
 @NgModule({
   declarations: [
@@ -68,7 +69,8 @@ import {BarcodesModule} from '@eg/staff/share/barcodes/barcodes.module';
     BookingModule,
     PatronModule,
     BarcodesModule,
-    MarcEditModule
+    MarcEditModule,
+    WorkLogModule
   ],
   providers: [
     StaffCatalogService
