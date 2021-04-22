@@ -20,6 +20,7 @@ import {PatronSearchDialogComponent
     } from '@eg/staff/share/patron/search-dialog.component';
 import {BarcodeSelectComponent
     } from '@eg/staff/share/barcodes/barcode-select.component';
+import {WorkLogService} from '@eg/staff/share/worklog/worklog.service';
 
 class HoldContext {
     holdMeta: HoldRequestTarget;
@@ -111,7 +112,8 @@ export class HoldComponent implements OnInit {
         private staffCat: StaffCatalogService,
         private holds: HoldsService,
         private patron: PatronService,
-        private perm: PermService
+        private perm: PermService,
+        private worklog: WorkLogService
     ) {
         this.holdContexts = [];
         this.smsCarriers = [];
@@ -136,7 +138,8 @@ export class HoldComponent implements OnInit {
         }
 
         this.store.getItem('circ.staff_placed_holds_fallback_to_ws_ou')
-        .then(setting => this.puLibWsFallback = setting === true);
+        .then(setting => this.puLibWsFallback = setting === true)
+        .then(_ => this.worklog.loadSettings())
 
         this.org.list().forEach(org => {
             if (org.ou_type().can_have_vols() === 'f') {
@@ -578,6 +581,13 @@ export class HoldComponent implements OnInit {
 
                 if (request.result.success) {
                     ctx.success = true;
+
+                    this.worklog.record({
+                        action: 'requested_hold',
+                        hold_id: request.result.holdId,
+                        patron_id: this.user.id(),
+                        user: this.user.family_name()
+                    });
 
                     // Overrides are processed one hold at a time, so
                     // we have to invoke the post-holds logic here
