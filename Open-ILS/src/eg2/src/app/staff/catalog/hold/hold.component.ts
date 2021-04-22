@@ -139,7 +139,7 @@ export class HoldComponent implements OnInit {
 
         this.store.getItem('circ.staff_placed_holds_fallback_to_ws_ou')
         .then(setting => this.puLibWsFallback = setting === true)
-        .then(_ => this.worklog.loadSettings())
+        .then(_ => this.worklog.loadSettings());
 
         this.org.list().forEach(org => {
             if (org.ou_type().can_have_vols() === 'f') {
