@@ -42,7 +42,7 @@ export class PrintService {
         private store: StoreService
     ) {
         this.onPrintRequest$ = new EventEmitter<PrintRequest>();
-		this.printJobQueued$ = new EventEmitter<PrintRequest>();
+        this.printJobQueued$ = new EventEmitter<PrintRequest>();
     }
 
     print(printReq: PrintRequest) {
