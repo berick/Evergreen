@@ -26,6 +26,9 @@ export class StaffNavComponent implements OnInit, OnDestroy {
     // When active, show a link to the experimental Angular staff catalog
     showAngularCatalog: boolean;
     curbsideEnabled: boolean;
+    showAngularCirc = false; // ui.staff.angular_circ.enabled
+    showRecentPatron = false;
+    showRecentPatrons = false;
 
     @ViewChild('navOpChange', {static: false}) opChange: OpChangeComponent;
     permFailedSub: Subscription;
@@ -72,6 +75,17 @@ export class StaffNavComponent implements OnInit, OnDestroy {
         this.permFailedSub =
             this.net.permFailed$.subscribe(
                 (req: NetRequest) => this.opChange.escalateRequest(req));
+
+        this.org.settings([
+            'ui.staff.angular_circ.enabled',
+            'ui.staff.max_recent_patrons'
+        ])
+        .then(sets => {
+            this.showAngularCirc = sets['ui.staff.angular_circ.enabled'];
+            const maxRecent = Number(sets['ui.staff.max_recent_patrons']);
+            this.showRecentPatron = maxRecent > 0;
+            this.showRecentPatrons = maxRecent > 1;
+        });
     }
 
     ngOnDestroy() {

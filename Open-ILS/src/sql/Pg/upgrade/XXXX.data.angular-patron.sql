@@ -422,7 +422,7 @@ UPDATE config.print_template SET template = $TEMPLATE$
   <div>Printed by [% staff.first_given_name %] at [% staff_org.shortname %]</div>
 </div>
 
-$TEMPLATE$ WHERE name = 'transit_slip';
+$TEMPLATE$ WHERE name = 'hold_transit_slip';
 
 INSERT INTO config.print_template 
     (name, label, owner, active, locale, content_type, template)
@@ -640,6 +640,22 @@ UPDATE config.print_template SET template = $TEMPLATE$
 </div>
 
 $TEMPLATE$ WHERE name = 'renew';
+
+INSERT into config.org_unit_setting_type (name, grp, label, description, datatype)
+VALUES ( 
+    'ui.staff.angular_circ.enabled', 'gui',
+    oils_i18n_gettext(
+        'ui.staff.angular_circ.enabled',
+        'Enable Angular Circulation Menu',
+        'coust', 'label'
+    ), 
+    oils_i18n_gettext(
+        'ui.staff.angular_circ.enabled',
+        'Enable the Circulation menu for the experimental Angular Circulation UIs',
+        'coust', 'description'
+    ),
+    'bool'
+);
 
 COMMIT;
 

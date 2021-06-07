@@ -23,10 +23,6 @@
             <span class="material-icons" aria-hidden="true">person</span>
             <span i18n>Search for Patrons</span>
           </a>
-          <a class="dropdown-item" routerLink="/staff/circ/patron/search">
-            <span class="material-icons" aria-hidden="true">person</span>
-            <span i18n>Search for Patrons (Experimental)</span>
-          </a>
           <a class="dropdown-item" href="/eg/staff/cat/item/search">
             <span class="material-icons" aria-hidden="true">assignment</span>
             <span i18n>Search for Items by Barcode</span>
@@ -59,12 +55,6 @@
             <span class="material-icons" aria-hidden="true">trending_down</span>
             <span i18n>Check In</span>
           </a>
-          <a class="dropdown-item" routerLink="/staff/circ/checkin"
-            egAccessKey keyCtx="navbar" i18n-keySpec i18n-keyDesc
-            keySpec="alt+f2" keyDesc="Checkin">
-            <span class="material-icons" aria-hidden="true">trending_down</span>
-            <span i18n>Check In (Experimental)</span>
-          </a>
           <a class="dropdown-item" href="/eg/staff/circ/checkin/capture"
             egAccessKey keyCtx="navbar" i18n-keySpec i18n-keyDesc
             keySpec="shift+f2" keyDesc="Capture Holds">
@@ -85,10 +75,6 @@
             <span class="material-icons" aria-hidden="true">autorenew</span>
             <span i18n>Renew Items</span>
           </a>
-          <a class="dropdown-item" routerLink="/staff/circ/renew">
-            <span class="material-icons" aria-hidden="true">autorenew</span>
-            <span i18n>Renew Items (Experimental)</span>
-          </a>
           <a class="dropdown-item" href="/eg/staff/circ/patron/register"
             egAccessKey keyCtx="navbar" i18n-keySpec i18n-keyDesc
             keySpec="shift+f1" keyDesc="Register Patron">
@@ -101,7 +87,7 @@
             <span class="material-icons" aria-hidden="true">redo</span>
             <span i18n>Retrieve Last Patron</span>
           </a>
-          <a class="dropdown-item" routerLink="/staff/circ/patron/search/recents">
+          <a class="dropdown-item" href="/eg/staff/circ/patron/search?show_recent=1">
             <span class="material-icons" aria-hidden="true">redo</span>
             <span i18n>Retrieve Recent Patrons</span>
           </a>
@@ -163,6 +149,56 @@
           <a *ngIf="curbsideEnabled" class="dropdown-item" href="/eg/staff/circ/curbside/index">
             <span class="material-icons">directions_bus</span>
             <span i18n>Curbside Pickup</span>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- 
+      Experimental Circulation Interfaces.
+      Note when these are upgraded to be the real thing, access key
+      attributes will need to be applied
+    -->
+    <div class="navbar-nav" *ngIf="showAngularCirc">
+      <div ngbDropdown class="nav-item dropdown">
+        <a ngbDropdownToggle class="nav-link dropdown-toggle">
+         <span i18n>Circulation (Experimental)</span>
+        </a>
+        <div class="dropdown-menu" ngbDropdownMenu>
+          <a class="dropdown-item" routerLink="/staff/circ/patron/search">
+            <span class="material-icons" aria-hidden="true">person</span>
+            <span i18n>Search for Patrons</span>
+          </a>
+          <div class="dropdown-divider"></div>
+          <a class="dropdown-item" routerLink="/staff/circ/patron/bcsearch">
+            <span class="material-icons" aria-hidden="true">trending_up</span>
+            <span i18n>Check Out</span>
+          </a>
+          <a class="dropdown-item" routerLink="/staff/circ/checkin">
+            <span class="material-icons" aria-hidden="true">trending_down</span>
+            <span i18n>Check In</span>
+          </a>
+          <a class="dropdown-item" routerLink="/staff/circ/checkin/capture">
+            <span class="material-icons" aria-hidden="true">pin_drop</span>
+            <span i18n>Capture Holds</span>
+          </a>
+          <a class="dropdown-item" routerLink="/staff/circ/renew">
+            <span class="material-icons" aria-hidden="true">autorenew</span>
+            <span i18n>Renew Items</span>
+          </a>
+          <a class="dropdown-item" routerLink="/staff/circ/patron/register">
+            <span class="material-icons" aria-hidden="true">person_add</span>
+            <span i18n>Register Patron</span>
+          </a>
+          <a class="dropdown-item" routerLink="/staff/circ/patron/last"
+            *ngIf="showRecentPatron">
+            <span class="material-icons" aria-hidden="true">redo</span>
+            <span i18n>Retrieve Last Patron</span>
+          </a>
+          <a class="dropdown-item" routerLink="/staff/circ/patron/search/recents"
+            *ngIf="showRecentPatrons">
+            <span class="material-icons" aria-hidden="true">redo</span>
+            <span i18n>Retrieve Recent Patrons</span>
           </a>
         </div>
       </div>

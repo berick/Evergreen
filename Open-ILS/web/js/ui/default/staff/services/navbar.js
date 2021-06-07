@@ -123,6 +123,7 @@ angular.module('egCoreMod')
                             egCore.org.settings([
                                 'ui.staff.max_recent_patrons',
                                 'ui.staff.angular_catalog.enabled',
+                                'ui.staff.angular_circ.enabled',
                                 'circ.curbside'
                             ]).then(function(s) {
                                 var val = s['ui.staff.max_recent_patrons'];
@@ -131,6 +132,8 @@ angular.module('egCoreMod')
 
                                 $scope.showAngularCatalog = 
                                     s['ui.staff.angular_catalog.enabled'];
+                                $scope.showAngularCirc = 
+                                    s['ui.staff.angular_circ.enabled'];
                                 $scope.enableCurbside = 
                                     s['circ.curbside'];
                             }).then(function() {

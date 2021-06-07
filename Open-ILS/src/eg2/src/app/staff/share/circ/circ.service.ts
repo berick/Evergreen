@@ -1187,7 +1187,7 @@ export class CircService {
         return this.components.badBarcodeDialog.open().toPromise()
         // Avoid prompting again on an override
         .then(response => {
-            params._checkbarcode = false
+            params._checkbarcode = false;
             return response;
         });
     }
