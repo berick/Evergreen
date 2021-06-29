@@ -87,6 +87,7 @@ export class GridColumnComponent implements OnInit {
         col.timezoneContextOrg = this.timezoneContextOrg;
         col.idlClass = this.idlClass;
         col.isAuto = false;
+
         this.grid.context.columnSet.add(col);
 
         if (this.cellTemplate &&
