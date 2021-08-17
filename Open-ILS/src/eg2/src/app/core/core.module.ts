@@ -6,7 +6,6 @@
  */
 import {NgModule} from '@angular/core';
 import {CommonModule, DatePipe, DecimalPipe} from '@angular/common';
-import {CommonModule, DatePipe, CurrencyPipe} from '@angular/common';
 import {FormatService, FormatValuePipe, OrgDateInContextPipe, DueDatePipe} from './format.service';
 
 @NgModule({
