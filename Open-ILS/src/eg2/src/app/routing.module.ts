@@ -17,6 +17,10 @@ const routes: Routes = [
     path: 'staff',
     resolve : {startup : BaseResolver},
     loadChildren: () => import('./staff/staff.module').then(m => m.StaffModule)
+  }, {
+    path: 'scko',
+    resolve : {startup : BaseResolver},
+    loadChildren: () => import('./scko/scko.module').then(m => m.SckoModule)
   }
 ];
 
