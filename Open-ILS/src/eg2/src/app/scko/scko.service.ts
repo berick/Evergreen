@@ -15,9 +15,7 @@ export class SckoService {
     constructor(
         private net: NetService,
         public auth: AuthService
-    ) {
-        this.auth.storePrefix = 'eg.scko';
-    }
+    ) {}
 }
 
 
