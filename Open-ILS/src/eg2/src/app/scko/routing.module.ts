@@ -4,7 +4,12 @@ import {SckoComponent} from './scko.component';
 
 const routes: Routes = [{
   path: '',
-  component: SckoComponent
+  component: SckoComponent,
+  /*
+  children: [{
+
+  }]
+  */
 }];
 
 @NgModule({
