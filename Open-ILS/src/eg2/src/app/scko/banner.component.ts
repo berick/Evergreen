@@ -14,15 +14,16 @@ import {OrgService} from '@eg/core/org.service';
 export class SckoBannerComponent implements OnInit {
 
     workstations: any[];
-    loginFailed = false;
     workstationNotFound = false;
 
     patronUsername: string;
     patronPassword: string;
+    patronLoginFailed = false;
 
     staffUsername: string;
     staffPassword: string;
     staffWorkstation: string;
+    staffLoginFailed = false;
 
     constructor(
         private route: ActivatedRoute,
@@ -36,10 +37,6 @@ export class SckoBannerComponent implements OnInit {
     ngOnInit() {
 
         const node = document.getElementById('staff-username');
-
-        console.log('PFX', this.scko.auth.storePrefix);
-        console.log(this.scko.auth.token());
-        console.log(this.scko.auth.user());
 
         // NOTE: Displaying a list of workstations will not work for users
         // of Hatch until the extension is updated to support /eg2/*/scko
@@ -67,7 +64,7 @@ export class SckoBannerComponent implements OnInit {
 
     submitStaffLogin() {
 
-        this.loginFailed = false;
+        this.staffLoginFailed = false;
 
         const args = {
             type: 'persistent',
@@ -76,14 +73,14 @@ export class SckoBannerComponent implements OnInit {
             workstation: this.staffWorkstation
         };
 
-        this.loginFailed = false;
+        this.staffLoginFailed = false;
         this.workstationNotFound = false;
 
         this.auth.login(args).then(
             ok => {
 
                 if (this.auth.workstationState === AuthWsState.NOT_FOUND_SERVER) {
-                    this.loginFailed = true;
+                    this.staffLoginFailed = true;
                     this.workstationNotFound = true;
 
                 } else {
@@ -93,8 +90,6 @@ export class SckoBannerComponent implements OnInit {
                     this.org.clearCachedSettings().then(_ => {
 
                         // Force reload of the app after a successful login.
-                        // This allows the route resolver to re-run with a
-                        // valid auth token and workstation.
                         window.location.href =
                             this.ngLocation.prepareExternalUrl('/scko');
 
@@ -102,12 +97,17 @@ export class SckoBannerComponent implements OnInit {
                 }
             },
             notOk => {
-                this.loginFailed = true;
+                this.staffLoginFailed = true;
             }
         );
     }
 
     submitPatronLogin() {
+        this.patronLoginFailed = false;
+        this.scko.loadPatron(this.patronUsername, this.patronPassword)
+        .finally(() => {
+            this.patronLoginFailed = this.scko.patron === null;
+        });
     }
 }
 

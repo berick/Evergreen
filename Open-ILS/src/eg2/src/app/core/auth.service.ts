@@ -41,7 +41,7 @@ export enum AuthWsState {
 export class AuthService {
 
     // Override this to store authtokens, etc. in a different location
-    storePrefix = 'eg.auth';
+    authDomain = 'eg.auth';
 
     private authChannel: any;
 
@@ -65,7 +65,7 @@ export class AuthService {
 
     // Returns true if we are currently in op-change mode.
     opChangeIsActive(): boolean {
-        return Boolean(this.store.getLoginSessionItem(`${this.storePrefix}.time.oc`));
+        return Boolean(this.store.getLoginSessionItem(`${this.authDomain}.time.oc`));
     }
 
     // - Accessor functions always refer to the active user.
@@ -95,8 +95,8 @@ export class AuthService {
             // Only necessary on new page loads.  During op-change,
             // for example, we already have an activeUser.
             this.activeUser = new AuthUser(
-                this.store.getLoginSessionItem(`${this.storePrefix}.token`),
-                this.store.getLoginSessionItem(`${this.storePrefix}.time`)
+                this.store.getLoginSessionItem(`${this.authDomain}.token`),
+                this.store.getLoginSessionItem(`${this.authDomain}.time`)
             );
         }
 
@@ -178,8 +178,8 @@ export class AuthService {
     handleLoginOk(args: AuthLoginArgs, evt: EgEvent, isOpChange: boolean): Promise<void> {
 
         if (isOpChange) {
-            this.store.setLoginSessionItem(`${this.storePrefix}.token.oc`, this.token());
-            this.store.setLoginSessionItem(`${this.storePrefix}.time.oc`, this.authtime());
+            this.store.setLoginSessionItem(`${this.authDomain}.token.oc`, this.token());
+            this.store.setLoginSessionItem(`${this.authDomain}.time.oc`, this.authtime());
         }
 
         this.activeUser = new AuthUser(
@@ -188,8 +188,8 @@ export class AuthService {
             args.workstation
         );
 
-        this.store.setLoginSessionItem(`${this.storePrefix}.token`, this.token());
-        this.store.setLoginSessionItem(`${this.storePrefix}.time`, this.authtime());
+        this.store.setLoginSessionItem(`${this.authDomain}.token`, this.token());
+        this.store.setLoginSessionItem(`${this.authDomain}.time`, this.authtime());
 
         return Promise.resolve();
     }
@@ -198,14 +198,14 @@ export class AuthService {
         if (this.opChangeIsActive()) {
             this.deleteSession();
             this.activeUser = new AuthUser(
-                this.store.getLoginSessionItem(`${this.storePrefix}.token.oc`),
-                this.store.getLoginSessionItem(`${this.storePrefix}.time.oc`),
+                this.store.getLoginSessionItem(`${this.authDomain}.token.oc`),
+                this.store.getLoginSessionItem(`${this.authDomain}.time.oc`),
                 this.activeUser.workstation
             );
-            this.store.removeLoginSessionItem(`${this.storePrefix}.token.oc`);
-            this.store.removeLoginSessionItem(`${this.storePrefix}.time.oc`);
-            this.store.setLoginSessionItem(`${this.storePrefix}.token`, this.token());
-            this.store.setLoginSessionItem(`${this.storePrefix}.time`, this.authtime());
+            this.store.removeLoginSessionItem(`${this.authDomain}.token.oc`);
+            this.store.removeLoginSessionItem(`${this.authDomain}.time.oc`);
+            this.store.setLoginSessionItem(`${this.authDomain}.token`, this.token());
+            this.store.setLoginSessionItem(`${this.authDomain}.time`, this.authtime());
         }
         // Re-fetch the user.
         return this.testAuthToken();

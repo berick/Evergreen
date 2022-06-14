@@ -16,13 +16,15 @@
 
             <input type="text" class="form-control border border-dark shadow-rounded" 
               autocomplete="off" id="patron-username" required 
-              [(ngModel)]="patronUsername" placeholder="Username or Barcode" i18n-placeholder>
+              [(ngModel)]="patronUsername" name="patron-username"
+              placeholder="Username or Barcode" i18n-placeholder>
 
             <label class="sr-only" for="patron-password" i18n>Password</label>
 
             <input type="password" class="form-control shadow border border-dark rounded ml-2" 
               autocomplete="off" id="patron-password" required
-              [(ngModel)]="patronUsername" placeholder="Password" i18n-placeholder>
+              [(ngModel)]="patronUsername" name="patron-password"
+              placeholder="Password" i18n-placeholder>
 
             <button type="submit" class="btn btn-dark ml-2">Submit</button>
           </form>
