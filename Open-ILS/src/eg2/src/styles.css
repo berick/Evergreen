@@ -160,7 +160,8 @@ h5 {font-size: .95rem}
 .sticky-top-with-nav {
   top: 48px;
   position: sticky;
-  z-index: 1;
+  /* Sticky menus display above sticky grid headers */
+  z-index: 2;
 }
 
 /* --------------------------------------------------------------------------
