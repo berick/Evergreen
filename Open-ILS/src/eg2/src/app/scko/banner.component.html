@@ -14,6 +14,8 @@
           <form (ngSubmit)="submitPatronLogin()" #patronLoginForm="ngForm"
             autocomplete="off" class="form-validated form-inline">
 
+            <label class="sr-only" for="patron-username" i18n>Username</label>
+
             <input type="text" class="form-control border border-dark shadow-rounded" 
               autocomplete="off" id="patron-username" required 
               [(ngModel)]="patronUsername" name="patron-username"
@@ -30,6 +32,32 @@
           </form>
         </div>
         <div class="flex-1"></div>
+      </div>
+    </ng-container>
+
+    <ng-container *ngIf="scko.patron">
+      <div id="scko-scan-input-text" i18n>Please enter an item barcode</div>
+      <div class="d-flex mt-3 mb-3">
+        <div class="flex-1"></div>
+        <div>
+          <form (ngSubmit)="submitBarcode()" #barcodeForm="ngForm"
+            autocomplete="off" class="form-validated form-inline">
+
+            <label class="sr-only" for="item-barcode" i18n>Item Barcode</label>
+
+            <input type="text" class="form-control border border-dark shadow-rounded" 
+              autocomplete="off" id="item-barcode" required 
+              [(ngModel)]="itemBarcode" name="item-barcode"
+              placeholder="Item Barcode" i18n-placeholder>
+
+          </form>
+        </div>
+        <div class="flex-1 d-flex">
+          <div class="flex-1"></div>
+          <div id="scko-welcome-message" class="mr-2 rounded" i18n>Welcome,
+            {{scko.patron.pref_first_given_name() || scko.patron.first_given_name()}}
+          </div>
+        </div>
       </div>
     </ng-container>
 

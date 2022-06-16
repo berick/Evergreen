@@ -8,11 +8,13 @@ import {SckoComponent} from './scko.component';
 import {SckoRoutingModule} from './routing.module';
 import {SckoService} from './scko.service';
 import {SckoBannerComponent} from './banner.component';
+import {SckoSummaryComponent} from './summary.component';
 
 @NgModule({
   declarations: [
     SckoComponent,
     SckoBannerComponent,
+    SckoSummaryComponent,
   ],
   imports: [
     EgCommonModule,

@@ -27,6 +27,8 @@ export class SckoBannerComponent implements OnInit {
     staffWorkstation: string;
     staffLoginFailed = false;
 
+    itemBarcode: string;
+
     constructor(
         private route: ActivatedRoute,
         private store: StoreService,
@@ -181,6 +183,10 @@ export class SckoBannerComponent implements OnInit {
 
             this.scko.patron = patron;
         });
+    }
+
+    submitBarcode() {
+        console.log('Submitting barcode ', this.itemBarcode);
     }
 
 }
