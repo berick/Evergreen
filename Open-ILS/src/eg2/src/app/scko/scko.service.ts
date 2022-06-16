@@ -14,6 +14,13 @@ export class SckoService {
     barcodeRegex: RegExp;
     patronPasswordRequired = false;
 
+    sessionTotalCheckouts = 0;
+    accountTotalCheckouts = 0;
+
+    totalHolds = 0;
+    holdsReady = 0;
+    totalFines = 0;
+
     constructor(
         private net: NetService,
         private evt: EventService,

@@ -36,19 +36,25 @@
 
   <fieldset>
     <legend i18n>Items Checked Out</legend>
-    <div id='oils-selfck-circ-session-total'></div>
-    <div id='oils-selfck-circ-account-total'></div>
     <div>
-      <a href='javascript:void(0);' id='oils-selfck-items-out-details-link'>
+      <span i18n>Total items this session: </span>
+      <span>{{scko.sessionTotalCheckouts}}</span>
+    </div>
+    <div class="mt-2">
+      <span i18n>Total items on account: </span>
+      <span>{{scko.accountTotalCheckouts}}</span>
+    </div>
+    <div class="mt-2">
+      <a (click)="null">
         <button type="button" class="scko-button" i18n>View Items Out</button>
       </a>
     </div>
   </fieldset>
   <fieldset>
     <legend i18n>Holds</legend>
-    <div id='oils-selfck-holds-ready'></div>
-    <div id='oils-selfck-holds-total'></div>
-    <div>
+    <div i18n>You have {{scko.holdsReady}} item(s) ready for pickup</div>
+    <div class="mt-2" i18n>You have {{scko.totalHolds}} total holds</div>
+    <div class="mt-2">
       <a href='javascript:void(0);' id='oils-selfck-hold-details-link'>
         <button type="button" class="scko-button" i18n>View Holds</button>
       </a>
@@ -56,8 +62,8 @@
   </fieldset>
   <fieldset>
     <legend i18n>Fines</legend>
-    <div id='oils-selfck-fines-total'></div>
-    <div>
+    <div>{{scko.totalFines | currency}}</div>
+    <div class="mt-2">
       <span>
         <a href='javascript:void(0);' id='oils-selfck-view-fines-link'>
           <button type="button" class="scko-button" i18n>View Details</button>
