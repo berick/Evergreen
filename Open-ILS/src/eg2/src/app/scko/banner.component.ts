@@ -2,9 +2,11 @@ import {Component, OnInit, NgZone, HostListener} from '@angular/core';
 import {Location} from '@angular/common';
 import {Router, ActivatedRoute, NavigationEnd} from '@angular/router';
 import {AuthService, AuthWsState} from '@eg/core/auth.service';
+import {NetService} from '@eg/core/net.service';
 import {StoreService} from '@eg/core/store.service';
 import {SckoService} from './scko.service';
 import {OrgService} from '@eg/core/org.service';
+import {EventService, EgEvent} from '@eg/core/event.service';
 
 @Component({
   selector: 'eg-scko-banner',
@@ -28,7 +30,9 @@ export class SckoBannerComponent implements OnInit {
     constructor(
         private route: ActivatedRoute,
         private store: StoreService,
+        private net: NetService,
         private auth: AuthService,
+        private evt: EventService,
         private ngLocation: Location,
         private org: OrgService,
         public scko: SckoService
@@ -104,10 +108,80 @@ export class SckoBannerComponent implements OnInit {
 
     submitPatronLogin() {
         this.patronLoginFailed = false;
-        this.scko.loadPatron(this.patronUsername, this.patronPassword)
-        .finally(() => {
+        this.loadPatron().finally(() => {
             this.patronLoginFailed = this.scko.patron === null;
         });
     }
+
+    loadPatron(): Promise<any> {
+        this.scko.patron = null;
+
+        if (!this.patronUsername) { return; }
+
+        let username;
+        let barcode;
+
+        if (this.patronUsername.match(this.scko.barcodeRegex)) {
+            barcode = this.patronUsername;
+        } else {
+            username = this.patronUsername;
+        }
+
+        if (this.scko.patronPasswordRequired) {
+            // TODO verify password
+
+            return this.net.request(
+                'open-ils.actor',
+                'open-ils.actor.verify_user_password',
+                this.auth.token(), barcode, username, null, this.patronPassword)
+
+            .toPromise().then(verified => {
+                if (Number(verified) === 1) {
+                    return this.fetchPatron(username, barcode);
+                } else {
+                    return Promise.reject('Bad password');
+                }
+            });
+
+        } else {
+
+            return this.fetchPatron(username, barcode);
+        }
+    }
+
+    fetchPatron(username: string, barcode: string): Promise<any> {
+
+        return this.net.request(
+            'open-ils.actor',
+            'open-ils.actor.user.retrieve_id_by_barcode_or_username',
+            this.auth.token(), barcode, username).toPromise()
+
+        .then(patronId => {
+
+            const evt = this.evt.parse(patronId);
+
+            if (evt || !patronId) {
+                console.error("Cannot find user: ", evt);
+                return Promise.reject('User not found');
+            }
+
+            return this.net.request(
+                'open-ils.actor',
+                'open-ils.actor.user.fleshed.retrieve.authoritative',
+                this.auth.token(), patronId).toPromise()
+
+        }).then(patron => {
+
+            const evt = this.evt.parse(patron);
+
+            if (evt) {
+                console.error('fetchPatron()', evt);
+                return Promise.reject('User not found');
+            }
+
+            this.scko.patron = patron;
+        });
+    }
+
 }
 

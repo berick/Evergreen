@@ -46,61 +46,7 @@ export class SckoService {
             this.barcodeRegex = new RegExp(regPattern);
             this.patronPasswordRequired =
                 sets['circ.selfcheck.patron_password_required'];
-        });
-    }
-
-    loadPatron(username: string, password: string): Promise<any> {
-        this.patron = null;
-
-        if (!username) { return; }
-
-        let barcode;
-
-        if (username.match(this.barcodeRegex)) {
-            barcode = username;
-            username = null;
-        }
-
-        if (this.patronPasswordRequired) {
-            // TODO verify password
-
-        } else {
-
-            return this.fetchPatron(username, barcode);
-        }
-    }
-
-    fetchPatron(username: string, barcode: string): Promise<any> {
-
-        return this.net.request(
-            'open-ils.actor',
-            'open-ils.actor.user.retrieve_id_by_barcode_or_username',
-            this.auth.token(), barcode, username).toPromise()
-
-        .then(patronId => {
-
-            const evt = this.evt.parse(patronId);
-
-            if (evt || !patronId) {
-                console.error("Cannot find user: ", evt);
-                return Promise.reject('User not found');
-            }
-
-            return this.net.request(
-                'open-ils.actor',
-                'open-ils.actor.user.fleshed.retrieve.authoritative',
-                this.auth.token(), patronId).toPromise()
-
-        }).then(patron => {
-
-            const evt = this.evt.parse(patron);
-
-            if (evt) {
-                console.error('fetchPatron()', evt);
-                return Promise.reject('User not found');
-            }
-
-            this.patron = patron;
+            console.log('REQ', this.patronPasswordRequired);
         });
     }
 }
