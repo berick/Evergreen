@@ -12,7 +12,7 @@ use DateTime;
 my $U = "OpenILS::Application::AppUtils";
 
 my %scripts;
-my $booking_status = 0;
+my $booking_status;
 my $opac_renewal_use_circ_lib;
 my $desk_renewal_use_circ_lib;
 
